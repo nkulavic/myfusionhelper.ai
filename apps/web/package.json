@@ -36,8 +36,6 @@
     "tailwindcss-animate": "^1.0.7",
     "eslint": "^9.18.0",
     "eslint-config-next": "^15.1.6",
-    "@myfusionhelper/types": "workspace:*",
-    "@myfusionhelper/ui": "workspace:*",
     "drizzle-kit": "^0.30.1"
   }
 }
