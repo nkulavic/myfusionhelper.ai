@@ -12,12 +12,12 @@ import (
 	// Protected endpoints (require auth)
 	statusClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/status"
 	logoutClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/logout"
-	refreshClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/refresh"
 
 	// Public endpoints (no auth required)
 	healthClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/health"
 	loginClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/login"
 	registerClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/register"
+	refreshClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/refresh"
 )
 
 // Handle is the main entry point for the consolidated auth service
@@ -44,8 +44,6 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return routeToProtectedHandler(ctx, event, statusClient.HandleWithAuth)
 	case "/auth/logout":
 		return routeToProtectedHandler(ctx, event, logoutClient.HandleWithAuth)
-	case "/auth/refresh":
-		return routeToProtectedHandler(ctx, event, refreshClient.HandleWithAuth)
 
 	// Public endpoints
 	case "/auth/health":
@@ -54,6 +52,8 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return loginClient.Handle(ctx, event)
 	case "/auth/register":
 		return registerClient.Handle(ctx, event)
+	case "/auth/refresh":
+		return refreshClient.Handle(ctx, event)
 
 	default:
 		log.Printf("No handler found for path: %s", event.RequestContext.HTTP.Path)

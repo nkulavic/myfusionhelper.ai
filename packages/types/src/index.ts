@@ -1,21 +1,29 @@
 // User & Account types
+// Field names match Go backend JSON (after snake_case → camelCase transform)
 export interface User {
-  id: string
+  userId: string
+  cognitoUserId?: string
   email: string
   name: string
+  phoneNumber?: string
+  company?: string
+  status: string
   currentAccountId: string
   createdAt: string
+  updatedAt?: string
 }
 
 export interface Account {
-  id: string
-  ownerId: string
+  accountId: string
+  ownerUserId: string
+  createdByUserId?: string
   name: string
   company?: string
   plan: 'free' | 'pro' | 'business'
   status: 'active' | 'suspended' | 'cancelled'
   stripeCustomerId?: string
   createdAt: string
+  updatedAt?: string
 }
 
 export interface UserAccount {

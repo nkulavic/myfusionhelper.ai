@@ -12,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
-	apitypes "github.com/myfusionhelper/api/internal/types"
 )
 
 type RefreshRequest struct {
@@ -21,9 +20,9 @@ type RefreshRequest struct {
 
 var clientID = os.Getenv("COGNITO_CLIENT_ID")
 
-// HandleWithAuth is the token refresh handler (requires auth)
-func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCtx *apitypes.AuthContext) (events.APIGatewayV2HTTPResponse, error) {
-	log.Printf("Refresh handler called for user: %s", authCtx.UserID)
+// Handle is the token refresh handler (public, no auth required)
+func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	log.Printf("Refresh handler called")
 
 	var req RefreshRequest
 	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
@@ -55,23 +54,22 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	})
 	if err != nil {
 		log.Printf("Failed to refresh token: %v", err)
-		return authMiddleware.CreateErrorResponse(400, "Failed to refresh token"), nil
+		return authMiddleware.CreateErrorResponse(401, "Invalid or expired refresh token"), nil
 	}
 
-	var accessToken, idToken string
-	if result.AuthenticationResult != nil {
-		if result.AuthenticationResult.AccessToken != nil {
-			accessToken = *result.AuthenticationResult.AccessToken
-		}
-		if result.AuthenticationResult.IdToken != nil {
-			idToken = *result.AuthenticationResult.IdToken
-		}
+	if result.AuthenticationResult == nil {
+		return authMiddleware.CreateErrorResponse(500, "Failed to refresh token"), nil
 	}
 
-	return authMiddleware.CreateSuccessResponse(200, "Token refreshed successfully", map[string]interface{}{
-		"user_id":      authCtx.UserID,
-		"access_token": accessToken,
-		"id_token":     idToken,
-		"token_type":   "Bearer",
-	}), nil
+	response := map[string]interface{}{
+		"token":      *result.AuthenticationResult.AccessToken,
+		"token_type": "Bearer",
+	}
+
+	// Cognito refresh does not return a new refresh token, keep the existing one
+	if result.AuthenticationResult.RefreshToken != nil {
+		response["refresh_token"] = *result.AuthenticationResult.RefreshToken
+	}
+
+	return authMiddleware.CreateSuccessResponse(200, "Token refreshed successfully", response), nil
 }

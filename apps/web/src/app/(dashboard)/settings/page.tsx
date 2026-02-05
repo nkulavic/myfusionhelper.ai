@@ -125,7 +125,7 @@ function AccountTab() {
   const handleSave = () => {
     if (!currentAccount) return
     updateAccount.mutate({
-      accountId: currentAccount.id,
+      accountId: currentAccount.accountId,
       input: { name: accountName, company },
     })
   }
@@ -159,12 +159,12 @@ function AccountTab() {
               <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  value={currentAccount.id}
+                  value={currentAccount.accountId}
                   readOnly
                   className="flex h-10 flex-1 rounded-md border border-input bg-muted px-3 py-2 text-sm font-mono text-muted-foreground"
                 />
                 <button
-                  onClick={() => navigator.clipboard.writeText(currentAccount.id)}
+                  onClick={() => navigator.clipboard.writeText(currentAccount.accountId)}
                   className="rounded-md border border-input bg-background px-3 py-2 text-sm hover:bg-accent"
                 >
                   Copy

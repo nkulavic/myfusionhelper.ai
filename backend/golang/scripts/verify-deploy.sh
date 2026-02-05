@@ -29,6 +29,7 @@ ENDPOINTS=(
   "/api-keys/health"
   "/helpers/health"
   "/platforms/health"
+  "/data/health"
 )
 
 PASS=0
@@ -47,20 +48,24 @@ done
 
 echo ""
 
-# Check worker stack
-WORKER_STATUS=$(aws cloudformation describe-stacks \
-  --stack-name "mfh-helper-worker-${STAGE}" \
-  --region "${REGION}" \
-  --query "Stacks[0].StackStatus" \
-  --output text 2>/dev/null || echo "NOT_FOUND")
+# Check worker stacks
+WORKER_STACKS=("mfh-helper-worker" "mfh-data-sync")
 
-if [[ "$WORKER_STATUS" == *"COMPLETE"* ]]; then
-  echo "  PASS: helper-worker stack (${WORKER_STATUS})"
-  ((PASS++))
-else
-  echo "  FAIL: helper-worker stack (${WORKER_STATUS})"
-  ((FAIL++))
-fi
+for STACK_NAME in "${WORKER_STACKS[@]}"; do
+  WORKER_STATUS=$(aws cloudformation describe-stacks \
+    --stack-name "${STACK_NAME}-${STAGE}" \
+    --region "${REGION}" \
+    --query "Stacks[0].StackStatus" \
+    --output text 2>/dev/null || echo "NOT_FOUND")
+
+  if [[ "$WORKER_STATUS" == *"COMPLETE"* ]]; then
+    echo "  PASS: ${STACK_NAME} stack (${WORKER_STATUS})"
+    ((PASS++))
+  else
+    echo "  FAIL: ${STACK_NAME} stack (${WORKER_STATUS})"
+    ((FAIL++))
+  fi
+done
 
 echo ""
 echo "================================================"

@@ -147,8 +147,6 @@ functions:
       - httpApi:
           path: /auth/refresh
           method: post
-          authorizer:
-            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
   # Public endpoints (no auth required)
   auth-health:

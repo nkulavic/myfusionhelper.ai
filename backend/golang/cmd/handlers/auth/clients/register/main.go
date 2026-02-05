@@ -54,9 +54,11 @@ type Account struct {
 }
 
 var (
-	usersTable    = os.Getenv("USERS_TABLE")
-	accountsTable = os.Getenv("ACCOUNTS_TABLE")
-	userPoolID    = os.Getenv("COGNITO_USER_POOL_ID")
+	usersTable        = os.Getenv("USERS_TABLE")
+	accountsTable     = os.Getenv("ACCOUNTS_TABLE")
+	userAccountsTable = os.Getenv("USER_ACCOUNTS_TABLE")
+	userPoolID        = os.Getenv("COGNITO_USER_POOL_ID")
+	cognitoClientID   = os.Getenv("COGNITO_CLIENT_ID")
 )
 
 // Handle is the registration handler (public, no auth required)
@@ -235,7 +237,7 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	}
 
 	_, err = dynamoClient.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: aws.String(os.Getenv("USER_ACCOUNTS_TABLE")),
+		TableName: aws.String(userAccountsTable),
 		Item:      userAccountItem,
 	})
 	if err != nil {
@@ -243,14 +245,30 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return authMiddleware.CreateErrorResponse(500, "Failed to create user-account relationship"), nil
 	}
 
+	// Authenticate the new user to get tokens
+	authResult, err := cognitoClient.InitiateAuth(ctx, &cognitoidentityprovider.InitiateAuthInput{
+		AuthFlow: cognitotypes.AuthFlowTypeUserPasswordAuth,
+		ClientId: aws.String(cognitoClientID),
+		AuthParameters: map[string]string{
+			"USERNAME": strings.ToLower(req.Email),
+			"PASSWORD": req.Password,
+		},
+	})
+	if err != nil {
+		log.Printf("Failed to authenticate new user: %v", err)
+		return authMiddleware.CreateErrorResponse(500, "Account created but login failed"), nil
+	}
+
+	if authResult.AuthenticationResult == nil {
+		return authMiddleware.CreateErrorResponse(500, "Account created but login failed"), nil
+	}
+
 	log.Printf("Registration successful for user: %s", req.Email)
 
 	return authMiddleware.CreateSuccessResponse(200, "Registration successful", map[string]interface{}{
-		"user_id":    userID,
-		"account_id": accountID,
-		"email":      req.Email,
-		"name":       req.Name,
-		"company":    companyName,
-		"created_at": now,
+		"token":         *authResult.AuthenticationResult.AccessToken,
+		"refresh_token": *authResult.AuthenticationResult.RefreshToken,
+		"user":          user,
+		"account":       account,
 	}), nil
 }

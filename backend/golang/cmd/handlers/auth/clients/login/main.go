@@ -25,10 +25,36 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type User struct {
+	UserID           string `json:"user_id" dynamodbav:"user_id"`
+	CognitoUserID    string `json:"cognito_user_id" dynamodbav:"cognito_user_id"`
+	Email            string `json:"email" dynamodbav:"email"`
+	Name             string `json:"name" dynamodbav:"name"`
+	PhoneNumber      string `json:"phone_number,omitempty" dynamodbav:"phone_number,omitempty"`
+	Company          string `json:"company,omitempty" dynamodbav:"company,omitempty"`
+	Status           string `json:"status" dynamodbav:"status"`
+	CurrentAccountID string `json:"current_account_id" dynamodbav:"current_account_id"`
+	CreatedAt        string `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt        string `json:"updated_at" dynamodbav:"updated_at"`
+}
+
+type Account struct {
+	AccountID       string `json:"account_id" dynamodbav:"account_id"`
+	OwnerUserID     string `json:"owner_user_id" dynamodbav:"owner_user_id"`
+	CreatedByUserID string `json:"created_by_user_id" dynamodbav:"created_by_user_id"`
+	Name            string `json:"name" dynamodbav:"name"`
+	Company         string `json:"company" dynamodbav:"company"`
+	Plan            string `json:"plan" dynamodbav:"plan"`
+	Status          string `json:"status" dynamodbav:"status"`
+	CreatedAt       string `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt       string `json:"updated_at" dynamodbav:"updated_at"`
+}
+
 var (
 	cognitoUserPoolID = os.Getenv("COGNITO_USER_POOL_ID")
 	cognitoClientID   = os.Getenv("COGNITO_CLIENT_ID")
 	usersTable        = os.Getenv("USERS_TABLE")
+	accountsTable     = os.Getenv("ACCOUNTS_TABLE")
 	userAccountsTable = os.Getenv("USER_ACCOUNTS_TABLE")
 )
 
@@ -87,97 +113,127 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return authMiddleware.CreateErrorResponse(400, "Additional authentication required"), nil
 	}
 
-	if authResult.AuthenticationResult != nil {
-		accessToken := *authResult.AuthenticationResult.AccessToken
+	if authResult.AuthenticationResult == nil {
+		return authMiddleware.CreateErrorResponse(500, "Authentication failed"), nil
+	}
 
-		// Ensure user has a current account set
-		dbClient := dynamodb.NewFromConfig(cfg)
-		if err := ensureUserHasCurrentAccount(ctx, dbClient, accessToken); err != nil {
-			log.Printf("Warning: could not ensure current account: %v", err)
+	accessToken := *authResult.AuthenticationResult.AccessToken
+
+	// Extract user ID from the access token
+	dbClient := dynamodb.NewFromConfig(cfg)
+	userID, err := extractUserID(accessToken)
+	if err != nil {
+		log.Printf("Failed to extract user ID from token: %v", err)
+		return authMiddleware.CreateErrorResponse(500, "Login failed"), nil
+	}
+
+	// Fetch user record from DynamoDB
+	user, err := getUser(ctx, dbClient, userID)
+	if err != nil {
+		log.Printf("Failed to fetch user: %v", err)
+		return authMiddleware.CreateErrorResponse(500, "Login failed"), nil
+	}
+
+	// Ensure user has a current account
+	if user.CurrentAccountID == "" {
+		if err := setFirstAccount(ctx, dbClient, userID); err != nil {
+			log.Printf("Warning: could not set current account: %v", err)
 		}
-
-		return authMiddleware.CreateSuccessResponse(200, "Login successful", map[string]interface{}{
-			"access_token":  accessToken,
-			"id_token":      *authResult.AuthenticationResult.IdToken,
-			"refresh_token": *authResult.AuthenticationResult.RefreshToken,
-			"expires_in":    authResult.AuthenticationResult.ExpiresIn,
-			"token_type":    *authResult.AuthenticationResult.TokenType,
-			"user_email":    req.Email,
-		}), nil
+		// Re-fetch user to get updated current_account_id
+		user, _ = getUser(ctx, dbClient, userID)
 	}
 
-	return authMiddleware.CreateErrorResponse(500, "Authentication failed"), nil
+	// Fetch account record
+	var account *Account
+	if user != nil && user.CurrentAccountID != "" {
+		account, err = getAccount(ctx, dbClient, user.CurrentAccountID)
+		if err != nil {
+			log.Printf("Warning: could not fetch account: %v", err)
+		}
+	}
+
+	return authMiddleware.CreateSuccessResponse(200, "Login successful", map[string]interface{}{
+		"token":         accessToken,
+		"refresh_token": *authResult.AuthenticationResult.RefreshToken,
+		"user":          user,
+		"account":       account,
+	}), nil
 }
 
-func handleLoginError(err error) events.APIGatewayV2HTTPResponse {
-	if err == nil {
-		return authMiddleware.CreateErrorResponse(500, "Unknown login error")
-	}
-
-	var notAuth *cognitotypes.NotAuthorizedException
-	var userNotFound *cognitotypes.UserNotFoundException
-	var userNotConfirmed *cognitotypes.UserNotConfirmedException
-	var tooMany *cognitotypes.TooManyRequestsException
-
-	switch {
-	case errors.As(err, &notAuth):
-		return authMiddleware.CreateErrorResponse(401, "Invalid email or password")
-	case errors.As(err, &userNotFound):
-		return authMiddleware.CreateErrorResponse(401, "Invalid email or password")
-	case errors.As(err, &userNotConfirmed):
-		return authMiddleware.CreateErrorResponse(401, "Email not verified")
-	case errors.As(err, &tooMany):
-		return authMiddleware.CreateErrorResponse(429, "Too many login attempts")
-	default:
-		return authMiddleware.CreateErrorResponse(500, "Login failed")
-	}
-}
-
-func ensureUserHasCurrentAccount(ctx context.Context, dbClient *dynamodb.Client, accessToken string) error {
-	if usersTable == "" || userAccountsTable == "" {
-		return nil
-	}
-
+func extractUserID(accessToken string) (string, error) {
 	token, _, err := jwt.NewParser().ParseUnverified(accessToken, jwt.MapClaims{})
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil
+		return "", errors.New("invalid token claims")
 	}
 
 	sub, ok := claims["sub"].(string)
 	if !ok || sub == "" {
-		return nil
+		return "", errors.New("missing sub claim")
 	}
 
-	userID := "user:" + sub
+	return "user:" + sub, nil
+}
 
-	userResult, err := dbClient.GetItem(ctx, &dynamodb.GetItemInput{
+func getUser(ctx context.Context, dbClient *dynamodb.Client, userID string) (*User, error) {
+	if usersTable == "" {
+		return nil, errors.New("users table not configured")
+	}
+
+	result, err := dbClient.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(usersTable),
 		Key: map[string]ddbtypes.AttributeValue{
 			"user_id": &ddbtypes.AttributeValueMemberS{Value: userID},
 		},
-		ProjectionExpression: aws.String("user_id, current_account_id"),
 	})
-	if err != nil || userResult.Item == nil {
-		return err
+	if err != nil {
+		return nil, err
+	}
+	if result.Item == nil {
+		return nil, errors.New("user not found")
 	}
 
-	var user struct {
-		CurrentAccountID string `dynamodbav:"current_account_id"`
+	var user User
+	if err := attributevalue.UnmarshalMap(result.Item, &user); err != nil {
+		return nil, err
 	}
-	if err := attributevalue.UnmarshalMap(userResult.Item, &user); err != nil {
-		return err
+	return &user, nil
+}
+
+func getAccount(ctx context.Context, dbClient *dynamodb.Client, accountID string) (*Account, error) {
+	if accountsTable == "" {
+		return nil, errors.New("accounts table not configured")
 	}
 
-	if user.CurrentAccountID != "" {
+	result, err := dbClient.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(accountsTable),
+		Key: map[string]ddbtypes.AttributeValue{
+			"account_id": &ddbtypes.AttributeValueMemberS{Value: accountID},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result.Item == nil {
+		return nil, errors.New("account not found")
+	}
+
+	var account Account
+	if err := attributevalue.UnmarshalMap(result.Item, &account); err != nil {
+		return nil, err
+	}
+	return &account, nil
+}
+
+func setFirstAccount(ctx context.Context, dbClient *dynamodb.Client, userID string) error {
+	if userAccountsTable == "" || usersTable == "" {
 		return nil
 	}
 
-	// Set first available account as current
 	accountsResult, err := dbClient.Query(ctx, &dynamodb.QueryInput{
 		TableName:              aws.String(userAccountsTable),
 		KeyConditionExpression: aws.String("user_id = :user_id"),
@@ -209,4 +265,28 @@ func ensureUserHasCurrentAccount(ctx context.Context, dbClient *dynamodb.Client,
 		},
 	})
 	return err
+}
+
+func handleLoginError(err error) events.APIGatewayV2HTTPResponse {
+	if err == nil {
+		return authMiddleware.CreateErrorResponse(500, "Unknown login error")
+	}
+
+	var notAuth *cognitotypes.NotAuthorizedException
+	var userNotFound *cognitotypes.UserNotFoundException
+	var userNotConfirmed *cognitotypes.UserNotConfirmedException
+	var tooMany *cognitotypes.TooManyRequestsException
+
+	switch {
+	case errors.As(err, &notAuth):
+		return authMiddleware.CreateErrorResponse(401, "Invalid email or password")
+	case errors.As(err, &userNotFound):
+		return authMiddleware.CreateErrorResponse(401, "Invalid email or password")
+	case errors.As(err, &userNotConfirmed):
+		return authMiddleware.CreateErrorResponse(401, "Email not verified")
+	case errors.As(err, &tooMany):
+		return authMiddleware.CreateErrorResponse(429, "Too many login attempts")
+	default:
+		return authMiddleware.CreateErrorResponse(500, "Login failed")
+	}
 }
