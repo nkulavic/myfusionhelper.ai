@@ -39,10 +39,10 @@ for ep in "${ENDPOINTS[@]}"; do
   STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${API_URL}${ep}" 2>/dev/null || echo "000")
   if [ "$STATUS" -eq 200 ]; then
     echo "  PASS: ${ep} (${STATUS})"
-    ((PASS++))
+    PASS=$((PASS + 1))
   else
     echo "  FAIL: ${ep} (${STATUS})"
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
   fi
 done
 
@@ -60,10 +60,10 @@ for STACK_NAME in "${WORKER_STACKS[@]}"; do
 
   if [[ "$WORKER_STATUS" == *"COMPLETE"* ]]; then
     echo "  PASS: ${STACK_NAME} stack (${WORKER_STATUS})"
-    ((PASS++))
+    PASS=$((PASS + 1))
   else
     echo "  FAIL: ${STACK_NAME} stack (${WORKER_STATUS})"
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
   fi
 done
 
