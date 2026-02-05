@@ -155,5 +155,11 @@ Thumbs.db
 dist/
 build/
 
+# Go compiled binaries
+backend/golang/data-sync
+backend/golang/data-sync-scheduler
+backend/golang/bootstrap
+*.exe
+
 # Local env files
 .env*.local
