@@ -7,6 +7,7 @@ on:
       - dev
     paths:
       - 'backend/golang/**'
+      - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
     inputs:
       stage:
@@ -19,6 +20,11 @@ env:
   AWS_REGION: us-west-2
   # Map branch to stage: dev→dev, main→prod. Manual dispatch uses input.
   DEPLOY_STAGE: ${{ github.event.inputs.stage || (github.ref_name == 'main' && 'prod' || 'dev') }}
+
+# OIDC token permissions for AWS
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   # ──────────────────────────────────────────────
@@ -36,6 +42,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+          cache-dependency-path: backend/golang/go.sum
 
       - name: Download dependencies
         run: go mod download
@@ -75,11 +82,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+          cache-dependency-path: backend/golang/go.sum
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
           aws-region: us-west-2
 
       - name: Install Serverless Framework
@@ -110,11 +117,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+          cache-dependency-path: backend/golang/go.sum
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
           aws-region: us-west-2
 
       - name: Install Serverless Framework
@@ -155,11 +162,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+          cache-dependency-path: backend/golang/go.sum
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
           aws-region: us-west-2
 
       - name: Install Serverless Framework
@@ -196,11 +203,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+          cache-dependency-path: backend/golang/go.sum
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
           aws-region: us-west-2
 
       - name: Install Serverless Framework
@@ -233,11 +240,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
+          cache-dependency-path: backend/golang/go.sum
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
           aws-region: us-west-2
 
       - name: Seed platforms
