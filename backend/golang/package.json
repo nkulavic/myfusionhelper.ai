@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "devDependencies": {
+    "serverless-go-plugin": "^3.4.0"
+  }
+}
