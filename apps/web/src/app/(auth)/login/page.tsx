@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Zap } from 'lucide-react'
 import { signIn } from '@/lib/auth-client'
 
 export default function LoginPage() {
@@ -40,15 +40,14 @@ export default function LoginPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-center gap-2 text-center">
         <Link href="/" className="flex items-center gap-2 font-bold">
-          <Zap className="h-6 w-6" />
-          <span>MyFusion Helper</span>
+          <Image src="/logo.png" alt="MyFusion Helper" width={180} height={23} className="dark:brightness-0 dark:invert" />
         </Link>
         <h1 className="text-2xl font-bold">Welcome back</h1>
         <p className="text-sm text-muted-foreground">Enter your credentials to sign in</p>
       </div>
 
       {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </div>
       )}

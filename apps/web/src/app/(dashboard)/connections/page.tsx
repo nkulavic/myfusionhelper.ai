@@ -1,88 +1,527 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, CheckCircle, XCircle, AlertCircle, ExternalLink, Settings, Trash2 } from 'lucide-react'
+import {
+  Plus,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  ExternalLink,
+  Settings,
+  Trash2,
+  RefreshCw,
+  Shield,
+  Key,
+  Clock,
+  Activity,
+  ChevronRight,
+  ArrowLeft,
+  Loader2,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  useConnections,
+  usePlatforms,
+  useCreateConnection,
+  useDeleteConnection,
+  useTestConnection,
+  useStartOAuth,
+} from '@/lib/hooks/use-connections'
+import { Skeleton } from '@/components/ui/skeleton'
+import type { PlatformDefinition } from '@/lib/api/connections'
+import { getCRMPlatform } from '@/lib/crm-platforms'
+import { PlatformLogo } from '@/components/platform-logo'
 
-const platforms = [
+type ViewState = 'list' | 'add' | 'detail'
+
+// Fallback platform list when API isn't available
+const fallbackPlatforms: PlatformDefinition[] = [
   {
     id: 'keap',
     name: 'Keap',
-    description: 'Formerly Infusionsoft',
-    logo: '/platforms/keap.svg',
-    status: 'available',
+    category: 'crm',
+    authType: 'oauth2',
+    apiBaseUrl: 'https://api.infusionsoft.com',
+    rateLimit: { requestsPerSecond: 10, dailyLimit: 25000 },
+    capabilities: ['Contacts', 'Tags', 'Custom Fields', 'Automations', 'Goals', 'Deals'],
   },
   {
     id: 'gohighlevel',
     name: 'GoHighLevel',
-    description: 'All-in-one marketing platform',
-    logo: '/platforms/ghl.svg',
-    status: 'available',
+    category: 'crm',
+    authType: 'oauth2',
+    apiBaseUrl: 'https://services.leadconnectorhq.com',
+    rateLimit: { requestsPerSecond: 20, dailyLimit: 50000 },
+    capabilities: ['Contacts', 'Tags', 'Custom Fields', 'Workflows', 'Pipelines', 'SMS'],
   },
   {
     id: 'activecampaign',
     name: 'ActiveCampaign',
-    description: 'Email marketing & automation',
-    logo: '/platforms/activecampaign.svg',
-    status: 'coming_soon',
+    category: 'crm',
+    authType: 'api_key',
+    apiBaseUrl: '',
+    rateLimit: { requestsPerSecond: 5, dailyLimit: 100000 },
+    capabilities: ['Contacts', 'Tags', 'Custom Fields', 'Automations', 'Deals', 'Campaigns'],
   },
   {
     id: 'ontraport',
     name: 'Ontraport',
-    description: 'Business automation software',
-    logo: '/platforms/ontraport.svg',
-    status: 'coming_soon',
-  },
-]
-
-const connections = [
-  {
-    id: '1',
-    platform: 'keap',
-    name: 'Production Keap',
-    status: 'active',
-    lastSync: '2 minutes ago',
-    helpersCount: 12,
+    category: 'crm',
+    authType: 'api_key',
+    apiBaseUrl: 'https://api.ontraport.com',
+    rateLimit: { requestsPerSecond: 4, dailyLimit: 50000 },
+    capabilities: ['Contacts', 'Tags', 'Custom Fields', 'Sequences', 'Tasks'],
   },
   {
-    id: '2',
-    platform: 'keap',
-    name: 'Sandbox Keap',
-    status: 'error',
-    lastSync: '1 hour ago',
-    helpersCount: 3,
-    error: 'Token expired',
+    id: 'hubspot',
+    name: 'HubSpot',
+    category: 'crm',
+    authType: 'oauth2',
+    apiBaseUrl: 'https://api.hubapi.com',
+    rateLimit: { requestsPerSecond: 10, dailyLimit: 250000 },
+    capabilities: ['Contacts', 'Deals', 'Lists', 'Workflows', 'Custom Properties', 'Pipelines'],
   },
 ]
 
 export default function ConnectionsPage() {
-  const [showAddModal, setShowAddModal] = useState(false)
+  const [view, setView] = useState<ViewState>('list')
+  const [selectedPlatform, setSelectedPlatform] = useState<PlatformDefinition | null>(null)
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null)
+  const [connectionName, setConnectionName] = useState('')
+  const [apiKeyInput, setApiKeyInput] = useState('')
+  const [apiUrlInput, setApiUrlInput] = useState('')
+  const [appIdInput, setAppIdInput] = useState('')
+
+  const { data: connections, isLoading: connectionsLoading } = useConnections()
+  const { data: apiPlatforms } = usePlatforms()
+  const createConnection = useCreateConnection()
+  const deleteConnection = useDeleteConnection()
+  const testConnection = useTestConnection()
+  const startOAuth = useStartOAuth()
+
+  const platforms = apiPlatforms && apiPlatforms.length > 0 ? apiPlatforms : fallbackPlatforms
+
+  const selectedConnection = connections?.find((c) => c.id === selectedConnectionId)
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'active':
-        return <CheckCircle className="h-5 w-5 text-green-500" />
+        return <CheckCircle className="h-5 w-5 text-success" />
       case 'error':
-        return <XCircle className="h-5 w-5 text-red-500" />
+        return <XCircle className="h-5 w-5 text-destructive" />
+      case 'disconnected':
+        return <AlertCircle className="h-5 w-5 text-warning" />
       default:
-        return <AlertCircle className="h-5 w-5 text-yellow-500" />
+        return <AlertCircle className="h-5 w-5 text-warning" />
     }
   }
 
-  const getPlatformInfo = (platformId: string) => {
-    return platforms.find((p) => p.id === platformId)
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      active: 'bg-success/10 text-success',
+      error: 'bg-destructive/10 text-destructive',
+      disconnected: 'bg-warning/10 text-warning',
+    }
+    return (
+      <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium capitalize', styles[status] || styles.disconnected)}>
+        {status}
+      </span>
+    )
   }
 
+  const getPlatformInfo = (platformId: string) => platforms.find((p) => p.id === platformId)
+
+  const handleConnect = async () => {
+    if (!selectedPlatform) return
+
+    if (selectedPlatform.authType === 'oauth2') {
+      startOAuth.mutate(selectedPlatform.id, {
+        onSuccess: (res) => {
+          if (res.data?.url) {
+            window.location.href = res.data.url
+          }
+        },
+      })
+    } else {
+      createConnection.mutate(
+        {
+          platformId: selectedPlatform.id,
+          input: {
+            name: connectionName || `${selectedPlatform.name} Connection`,
+            credentials: {
+              apiKey: apiKeyInput || undefined,
+              apiUrl: apiUrlInput || undefined,
+              appId: appIdInput || undefined,
+            },
+          },
+        },
+        {
+          onSuccess: () => {
+            setView('list')
+            setSelectedPlatform(null)
+            setConnectionName('')
+            setApiKeyInput('')
+            setApiUrlInput('')
+            setAppIdInput('')
+          },
+        }
+      )
+    }
+  }
+
+  const handleDelete = (platformId: string, connectionId: string) => {
+    deleteConnection.mutate(
+      { platformId, connectionId },
+      { onSuccess: () => { setView('list'); setSelectedConnectionId(null) } }
+    )
+  }
+
+  const handleTest = (platformId: string, connectionId: string) => {
+    testConnection.mutate({ platformId, connectionId })
+  }
+
+  // Add Connection Flow
+  if (view === 'add') {
+    return (
+      <div className="mx-auto max-w-2xl space-y-6">
+        <div className="flex items-center gap-4">
+          <button onClick={() => { setView('list'); setSelectedPlatform(null) }} className="rounded-md p-2 hover:bg-accent">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold">Add Connection</h1>
+            <p className="text-muted-foreground">
+              {selectedPlatform ? `Connect to ${selectedPlatform.name}` : 'Select a CRM platform to connect'}
+            </p>
+          </div>
+        </div>
+
+        {!selectedPlatform ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {platforms.map((platform) => (
+              <button
+                key={platform.id}
+                onClick={() => setSelectedPlatform(platform)}
+                className="flex flex-col items-start rounded-lg border bg-card p-5 text-left transition-all hover:border-primary hover:shadow-md"
+              >
+                {(() => {
+                  const crm = getCRMPlatform(platform.id)
+                  return crm ? (
+                    <PlatformLogo platform={crm} size={48} className="mb-3" />
+                  ) : (
+                    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg text-xl font-bold text-white bg-primary">
+                      {platform.name.charAt(0)}
+                    </div>
+                  )
+                })()}
+                <h3 className="mb-1 font-semibold">{platform.name}</h3>
+                <div className="mb-3 flex flex-wrap gap-1">
+                  {platform.capabilities.slice(0, 3).map((cap) => (
+                    <span key={cap} className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
+                      {cap}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  {platform.authType === 'oauth2' ? (
+                    <><Shield className="h-3 w-3" /> OAuth 2.0</>
+                  ) : (
+                    <><Key className="h-3 w-3" /> API Key</>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="rounded-lg border bg-card p-5">
+              <div className="flex items-center gap-4">
+                {(() => {
+                  const crm = getCRMPlatform(selectedPlatform.id)
+                  return crm ? (
+                    <PlatformLogo platform={crm} size={48} />
+                  ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg text-xl font-bold text-white bg-primary">
+                      {selectedPlatform.name.charAt(0)}
+                    </div>
+                  )
+                })()}
+                <div>
+                  <h3 className="font-semibold">{selectedPlatform.name}</h3>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    {selectedPlatform.authType === 'oauth2' ? (
+                      <><Shield className="h-3 w-3" /> OAuth 2.0 Authentication</>
+                    ) : (
+                      <><Key className="h-3 w-3" /> API Key Authentication</>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {selectedPlatform.capabilities.map((cap) => (
+                  <span key={cap} className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
+                    {cap}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-card p-5 space-y-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium">Connection Name</label>
+                <input
+                  type="text"
+                  value={connectionName}
+                  onChange={(e) => setConnectionName(e.target.value)}
+                  placeholder={`e.g. ${selectedPlatform.name} (Production)`}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+
+              {selectedPlatform.authType === 'api_key' && (
+                <>
+                  {selectedPlatform.id === 'activecampaign' && (
+                    <div>
+                      <label className="mb-2 block text-sm font-medium">Account URL</label>
+                      <input
+                        type="url"
+                        value={apiUrlInput}
+                        onChange={(e) => setApiUrlInput(e.target.value)}
+                        placeholder="https://yourname.api-us1.com"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        Found in Settings &rarr; Developer &rarr; API Access
+                      </p>
+                    </div>
+                  )}
+                  {selectedPlatform.id === 'ontraport' && (
+                    <div>
+                      <label className="mb-2 block text-sm font-medium">App ID</label>
+                      <input
+                        type="text"
+                        value={appIdInput}
+                        onChange={(e) => setAppIdInput(e.target.value)}
+                        placeholder="Your Ontraport App ID"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="mb-2 block text-sm font-medium">API Key</label>
+                    <input
+                      type="password"
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      placeholder="Enter your API key"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      Your API key is encrypted and stored securely
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setSelectedPlatform(null)}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Choose a different platform
+              </button>
+              <button
+                onClick={handleConnect}
+                disabled={createConnection.isPending || startOAuth.isPending}
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {(createConnection.isPending || startOAuth.isPending) && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
+                {selectedPlatform.authType === 'oauth2' ? (
+                  <>
+                    <ExternalLink className="h-4 w-4" />
+                    Connect with {selectedPlatform.name}
+                  </>
+                ) : (
+                  <>
+                    <Key className="h-4 w-4" />
+                    Save Connection
+                  </>
+                )}
+              </button>
+            </div>
+
+            {createConnection.isError && (
+              <p className="text-center text-sm text-destructive">
+                {createConnection.error instanceof Error
+                  ? createConnection.error.message
+                  : 'Failed to create connection'}
+              </p>
+            )}
+
+            {selectedPlatform.authType === 'oauth2' && (
+              <p className="text-center text-xs text-muted-foreground">
+                You&apos;ll be redirected to {selectedPlatform.name} to authorize access.
+                We only request the minimum permissions needed.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Connection Detail View
+  if (view === 'detail' && selectedConnection) {
+    const platform = getPlatformInfo(selectedConnection.platform)
+    return (
+      <div className="mx-auto max-w-3xl space-y-6">
+        <div className="flex items-center gap-4">
+          <button onClick={() => { setView('list'); setSelectedConnectionId(null) }} className="rounded-md p-2 hover:bg-accent">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold">{selectedConnection.name}</h1>
+              {getStatusBadge(selectedConnection.status)}
+            </div>
+            <p className="text-sm text-muted-foreground">{platform?.name} connection</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleTest(selectedConnection.platform, selectedConnection.id)}
+              disabled={testConnection.isPending}
+              className="inline-flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
+            >
+              {testConnection.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Test Connection
+            </button>
+            {selectedConnection.status === 'error' && platform?.authType === 'oauth2' && (
+              <button
+                onClick={() => startOAuth.mutate(selectedConnection.platform, {
+                  onSuccess: (res) => { if (res.data?.url) window.location.href = res.data.url },
+                })}
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Re-authorize
+              </button>
+            )}
+          </div>
+        </div>
+
+        {testConnection.isSuccess && (
+          <div className="flex items-start gap-3 rounded-lg border border-success/30 bg-success/10 p-4">
+            <CheckCircle className="mt-0.5 h-5 w-5 text-success" />
+            <p className="text-sm text-success">
+              Connection test passed successfully.
+            </p>
+          </div>
+        )}
+
+        {testConnection.isError && (
+          <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+            <XCircle className="mt-0.5 h-5 w-5 text-destructive" />
+            <div>
+              <p className="text-sm font-medium text-destructive">Connection test failed</p>
+              <p className="text-sm text-destructive/80">
+                {testConnection.error instanceof Error ? testConnection.error.message : 'Unknown error'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="rounded-lg border bg-card p-5 space-y-3">
+              <h3 className="font-semibold">Connection Details</h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Platform</span>
+                  <span className="font-medium">{platform?.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Auth Type</span>
+                  <span className="font-medium capitalize">{platform?.authType === 'oauth2' ? 'OAuth 2.0' : 'API Key'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Status</span>
+                  {getStatusBadge(selectedConnection.status)}
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Created</span>
+                  <span className="font-medium">{new Date(selectedConnection.createdAt).toLocaleDateString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Updated</span>
+                  <span className="font-medium">{new Date(selectedConnection.updatedAt).toLocaleDateString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Connection ID</span>
+                  <span className="font-mono text-xs">{selectedConnection.id}</span>
+                </div>
+              </div>
+            </div>
+
+            {platform && (
+              <div className="rounded-lg border bg-card p-5 space-y-3">
+                <h3 className="font-semibold">Platform Capabilities</h3>
+                <div className="flex flex-wrap gap-2">
+                  {platform.capabilities.map((cap) => (
+                    <span
+                      key={cap}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium"
+                    >
+                      <CheckCircle className="h-3 w-3 text-success" />
+                      {cap}
+                    </span>
+                  ))}
+                </div>
+                {platform.rateLimit && (
+                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    <p>{platform.rateLimit.requestsPerSecond} requests/sec &middot; {platform.rateLimit.dailyLimit.toLocaleString()} daily limit</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-card p-5 space-y-3">
+              <h3 className="font-semibold">Actions</h3>
+              <div className="space-y-2">
+                <button
+                  onClick={() => handleDelete(selectedConnection.platform, selectedConnection.id)}
+                  disabled={deleteConnection.isPending}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {deleteConnection.isPending ? 'Deleting...' : 'Delete Connection'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Main List View
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Connections</h1>
           <p className="text-muted-foreground">Connect and manage your CRM platforms</p>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => setView('add')}
           className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />
@@ -92,46 +531,69 @@ export default function ConnectionsPage() {
 
       {/* Active Connections */}
       <div>
-        <h2 className="mb-4 text-lg font-semibold">Active Connections</h2>
-        {connections.length > 0 ? (
-          <div className="space-y-4">
+        <h2 className="mb-4 text-lg font-semibold">
+          Your Connections
+          {connections && (
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              ({connections.length})
+            </span>
+          )}
+        </h2>
+        {connectionsLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-4 rounded-lg border bg-card p-4">
+                <Skeleton className="h-12 w-12 rounded-lg" />
+                <div className="flex-1">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="mt-1 h-4 w-32" />
+                </div>
+                <Skeleton className="h-5 w-5" />
+              </div>
+            ))}
+          </div>
+        ) : connections && connections.length > 0 ? (
+          <div className="space-y-3">
             {connections.map((connection) => {
               const platform = getPlatformInfo(connection.platform)
+              const crm = getCRMPlatform(connection.platform)
               return (
-                <div
+                <button
                   key={connection.id}
-                  className="flex items-center justify-between rounded-lg border bg-card p-4"
+                  onClick={() => { setSelectedConnectionId(connection.id); setView('detail') }}
+                  className="flex w-full items-center justify-between rounded-lg border bg-card p-4 text-left transition-all hover:border-primary/50 hover:shadow-sm"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-2xl font-bold">
-                      {platform?.name.charAt(0)}
-                    </div>
+                    {crm ? (
+                      <PlatformLogo platform={crm} size={48} />
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-lg text-xl font-bold text-white bg-primary">
+                        {platform?.name.charAt(0) || '?'}
+                      </div>
+                    )}
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold">{connection.name}</h3>
-                        {getStatusIcon(connection.status)}
+                        {getStatusBadge(connection.status)}
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>{platform?.name}</span>
-                        <span>•</span>
-                        <span>{connection.helpersCount} helpers</span>
-                        <span>•</span>
-                        <span>Last sync: {connection.lastSync}</span>
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <span>{platform?.name || connection.platform}</span>
+                        <span className="text-border">&middot;</span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {new Date(connection.updatedAt).toLocaleDateString()}
+                        </span>
+                        {platform && (
+                          <>
+                            <span className="text-border">&middot;</span>
+                            <span>{platform.capabilities.length} features</span>
+                          </>
+                        )}
                       </div>
-                      {connection.error && (
-                        <p className="mt-1 text-sm text-red-500">{connection.error}</p>
-                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button className="rounded-md p-2 hover:bg-accent">
-                      <Settings className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                    <button className="rounded-md p-2 hover:bg-accent">
-                      <Trash2 className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                  </div>
-                </div>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </button>
               )
             })}
           </div>
@@ -143,7 +605,7 @@ export default function ConnectionsPage() {
               Connect your first CRM platform to start automating
             </p>
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => setView('add')}
               className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
               <Plus className="h-4 w-4" />
@@ -156,40 +618,45 @@ export default function ConnectionsPage() {
       {/* Available Platforms */}
       <div>
         <h2 className="mb-4 text-lg font-semibold">Available Platforms</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {platforms.map((platform) => (
-            <div
-              key={platform.id}
-              className={cn(
-                'relative rounded-lg border bg-card p-4',
-                platform.status === 'coming_soon' && 'opacity-60'
-              )}
-            >
-              {platform.status === 'coming_soon' && (
-                <span className="absolute right-2 top-2 rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
-                  Coming Soon
-                </span>
-              )}
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-2xl font-bold">
-                {platform.name.charAt(0)}
-              </div>
-              <h3 className="font-semibold">{platform.name}</h3>
-              <p className="mb-3 text-sm text-muted-foreground">{platform.description}</p>
-              {platform.status === 'available' ? (
-                <button className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {platforms.map((platform) => {
+            const crm = getCRMPlatform(platform.id)
+            const connectedCount = connections?.filter((c) => c.platform === platform.id).length || 0
+            return (
+              <div
+                key={platform.id}
+                className="relative overflow-hidden rounded-lg border bg-card p-4 transition-all hover:border-primary/50 hover:shadow-sm"
+              >
+                <div
+                  className="absolute inset-x-0 top-0 h-[3px]"
+                  style={{ backgroundColor: crm?.color || 'hsl(var(--primary))' }}
+                />
+                {crm ? (
+                  <PlatformLogo platform={crm} size={48} className="mb-3" />
+                ) : (
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg text-xl font-bold text-white bg-primary">
+                    {platform.name.charAt(0)}
+                  </div>
+                )}
+                <h3 className="font-semibold">{platform.name}</h3>
+                <div className="mb-3 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                  {platform.authType === 'oauth2' ? 'OAuth 2.0' : 'API Key'}
+                  {connectedCount > 0 && (
+                    <span className="ml-1 rounded-full bg-success/10 px-1.5 py-0.5 text-success normal-case">
+                      {connectedCount} connected
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setSelectedPlatform(platform); setView('add') }}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+                >
                   <ExternalLink className="h-4 w-4" />
                   Connect
                 </button>
-              ) : (
-                <button
-                  disabled
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium opacity-50"
-                >
-                  Coming Soon
-                </button>
-              )}
-            </div>
-          ))}
+              </div>
+            )
+          })}
         </div>
       </div>
     </div>

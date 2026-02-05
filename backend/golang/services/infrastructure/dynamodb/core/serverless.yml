@@ -1,0 +1,383 @@
+service: mfh-infrastructure-dynamodb-core
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+
+resources:
+  Resources:
+    # Users Table
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-users
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+        AttributeDefinitions:
+          - AttributeName: user_id
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+          - AttributeName: cognito_user_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: user_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: EmailIndex
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: CognitoUserIdIndex
+            KeySchema:
+              - AttributeName: cognito_user_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    # Accounts Table
+    AccountsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-accounts
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+        AttributeDefinitions:
+          - AttributeName: account_id
+            AttributeType: S
+          - AttributeName: owner_user_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: account_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: OwnerUserIdIndex
+            KeySchema:
+              - AttributeName: owner_user_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    # User-Accounts Relationship Table
+    UserAccountsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-user-accounts
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        AttributeDefinitions:
+          - AttributeName: user_id
+            AttributeType: S
+          - AttributeName: account_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: user_id
+            KeyType: HASH
+          - AttributeName: account_id
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: AccountIdIndex
+            KeySchema:
+              - AttributeName: account_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    # API Keys Table
+    ApiKeysTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-api-keys
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        AttributeDefinitions:
+          - AttributeName: key_id
+            AttributeType: S
+          - AttributeName: account_id
+            AttributeType: S
+          - AttributeName: key_hash
+            AttributeType: S
+        KeySchema:
+          - AttributeName: key_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: AccountIdIndex
+            KeySchema:
+              - AttributeName: account_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: KeyHashIndex
+            KeySchema:
+              - AttributeName: key_hash
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    # Platform Connections Table
+    ConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-connections
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        AttributeDefinitions:
+          - AttributeName: connection_id
+            AttributeType: S
+          - AttributeName: account_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connection_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: AccountIdIndex
+            KeySchema:
+              - AttributeName: account_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    # Helpers Table
+    HelpersTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-helpers
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        AttributeDefinitions:
+          - AttributeName: helper_id
+            AttributeType: S
+          - AttributeName: account_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: helper_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: AccountIdIndex
+            KeySchema:
+              - AttributeName: account_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    # Executions Table
+    ExecutionsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-executions
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: execution_id
+            AttributeType: S
+          - AttributeName: account_id
+            AttributeType: S
+          - AttributeName: helper_id
+            AttributeType: S
+          - AttributeName: created_at
+            AttributeType: S
+        KeySchema:
+          - AttributeName: execution_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: AccountIdCreatedAtIndex
+            KeySchema:
+              - AttributeName: account_id
+                KeyType: HASH
+              - AttributeName: created_at
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: HelperIdCreatedAtIndex
+            KeySchema:
+              - AttributeName: helper_id
+                KeyType: HASH
+              - AttributeName: created_at
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    # Platforms Table (CRM platform definitions)
+    PlatformsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-platforms
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        AttributeDefinitions:
+          - AttributeName: platform_id
+            AttributeType: S
+          - AttributeName: slug
+            AttributeType: S
+        KeySchema:
+          - AttributeName: platform_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: SlugIndex
+            KeySchema:
+              - AttributeName: slug
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    # Platform Connection Auth Table (credential separation)
+    PlatformConnectionAuthsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-platform-connection-auths
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        AttributeDefinitions:
+          - AttributeName: auth_id
+            AttributeType: S
+          - AttributeName: connection_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: auth_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: ConnectionIdIndex
+            KeySchema:
+              - AttributeName: connection_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    # OAuth States Table (for CRM connections)
+    OAuthStatesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: mfh-${self:provider.stage}-oauth-states
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: state
+            AttributeType: S
+        KeySchema:
+          - AttributeName: state
+            KeyType: HASH
+
+  Outputs:
+    UsersTableName:
+      Value: !Ref UsersTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UsersTableName
+    UsersTableArn:
+      Value: !GetAtt UsersTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UsersTableArn
+    UsersTableStreamArn:
+      Value: !GetAtt UsersTable.StreamArn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UsersTableStreamArn
+
+    AccountsTableName:
+      Value: !Ref AccountsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AccountsTableName
+    AccountsTableArn:
+      Value: !GetAtt AccountsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AccountsTableArn
+
+    UserAccountsTableName:
+      Value: !Ref UserAccountsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UserAccountsTableName
+    UserAccountsTableArn:
+      Value: !GetAtt UserAccountsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UserAccountsTableArn
+
+    ApiKeysTableName:
+      Value: !Ref ApiKeysTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ApiKeysTableName
+    ApiKeysTableArn:
+      Value: !GetAtt ApiKeysTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ApiKeysTableArn
+
+    ConnectionsTableName:
+      Value: !Ref ConnectionsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ConnectionsTableName
+    ConnectionsTableArn:
+      Value: !GetAtt ConnectionsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ConnectionsTableArn
+
+    HelpersTableName:
+      Value: !Ref HelpersTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HelpersTableName
+    HelpersTableArn:
+      Value: !GetAtt HelpersTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HelpersTableArn
+
+    ExecutionsTableName:
+      Value: !Ref ExecutionsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ExecutionsTableName
+    ExecutionsTableArn:
+      Value: !GetAtt ExecutionsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ExecutionsTableArn
+
+    PlatformsTableName:
+      Value: !Ref PlatformsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PlatformsTableName
+    PlatformsTableArn:
+      Value: !GetAtt PlatformsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PlatformsTableArn
+
+    PlatformConnectionAuthsTableName:
+      Value: !Ref PlatformConnectionAuthsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PlatformConnectionAuthsTableName
+    PlatformConnectionAuthsTableArn:
+      Value: !GetAtt PlatformConnectionAuthsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PlatformConnectionAuthsTableArn
+
+    OAuthStatesTableName:
+      Value: !Ref OAuthStatesTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OAuthStatesTableName
+    OAuthStatesTableArn:
+      Value: !GetAtt OAuthStatesTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OAuthStatesTableArn

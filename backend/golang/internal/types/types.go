@@ -1,0 +1,332 @@
+package types
+
+import (
+	"time"
+)
+
+// ========== USER & ACCOUNT TYPES ==========
+
+// User represents a user in the system
+type User struct {
+	UserID           string     `json:"user_id" dynamodbav:"user_id"`
+	CognitoUserID    string     `json:"cognito_user_id" dynamodbav:"cognito_user_id"`
+	Email            string     `json:"email" dynamodbav:"email"`
+	Name             string     `json:"name" dynamodbav:"name"`
+	PhoneNumber      string     `json:"phone_number,omitempty" dynamodbav:"phone_number,omitempty"`
+	Company          string     `json:"company,omitempty" dynamodbav:"company,omitempty"`
+	Status           string     `json:"status" dynamodbav:"status"`
+	CurrentAccountID string     `json:"current_account_id" dynamodbav:"current_account_id"`
+	CreatedAt        time.Time  `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at" dynamodbav:"updated_at"`
+	LastLoginAt      *time.Time `json:"last_login_at,omitempty" dynamodbav:"last_login_at,omitempty"`
+}
+
+// Account represents a billing entity / workspace
+type Account struct {
+	AccountID        string          `json:"account_id" dynamodbav:"account_id"`
+	OwnerUserID      string          `json:"owner_user_id" dynamodbav:"owner_user_id"`
+	CreatedByUserID  string          `json:"created_by_user_id" dynamodbav:"created_by_user_id"`
+	Name             string          `json:"name" dynamodbav:"name"`
+	Company          string          `json:"company" dynamodbav:"company"`
+	Plan             string          `json:"plan" dynamodbav:"plan"`
+	Status           string          `json:"status" dynamodbav:"status"`
+	StripeCustomerID string          `json:"stripe_customer_id,omitempty" dynamodbav:"stripe_customer_id,omitempty"`
+	Settings         AccountSettings `json:"settings" dynamodbav:"settings"`
+	Usage            AccountUsage    `json:"usage" dynamodbav:"usage"`
+	CreatedAt        time.Time       `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at" dynamodbav:"updated_at"`
+}
+
+// AccountSettings represents configurable account settings
+type AccountSettings struct {
+	MaxHelpers      int  `json:"max_helpers" dynamodbav:"max_helpers"`
+	MaxConnections  int  `json:"max_connections" dynamodbav:"max_connections"`
+	MaxAPIKeys      int  `json:"max_api_keys" dynamodbav:"max_api_keys"`
+	MaxTeamMembers  int  `json:"max_team_members" dynamodbav:"max_team_members"`
+	MaxExecutions   int  `json:"max_executions" dynamodbav:"max_executions"`
+	WebhooksEnabled bool `json:"webhooks_enabled" dynamodbav:"webhooks_enabled"`
+}
+
+// AccountUsage represents current usage metrics for an account
+type AccountUsage struct {
+	Helpers             int `json:"helpers" dynamodbav:"helpers"`
+	Connections         int `json:"connections" dynamodbav:"connections"`
+	APIKeys             int `json:"api_keys" dynamodbav:"api_keys"`
+	TeamMembers         int `json:"team_members" dynamodbav:"team_members"`
+	MonthlyExecutions   int `json:"monthly_executions" dynamodbav:"monthly_executions"`
+	MonthlyAPIRequests  int `json:"monthly_api_requests" dynamodbav:"monthly_api_requests"`
+}
+
+// UserAccount represents the many-to-many relationship between users and accounts
+type UserAccount struct {
+	UserID      string      `json:"user_id" dynamodbav:"user_id"`
+	AccountID   string      `json:"account_id" dynamodbav:"account_id"`
+	Role        string      `json:"role" dynamodbav:"role"`
+	Status      string      `json:"status" dynamodbav:"status"`
+	Permissions Permissions `json:"permissions" dynamodbav:"permissions"`
+	LinkedAt    string      `json:"linked_at" dynamodbav:"linked_at"`
+	UpdatedAt   string      `json:"updated_at" dynamodbav:"updated_at"`
+}
+
+// ========== AUTH CONTEXT TYPES ==========
+
+// AuthContext holds the authenticated user's context
+type AuthContext struct {
+	UserID            string          `json:"user_id"`
+	AccountID         string          `json:"account_id"`
+	Email             string          `json:"email"`
+	Role              string          `json:"role"`
+	Permissions       Permissions     `json:"permissions"`
+	AvailableAccounts []AccountAccess `json:"available_accounts"`
+}
+
+// Permissions defines granular user permissions within an account
+type Permissions struct {
+	CanManageHelpers     bool `json:"can_manage_helpers" dynamodbav:"can_manage_helpers"`
+	CanExecuteHelpers    bool `json:"can_execute_helpers" dynamodbav:"can_execute_helpers"`
+	CanManageConnections bool `json:"can_manage_connections" dynamodbav:"can_manage_connections"`
+	CanManageTeam        bool `json:"can_manage_team" dynamodbav:"can_manage_team"`
+	CanManageBilling     bool `json:"can_manage_billing" dynamodbav:"can_manage_billing"`
+	CanViewAnalytics     bool `json:"can_view_analytics" dynamodbav:"can_view_analytics"`
+	CanManageAPIKeys     bool `json:"can_manage_api_keys" dynamodbav:"can_manage_api_keys"`
+}
+
+// AccountAccess represents a user's access to an account
+type AccountAccess struct {
+	AccountID   string      `json:"account_id"`
+	AccountName string      `json:"account_name"`
+	Role        string      `json:"role"`
+	Permissions Permissions `json:"permissions"`
+	IsCurrent   bool        `json:"is_current"`
+}
+
+// ========== PLATFORM TYPES ==========
+
+// Platform represents a CRM service provider (Keap, GoHighLevel, ActiveCampaign, etc.)
+type Platform struct {
+	PlatformID       string              `json:"platform_id" dynamodbav:"platform_id"`
+	Name             string              `json:"name" dynamodbav:"name"`
+	Slug             string              `json:"slug" dynamodbav:"slug"`
+	Category         string              `json:"category" dynamodbav:"category"`
+	Description      string              `json:"description" dynamodbav:"description"`
+	Status           string              `json:"status" dynamodbav:"status"`
+	Version          string              `json:"version" dynamodbav:"version"`
+	LogoURL          string              `json:"logo_url" dynamodbav:"logo_url"`
+	DocumentationURL string              `json:"documentation_url" dynamodbav:"documentation_url"`
+	OAuth            *OAuthConfiguration `json:"oauth,omitempty" dynamodbav:"oauth,omitempty"`
+	APIConfig        APIConfiguration    `json:"api_config" dynamodbav:"api_config"`
+	TestEndpoints    *TestEndpoints      `json:"test_endpoints,omitempty" dynamodbav:"test_endpoints,omitempty"`
+	Capabilities     []string            `json:"capabilities" dynamodbav:"capabilities"`
+	CreatedAt        time.Time           `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt        time.Time           `json:"updated_at" dynamodbav:"updated_at"`
+}
+
+// OAuthConfiguration represents OAuth settings for a platform
+type OAuthConfiguration struct {
+	AuthURL      string   `json:"auth_url" dynamodbav:"auth_url"`
+	TokenURL     string   `json:"token_url" dynamodbav:"token_url"`
+	UserInfoURL  string   `json:"user_info_url" dynamodbav:"user_info_url"`
+	Scopes       []string `json:"scopes" dynamodbav:"scopes"`
+	ResponseType string   `json:"response_type" dynamodbav:"response_type"`
+}
+
+// APIConfiguration represents API configuration for a platform
+type APIConfiguration struct {
+	BaseURL         string            `json:"base_url" dynamodbav:"base_url"`
+	AuthType        string            `json:"auth_type" dynamodbav:"auth_type"`
+	TestEndpoint    string            `json:"test_endpoint" dynamodbav:"test_endpoint"`
+	RateLimits      RateLimitConfig   `json:"rate_limits" dynamodbav:"rate_limits"`
+	RequiredHeaders map[string]string `json:"required_headers" dynamodbav:"required_headers"`
+	Version         string            `json:"version" dynamodbav:"version"`
+}
+
+// RateLimitConfig represents rate limiting configuration
+type RateLimitConfig struct {
+	RequestsPerSecond int `json:"requests_per_second" dynamodbav:"requests_per_second"`
+	RequestsPerMinute int `json:"requests_per_minute" dynamodbav:"requests_per_minute"`
+	RequestsPerHour   int `json:"requests_per_hour" dynamodbav:"requests_per_hour"`
+	BurstLimit        int `json:"burst_limit" dynamodbav:"burst_limit"`
+}
+
+// TestEndpointConfig represents a test/validation endpoint for a platform
+type TestEndpointConfig struct {
+	URL        string `json:"url" dynamodbav:"url"`
+	Method     string `json:"method" dynamodbav:"method"`
+	AuthHeader string `json:"auth_header" dynamodbav:"auth_header"`
+	AuthFormat string `json:"auth_format" dynamodbav:"auth_format"`
+}
+
+// TestEndpoints represents test endpoints for different auth types
+type TestEndpoints struct {
+	OAuth2 *TestEndpointConfig `json:"oauth2,omitempty" dynamodbav:"oauth2,omitempty"`
+	Bearer *TestEndpointConfig `json:"bearer,omitempty" dynamodbav:"bearer,omitempty"`
+	APIKey *TestEndpointConfig `json:"api_key,omitempty" dynamodbav:"api_key,omitempty"`
+}
+
+// ========== PLATFORM CONNECTION TYPES ==========
+
+// PlatformConnection represents a user's authenticated connection to a CRM platform
+type PlatformConnection struct {
+	ConnectionID        string                 `json:"connection_id" dynamodbav:"connection_id"`
+	AccountID           string                 `json:"account_id" dynamodbav:"account_id"`
+	UserID              string                 `json:"user_id" dynamodbav:"user_id"`
+	PlatformID          string                 `json:"platform_id" dynamodbav:"platform_id"`
+	ExternalUserID      string                 `json:"external_user_id,omitempty" dynamodbav:"external_user_id,omitempty"`
+	ExternalUserEmail   string                 `json:"external_user_email,omitempty" dynamodbav:"external_user_email,omitempty"`
+	ExternalAppID       string                 `json:"external_app_id,omitempty" dynamodbav:"external_app_id,omitempty"`
+	ExternalAppName     string                 `json:"external_app_name,omitempty" dynamodbav:"external_app_name,omitempty"`
+	Name                string                 `json:"name" dynamodbav:"name"`
+	Status              string                 `json:"status" dynamodbav:"status"`
+	AuthType            string                 `json:"auth_type" dynamodbav:"auth_type"`
+	AuthID              *string                `json:"auth_id,omitempty" dynamodbav:"auth_id,omitempty"`
+	CredentialsMetadata map[string]interface{} `json:"credentials_metadata" dynamodbav:"credentials_metadata"`
+	LastConnected       *time.Time             `json:"last_connected,omitempty" dynamodbav:"last_connected,omitempty"`
+	CreatedAt           time.Time              `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt           time.Time              `json:"updated_at" dynamodbav:"updated_at"`
+	ExpiresAt           *time.Time             `json:"expires_at,omitempty" dynamodbav:"expires_at,omitempty"`
+	LastSyncedAt        *time.Time             `json:"last_synced_at,omitempty" dynamodbav:"last_synced_at,omitempty"`
+	SyncStatus          string                 `json:"sync_status,omitempty" dynamodbav:"sync_status,omitempty"`
+	SyncRecordCounts    map[string]int         `json:"sync_record_counts,omitempty" dynamodbav:"sync_record_counts,omitempty"`
+}
+
+// PlatformConnectionAuth represents authentication credentials for a platform connection
+type PlatformConnectionAuth struct {
+	AuthID        string                 `json:"auth_id" dynamodbav:"auth_id"`
+	ConnectionID  string                 `json:"connection_id" dynamodbav:"connection_id"`
+	AccountID     string                 `json:"account_id" dynamodbav:"account_id"`
+	UserID        string                 `json:"user_id" dynamodbav:"user_id"`
+	PlatformID    string                 `json:"platform_id" dynamodbav:"platform_id"`
+	AuthType      string                 `json:"auth_type" dynamodbav:"auth_type"`
+	Status        string                 `json:"status" dynamodbav:"status"`
+	Version       int                    `json:"version" dynamodbav:"version"`
+
+	// OAuth2 credentials
+	AccessToken  string `json:"access_token,omitempty" dynamodbav:"access_token,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty" dynamodbav:"refresh_token,omitempty"`
+	TokenType    string `json:"token_type,omitempty" dynamodbav:"token_type,omitempty"`
+	ExpiresAt    int64  `json:"expires_at,omitempty" dynamodbav:"expires_at,omitempty"`
+	Scope        string `json:"scope,omitempty" dynamodbav:"scope,omitempty"`
+
+	// API Key credentials
+	APIKey    string `json:"api_key,omitempty" dynamodbav:"api_key,omitempty"`
+	APISecret string `json:"api_secret,omitempty" dynamodbav:"api_secret,omitempty"`
+
+	// Metadata & audit
+	CredentialsMeta  map[string]interface{} `json:"credentials_meta,omitempty" dynamodbav:"credentials_meta,omitempty"`
+	CreatedAt        int64                  `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt        int64                  `json:"updated_at" dynamodbav:"updated_at"`
+	LastUsedAt       *int64                 `json:"last_used_at,omitempty" dynamodbav:"last_used_at,omitempty"`
+	RevokedAt        *int64                 `json:"revoked_at,omitempty" dynamodbav:"revoked_at,omitempty"`
+
+	// Token refresh tracking
+	RefreshAttempts  int     `json:"refresh_attempts" dynamodbav:"refresh_attempts"`
+	LastRefreshAt    *int64  `json:"last_refresh_at,omitempty" dynamodbav:"last_refresh_at,omitempty"`
+	LastRefreshError *string `json:"last_refresh_error,omitempty" dynamodbav:"last_refresh_error,omitempty"`
+
+	// TTL for automatic cleanup
+	TTL *int64 `json:"ttl,omitempty" dynamodbav:"ttl,omitempty"`
+}
+
+// OAuthState represents a temporary OAuth state token for CSRF protection
+type OAuthState struct {
+	State      string                 `json:"state" dynamodbav:"state_id"`
+	UserID     string                 `json:"user_id" dynamodbav:"user_id"`
+	AccountID  string                 `json:"account_id" dynamodbav:"account_id"`
+	PlatformID string                 `json:"platform_id" dynamodbav:"platform_id"`
+	RedirectURI string                `json:"redirect_uri,omitempty" dynamodbav:"redirect_uri,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty" dynamodbav:"metadata,omitempty"`
+	CreatedAt  int64                  `json:"created_at" dynamodbav:"created_at"`
+	ExpiresAt  int64                  `json:"expires_at" dynamodbav:"expires_at"`
+	TTL        int64                  `json:"ttl,omitempty" dynamodbav:"ttl,omitempty"`
+}
+
+// ========== HELPER TYPES ==========
+
+// Helper represents a configured automation helper
+type Helper struct {
+	HelperID     string                 `json:"helper_id" dynamodbav:"helper_id"`
+	AccountID    string                 `json:"account_id" dynamodbav:"account_id"`
+	CreatedBy    string                 `json:"created_by" dynamodbav:"created_by"`
+	ConnectionID string                 `json:"connection_id,omitempty" dynamodbav:"connection_id,omitempty"`
+	Name         string                 `json:"name" dynamodbav:"name"`
+	Description  string                 `json:"description" dynamodbav:"description"`
+	HelperType   string                 `json:"helper_type" dynamodbav:"helper_type"`
+	Category     string                 `json:"category" dynamodbav:"category"`
+	Status       string                 `json:"status" dynamodbav:"status"`
+	Config       map[string]interface{} `json:"config" dynamodbav:"config"`
+	ConfigSchema map[string]interface{} `json:"config_schema,omitempty" dynamodbav:"config_schema,omitempty"`
+	Enabled      bool                   `json:"enabled" dynamodbav:"enabled"`
+	ExecutionCount int64                `json:"execution_count" dynamodbav:"execution_count"`
+	LastExecutedAt *time.Time           `json:"last_executed_at,omitempty" dynamodbav:"last_executed_at,omitempty"`
+	CreatedAt    time.Time              `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt    time.Time              `json:"updated_at" dynamodbav:"updated_at"`
+}
+
+// HelperTemplate represents a predefined helper template from the library
+type HelperTemplate struct {
+	TemplateID   string                 `json:"template_id" dynamodbav:"template_id"`
+	Name         string                 `json:"name" dynamodbav:"name"`
+	Description  string                 `json:"description" dynamodbav:"description"`
+	HelperType   string                 `json:"helper_type" dynamodbav:"helper_type"`
+	Category     string                 `json:"category" dynamodbav:"category"`
+	Icon         string                 `json:"icon" dynamodbav:"icon"`
+	ConfigSchema map[string]interface{} `json:"config_schema" dynamodbav:"config_schema"`
+	DefaultConfig map[string]interface{} `json:"default_config" dynamodbav:"default_config"`
+	RequiresCRM  bool                   `json:"requires_crm" dynamodbav:"requires_crm"`
+	SupportedCRMs []string              `json:"supported_crms" dynamodbav:"supported_crms"`
+	Popularity   int                    `json:"popularity" dynamodbav:"popularity"`
+	Status       string                 `json:"status" dynamodbav:"status"`
+	CreatedAt    time.Time              `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt    time.Time              `json:"updated_at" dynamodbav:"updated_at"`
+}
+
+// ========== EXECUTION TYPES ==========
+
+// Execution represents a helper execution record
+type Execution struct {
+	ExecutionID  string                 `json:"execution_id" dynamodbav:"execution_id"`
+	HelperID     string                 `json:"helper_id" dynamodbav:"helper_id"`
+	AccountID    string                 `json:"account_id" dynamodbav:"account_id"`
+	UserID       string                 `json:"user_id,omitempty" dynamodbav:"user_id,omitempty"`
+	APIKeyID     string                 `json:"api_key_id,omitempty" dynamodbav:"api_key_id,omitempty"`
+	ConnectionID string                 `json:"connection_id,omitempty" dynamodbav:"connection_id,omitempty"`
+	ContactID    string                 `json:"contact_id,omitempty" dynamodbav:"contact_id,omitempty"`
+	Status       string                 `json:"status" dynamodbav:"status"`
+	TriggerType  string                 `json:"trigger_type" dynamodbav:"trigger_type"`
+	Input        map[string]interface{} `json:"input,omitempty" dynamodbav:"input,omitempty"`
+	Output       map[string]interface{} `json:"output,omitempty" dynamodbav:"output,omitempty"`
+	ErrorMessage string                 `json:"error_message,omitempty" dynamodbav:"error_message,omitempty"`
+	DurationMs   int64                  `json:"duration_ms" dynamodbav:"duration_ms"`
+	CreatedAt    string                 `json:"created_at" dynamodbav:"created_at"`
+	StartedAt    time.Time              `json:"started_at" dynamodbav:"started_at"`
+	CompletedAt  *time.Time             `json:"completed_at,omitempty" dynamodbav:"completed_at,omitempty"`
+	TTL          *int64                 `json:"ttl,omitempty" dynamodbav:"ttl,omitempty"`
+}
+
+// ========== API KEY TYPES ==========
+
+// APIKey represents an API key for external helper execution
+type APIKey struct {
+	KeyID       string     `json:"key_id" dynamodbav:"key_id"`
+	AccountID   string     `json:"account_id" dynamodbav:"account_id"`
+	CreatedBy   string     `json:"created_by" dynamodbav:"created_by"`
+	Name        string     `json:"name" dynamodbav:"name"`
+	KeyHash     string     `json:"key_hash" dynamodbav:"key_hash"`
+	KeyPrefix   string     `json:"key_prefix" dynamodbav:"key_prefix"`
+	Permissions []string   `json:"permissions" dynamodbav:"permissions"`
+	Status      string     `json:"status" dynamodbav:"status"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty" dynamodbav:"last_used_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at" dynamodbav:"created_at"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty" dynamodbav:"expires_at,omitempty"`
+}
+
+// ========== PLAN TYPES ==========
+
+// PlanLimits defines limits for an account plan
+type PlanLimits struct {
+	MaxHelpers      int `json:"max_helpers"`
+	MaxExecutions   int `json:"max_executions"`
+	MaxConnections  int `json:"max_connections"`
+	MaxTeamMembers  int `json:"max_team_members"`
+	MaxAPIKeys      int `json:"max_api_keys"`
+}

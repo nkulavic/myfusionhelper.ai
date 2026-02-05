@@ -1,0 +1,129 @@
+package data
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/myfusionhelper/api/internal/helpers"
+)
+
+func init() {
+	helpers.Register("last_send_it", func() helpers.Helper { return &LastSendIt{} })
+}
+
+// LastSendIt retrieves the last email send date for a contact and stores it
+// in a specified field. Queries email engagement stats via the CRM connector.
+// Ported from legacy PHP last_send_it helper.
+type LastSendIt struct{}
+
+func (h *LastSendIt) GetName() string     { return "Last Send It" }
+func (h *LastSendIt) GetType() string     { return "last_send_it" }
+func (h *LastSendIt) GetCategory() string { return "data" }
+func (h *LastSendIt) GetDescription() string {
+	return "Retrieve the last email send date for a contact and save it to a field"
+}
+func (h *LastSendIt) RequiresCRM() bool       { return true }
+func (h *LastSendIt) SupportedCRMs() []string { return nil }
+
+func (h *LastSendIt) GetConfigSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"email_field": map[string]interface{}{
+				"type":        "string",
+				"description": "The email field to look up (e.g., Email, Email2, Email3)",
+				"default":     "Email",
+			},
+			"save_to": map[string]interface{}{
+				"type":        "string",
+				"description": "The contact field to store the last send date",
+			},
+		},
+		"required": []string{"save_to"},
+	}
+}
+
+func (h *LastSendIt) ValidateConfig(config map[string]interface{}) error {
+	if _, ok := config["save_to"].(string); !ok || config["save_to"] == "" {
+		return fmt.Errorf("save_to field is required")
+	}
+	return nil
+}
+
+func (h *LastSendIt) Execute(ctx context.Context, input helpers.HelperInput) (*helpers.HelperOutput, error) {
+	saveTo := input.Config["save_to"].(string)
+
+	emailField := "Email"
+	if ef, ok := input.Config["email_field"].(string); ok && ef != "" {
+		emailField = ef
+	}
+
+	// Normalize email field names
+	if emailField == "Email2" {
+		emailField = "EmailAddress2"
+	}
+	if emailField == "Email3" {
+		emailField = "EmailAddress3"
+	}
+
+	output := &helpers.HelperOutput{
+		Logs: make([]string, 0),
+	}
+
+	// Get the email address from the contact
+	emailValue, err := input.Connector.GetContactFieldValue(ctx, input.ContactID, emailField)
+	if err != nil || emailValue == nil || fmt.Sprintf("%v", emailValue) == "" {
+		output.Success = true
+		output.Message = fmt.Sprintf("Email field '%s' is empty, nothing to look up", emailField)
+		output.Logs = append(output.Logs, output.Message)
+		return output, nil
+	}
+
+	// Query email engagement stats via the connector
+	lastSendKey := fmt.Sprintf("_email_stats.%s.LastSentDate", fmt.Sprintf("%v", emailValue))
+	lastSendDate, err := input.Connector.GetContactFieldValue(ctx, input.ContactID, lastSendKey)
+	if err != nil {
+		output.Logs = append(output.Logs, fmt.Sprintf("Email stats query not directly supported: %v", err))
+
+		// Fallback: try a generic email stats field
+		lastSendDate, err = input.Connector.GetContactFieldValue(ctx, input.ContactID, "LastSentDate")
+		if err != nil {
+			output.Success = true
+			output.Message = "Could not retrieve email send stats"
+			output.Logs = append(output.Logs, fmt.Sprintf("Failed to get LastSentDate: %v", err))
+			return output, nil
+		}
+	}
+
+	if lastSendDate == nil || fmt.Sprintf("%v", lastSendDate) == "" {
+		output.Success = true
+		output.Message = "No send date found for contact"
+		output.Logs = append(output.Logs, output.Message)
+		return output, nil
+	}
+
+	dateStr := fmt.Sprintf("%v", lastSendDate)
+
+	// Save the date to the target field
+	err = input.Connector.SetContactFieldValue(ctx, input.ContactID, saveTo, dateStr)
+	if err != nil {
+		output.Message = fmt.Sprintf("Failed to save last send date to '%s': %v", saveTo, err)
+		return output, err
+	}
+
+	output.Success = true
+	output.Message = fmt.Sprintf("Last send date saved to '%s'", saveTo)
+	output.Actions = []helpers.HelperAction{
+		{
+			Type:   "field_updated",
+			Target: saveTo,
+			Value:  dateStr,
+		},
+	}
+	output.ModifiedData = map[string]interface{}{
+		saveTo: dateStr,
+	}
+	output.Logs = append(output.Logs, fmt.Sprintf("Last send date '%s' saved to '%s' for contact %s", dateStr, saveTo, input.ContactID))
+
+	return output, nil
+}

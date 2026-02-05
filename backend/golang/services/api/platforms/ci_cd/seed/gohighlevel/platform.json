@@ -1,0 +1,34 @@
+{
+  "platform_id": "platform:gohighlevel",
+  "slug": "gohighlevel",
+  "name": "GoHighLevel",
+  "category": "crm",
+  "description": "All-in-one marketing platform for agencies with CRM, funnels, and automation",
+  "status": "active",
+  "version": "v2",
+  "logo_url": "https://assets.myfusionhelper.ai/platforms/gohighlevel-logo.svg",
+  "documentation_url": "https://highlevel.stoplight.io/docs/integrations/",
+  "oauth": {
+    "auth_url": "https://marketplace.gohighlevel.com/oauth/chooselocation",
+    "token_url": "https://services.leadconnectorhq.com/oauth/token",
+    "user_info_url": "",
+    "scopes": ["contacts.readonly", "contacts.write", "workflows.readonly"],
+    "response_type": "code"
+  },
+  "api_config": {
+    "base_url": "https://services.leadconnectorhq.com",
+    "auth_type": "oauth2",
+    "test_endpoint": "https://services.leadconnectorhq.com/contacts/?limit=1",
+    "rate_limits": {
+      "requests_per_second": 10,
+      "requests_per_minute": 0,
+      "requests_per_hour": 0,
+      "burst_limit": 20
+    },
+    "required_headers": {
+      "Version": "2021-07-28"
+    },
+    "version": "v2"
+  },
+  "capabilities": ["contacts", "tags", "custom_fields", "automations", "webhooks"]
+}

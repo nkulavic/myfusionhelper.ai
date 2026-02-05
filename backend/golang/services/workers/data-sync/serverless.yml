@@ -1,0 +1,108 @@
+service: mfh-data-sync
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  tracing:
+    lambda: true
+  environment:
+    STAGE: ${self:provider.stage}
+    COGNITO_REGION: ${self:provider.region}
+    CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
+    PLATFORMS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableName}
+    PLATFORM_CONNECTION_AUTHS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableName}
+    ANALYTICS_BUCKET: ${cf:mfh-infrastructure-s3-${self:provider.stage}.AnalyticsBucketName}
+    DATA_SYNC_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.DataSyncQueueUrl}
+  iam:
+    role:
+      statements:
+        # DynamoDB access for connections, platforms, and auth tables
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:Scan
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableArn}/index/*"
+        # S3 write access for parquet files
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+          Resource:
+            - "${cf:mfh-infrastructure-s3-${self:provider.stage}.AnalyticsBucketArn}/*"
+        # SQS send for scheduler, receive/delete for worker
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource:
+            - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.DataSyncQueueArn}
+        # CloudWatch logging
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        # X-Ray tracing
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+functions:
+  data-sync-worker:
+    handler: cmd/handlers/data-sync/main.go
+    description: "Pull CRM data via connector interface and write parquet files to S3"
+    memorySize: 1024
+    timeout: 900
+    reservedConcurrency: 5
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: data-sync-worker
+    events:
+      - sqs:
+          arn: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.DataSyncQueueArn}
+          batchSize: 1
+          maximumBatchingWindow: 0
+          functionResponseType: ReportBatchItemFailures
+
+  data-sync-scheduler:
+    handler: cmd/handlers/data-sync-scheduler/main.go
+    description: "Schedule data sync jobs for all active connections every 6 hours"
+    memorySize: 256
+    timeout: 60
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: data-sync-scheduler
+    events:
+      - schedule:
+          rate: rate(6 hours)
+          enabled: true
+          description: "Trigger CRM data sync for all active connections"

@@ -72,8 +72,12 @@ export interface Helper {
   type: string
   category: HelperCategory
   config: Record<string, unknown>
+  configSchema?: Record<string, unknown>
   connectionId: string
-  status: 'active' | 'inactive'
+  status: 'active' | 'deleted'
+  enabled: boolean
+  executionCount: number
+  lastExecutedAt?: string
   createdAt: string
   updatedAt: string
 }
@@ -82,14 +86,28 @@ export interface HelperExecution {
   id: string
   helperId: string
   accountId: string
+  userId?: string
+  connectionId?: string
   contactId?: string
   status: 'pending' | 'running' | 'completed' | 'failed'
+  triggerType?: string
   input: Record<string, unknown>
   output?: Record<string, unknown>
   error?: string
+  createdAt: string
   startedAt: string
   completedAt?: string
   durationMs?: number
+}
+
+export interface HelperTypeDefinition {
+  type: string
+  name: string
+  category: HelperCategory
+  description: string
+  requiresCrm: boolean
+  supportedCrms: string[]
+  configSchema: Record<string, unknown>
 }
 
 // API Key types
@@ -134,5 +152,7 @@ export interface APIResponse<T> {
     page?: number
     limit?: number
     total?: number
+    nextToken?: string
+    hasMore?: boolean
   }
 }

@@ -1,0 +1,246 @@
+name: Deploy Backend (Go Serverless)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/golang/**'
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Deployment stage'
+        required: false
+        default: 'dev'
+        type: string
+
+env:
+  AWS_REGION: us-west-2
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Build & Test
+  # ──────────────────────────────────────────────
+  build-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/golang
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: CGO_ENABLED=1 go build ./...
+
+      - name: Test
+        run: CGO_ENABLED=1 go test ./...
+
+  # ──────────────────────────────────────────────
+  # 2. Deploy Infrastructure (parallel matrix)
+  # ──────────────────────────────────────────────
+  deploy-infra:
+    name: "Deploy Infra: ${{ matrix.service }}"
+    needs: build-test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: cognito
+            path: services/infrastructure/cognito
+          - service: dynamodb-core
+            path: services/infrastructure/dynamodb/core
+          - service: s3
+            path: services/infrastructure/s3
+          - service: sqs
+            path: services/infrastructure/sqs
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Install Serverless Framework
+        run: npm install -g serverless
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+      - name: "Deploy ${{ matrix.service }}"
+        working-directory: backend/golang/${{ matrix.path }}
+        run: npx sls deploy --stage ${{ github.event.inputs.stage || 'dev' }} --region us-west-2
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+  # ──────────────────────────────────────────────
+  # 3. Deploy API Gateway
+  # ──────────────────────────────────────────────
+  deploy-gateway:
+    name: Deploy API Gateway
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Install Serverless Framework
+        run: npm install -g serverless
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+      - name: Deploy gateway
+        working-directory: backend/golang/services/api/gateway
+        run: npx sls deploy --stage ${{ github.event.inputs.stage || 'dev' }} --region us-west-2
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+  # ──────────────────────────────────────────────
+  # 4. Deploy API Services (parallel matrix)
+  # ──────────────────────────────────────────────
+  deploy-api:
+    name: "Deploy API: ${{ matrix.service }}"
+    needs: deploy-gateway
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - auth
+          - accounts
+          - api-keys
+          - helpers
+          - platforms
+          - data-explorer
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Install Serverless Framework
+        run: npm install -g serverless
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+      - name: "Deploy ${{ matrix.service }}"
+        working-directory: backend/golang/services/api/${{ matrix.service }}
+        run: npx sls deploy --stage ${{ github.event.inputs.stage || 'dev' }} --region us-west-2
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+  # ──────────────────────────────────────────────
+  # 5. Deploy Workers (parallel matrix)
+  # ──────────────────────────────────────────────
+  deploy-workers:
+    name: "Deploy Worker: ${{ matrix.service }}"
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - helper-worker
+          - data-sync
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Install Serverless Framework
+        run: npm install -g serverless
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+      - name: "Deploy ${{ matrix.service }}"
+        working-directory: backend/golang/services/workers/${{ matrix.service }}
+        run: npx sls deploy --stage ${{ github.event.inputs.stage || 'dev' }} --region us-west-2
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+  # ──────────────────────────────────────────────
+  # 6. Post-Deploy (seed + verify)
+  # ──────────────────────────────────────────────
+  post-deploy:
+    name: Post-Deploy Verification
+    needs:
+      - deploy-api
+      - deploy-workers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Seed platforms
+        working-directory: backend/golang/services/api/platforms/ci_cd/seed
+        run: bash seed.sh ${{ github.event.inputs.stage || 'dev' }} us-west-2
+
+      - name: Verify deployment
+        working-directory: backend/golang/scripts
+        run: bash verify-deploy.sh ${{ github.event.inputs.stage || 'dev' }} us-west-2

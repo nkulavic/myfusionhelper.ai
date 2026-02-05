@@ -1,0 +1,27 @@
+{
+  "platform_id": "platform:activecampaign",
+  "slug": "activecampaign",
+  "name": "ActiveCampaign",
+  "category": "crm",
+  "description": "Email marketing, marketing automation, and CRM tools for growing businesses",
+  "status": "active",
+  "version": "v3",
+  "logo_url": "https://assets.myfusionhelper.ai/platforms/activecampaign-logo.svg",
+  "documentation_url": "https://developers.activecampaign.com/reference/overview",
+  "api_config": {
+    "base_url": "https://{account}.api-us1.com/api/3",
+    "auth_type": "api_key",
+    "test_endpoint": "https://{account}.api-us1.com/api/3/users/me",
+    "rate_limits": {
+      "requests_per_second": 5,
+      "requests_per_minute": 0,
+      "requests_per_hour": 0,
+      "burst_limit": 10
+    },
+    "required_headers": {
+      "Api-Token": "{api_key}"
+    },
+    "version": "v3"
+  },
+  "capabilities": ["contacts", "tags", "custom_fields", "automations", "deals", "emails"]
+}

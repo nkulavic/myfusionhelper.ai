@@ -1,0 +1,204 @@
+service: mfh-auth
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 29
+  tracing:
+    lambda: true
+    apiGateway: true
+  httpApi:
+    id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+  environment:
+    SERVICE_VERSION: "2025.02.04.0001"
+    STAGE: ${self:provider.stage}
+    COGNITO_USER_POOL_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
+    COGNITO_CLIENT_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolClientId}
+    COGNITO_CLIENT_SECRET: ""
+    COGNITO_REGION: ${self:provider.region}
+    COGNITO_JWKS_URI: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoJwksUri}
+    COGNITO_ISSUER: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
+    USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
+    ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
+    USER_ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableName}
+    API_VERSION: v1
+    API_REFERENCE: mfh-api
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:BatchGetItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:DescribeTable
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}/index/*"
+        - Effect: Allow
+          Action:
+            - cognito-idp:AdminCreateUser
+            - cognito-idp:AdminSetUserPassword
+            - cognito-idp:AdminDeleteUser
+            - cognito-idp:AdminGetUser
+            - cognito-idp:AdminUpdateUserAttributes
+            - cognito-idp:AdminListGroupsForUser
+            - cognito-idp:ListUsers
+            - cognito-idp:InitiateAuth
+            - cognito-idp:RespondToAuthChallenge
+            - cognito-idp:GlobalSignOut
+            - cognito-idp:AdminUserGlobalSignOut
+            - cognito-idp:GetUser
+            - cognito-idp:ChangePassword
+            - cognito-idp:ConfirmSignUp
+            - cognito-idp:ForgotPassword
+            - cognito-idp:ConfirmForgotPassword
+          Resource:
+            - ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolArn}
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+functions:
+  # Protected endpoints (require auth)
+  auth-status:
+    handler: cmd/handlers/auth/main.go
+    description: "User status and authentication info"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-status
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-status
+      ENDPOINT_PATH: /auth/status
+    events:
+      - httpApi:
+          path: /auth/status
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  auth-logout:
+    handler: cmd/handlers/auth/main.go
+    description: "Session logout and token revocation"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-logout
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-logout
+      ENDPOINT_PATH: /auth/logout
+    events:
+      - httpApi:
+          path: /auth/logout
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  auth-refresh:
+    handler: cmd/handlers/auth/main.go
+    description: "Token refresh"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-refresh
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-refresh
+      ENDPOINT_PATH: /auth/refresh
+    events:
+      - httpApi:
+          path: /auth/refresh
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  # Public endpoints (no auth required)
+  auth-health:
+    handler: cmd/handlers/auth/main.go
+    description: "Health check endpoint"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-health
+    memorySize: 128
+    timeout: 5
+    environment:
+      FUNCTION_NAME: auth-health
+      ENDPOINT_PATH: /auth/health
+    events:
+      - httpApi:
+          path: /auth/health
+          method: get
+
+  auth-login:
+    handler: cmd/handlers/auth/main.go
+    description: "User authentication"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-login
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-login
+      ENDPOINT_PATH: /auth/login
+    events:
+      - httpApi:
+          path: /auth/login
+          method: post
+
+  auth-register:
+    handler: cmd/handlers/auth/main.go
+    description: "User registration"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-register
+    memorySize: 256
+    timeout: 10
+    reservedConcurrency: 100
+    environment:
+      FUNCTION_NAME: auth-register
+      ENDPOINT_PATH: /auth/register
+    events:
+      - httpApi:
+          path: /auth/register
+          method: post

@@ -1,0 +1,40 @@
+import { apiClient } from './client'
+import type { User, Account } from '@myfusionhelper/types'
+
+export interface LoginInput {
+  email: string
+  password: string
+}
+
+export interface RegisterInput {
+  email: string
+  password: string
+  name: string
+}
+
+export interface AuthStatusResponse {
+  user: User
+  account: Account
+}
+
+export const authApi = {
+  login: (input: LoginInput) =>
+    apiClient.post<{ token: string; user: User; account: Account }>(
+      '/auth/login',
+      input
+    ),
+
+  register: (input: RegisterInput) =>
+    apiClient.post<{ token: string; user: User; account: Account }>(
+      '/auth/register',
+      input
+    ),
+
+  status: () =>
+    apiClient.get<AuthStatusResponse>('/auth/status'),
+
+  logout: () => apiClient.post<void>('/auth/logout'),
+
+  refresh: () =>
+    apiClient.post<{ token: string }>('/auth/refresh'),
+}

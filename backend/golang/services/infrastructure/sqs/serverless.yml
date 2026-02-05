@@ -1,0 +1,273 @@
+service: mfh-infrastructure-sqs
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  deploymentBucket:
+    blockPublicAccess: true
+
+# No functions - this is infrastructure only
+functions: {}
+
+resources:
+  Description: "SQS queue infrastructure for MyFusionHelper.ai - helper execution and webhook processing"
+
+  Resources:
+    # High Priority - Helper execution queue (FIFO for ordered processing per account)
+    HelperExecutionQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-helper-execution-${self:provider.stage}.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 300  # 5 minutes
+        MessageRetentionPeriod: 1209600  # 14 days
+        ReceiveMessageWaitTimeSeconds: 20
+        RedrivePolicy:
+          deadLetterTargetArn: {"Fn::GetAtt": ["HelperExecutionDeadLetterQueue", "Arn"]}
+          maxReceiveCount: 3
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: Priority
+            Value: High
+          - Key: JobType
+            Value: HelperExecution
+
+    HelperExecutionDeadLetterQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-helper-execution-dlq-${self:provider.stage}.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        MessageRetentionPeriod: 1209600  # 14 days
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: QueueType
+            Value: DeadLetter
+          - Key: ParentQueue
+            Value: HelperExecutionQueue
+
+    # Medium Priority - Inbound webhook processing
+    # Standard queue (not FIFO) - webhooks don't require strict ordering
+    WebhookQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-webhooks-${self:provider.stage}
+        VisibilityTimeout: 60  # 1 minute
+        MessageRetentionPeriod: 1209600  # 14 days
+        ReceiveMessageWaitTimeSeconds: 20
+        RedrivePolicy:
+          deadLetterTargetArn: {"Fn::GetAtt": ["WebhookDeadLetterQueue", "Arn"]}
+          maxReceiveCount: 3
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: Priority
+            Value: Medium
+          - Key: JobType
+            Value: Webhook
+
+    WebhookDeadLetterQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-webhooks-dlq-${self:provider.stage}
+        MessageRetentionPeriod: 1209600  # 14 days
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: QueueType
+            Value: DeadLetter
+          - Key: ParentQueue
+            Value: WebhookQueue
+
+    # Low Priority - Notification queue for alerts and activity logging
+    NotificationQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-notifications-${self:provider.stage}.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 60  # 1 minute
+        MessageRetentionPeriod: 604800  # 7 days
+        ReceiveMessageWaitTimeSeconds: 1  # Fast polling for notifications
+        RedrivePolicy:
+          deadLetterTargetArn: {"Fn::GetAtt": ["NotificationDeadLetterQueue", "Arn"]}
+          maxReceiveCount: 5
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: Priority
+            Value: Low
+          - Key: JobType
+            Value: Notification
+
+    NotificationDeadLetterQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-notifications-dlq-${self:provider.stage}.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        MessageRetentionPeriod: 604800  # 7 days
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: QueueType
+            Value: DeadLetter
+          - Key: ParentQueue
+            Value: NotificationQueue
+
+    # Data sync queue - CRM data sync to parquet on S3
+    DataSyncQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-data-sync-${self:provider.stage}
+        VisibilityTimeout: 900  # 15 minutes - large CRM syncs
+        MessageRetentionPeriod: 1209600  # 14 days
+        ReceiveMessageWaitTimeSeconds: 20
+        RedrivePolicy:
+          deadLetterTargetArn: {"Fn::GetAtt": ["DataSyncDeadLetterQueue", "Arn"]}
+          maxReceiveCount: 3
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: Priority
+            Value: Medium
+          - Key: JobType
+            Value: DataSync
+
+    DataSyncDeadLetterQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-data-sync-dlq-${self:provider.stage}
+        MessageRetentionPeriod: 1209600  # 14 days
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: QueueType
+            Value: DeadLetter
+          - Key: ParentQueue
+            Value: DataSyncQueue
+
+  # CloudFormation Outputs
+  Outputs:
+    # Helper Execution Queue
+    HelperExecutionQueueUrl:
+      Description: Helper execution queue URL
+      Value: {"Ref": "HelperExecutionQueue"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HelperExecutionQueueUrl
+
+    HelperExecutionQueueArn:
+      Description: Helper execution queue ARN
+      Value: {"Fn::GetAtt": ["HelperExecutionQueue", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HelperExecutionQueueArn
+
+    HelperExecutionDeadLetterQueueUrl:
+      Description: Helper execution dead letter queue URL
+      Value: {"Ref": "HelperExecutionDeadLetterQueue"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HelperExecutionDeadLetterQueueUrl
+
+    HelperExecutionDeadLetterQueueArn:
+      Description: Helper execution dead letter queue ARN
+      Value: {"Fn::GetAtt": ["HelperExecutionDeadLetterQueue", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HelperExecutionDeadLetterQueueArn
+
+    # Webhook Queue
+    WebhookQueueUrl:
+      Description: Webhook queue URL
+      Value: {"Ref": "WebhookQueue"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WebhookQueueUrl
+
+    WebhookQueueArn:
+      Description: Webhook queue ARN
+      Value: {"Fn::GetAtt": ["WebhookQueue", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WebhookQueueArn
+
+    WebhookDeadLetterQueueUrl:
+      Description: Webhook dead letter queue URL
+      Value: {"Ref": "WebhookDeadLetterQueue"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WebhookDeadLetterQueueUrl
+
+    WebhookDeadLetterQueueArn:
+      Description: Webhook dead letter queue ARN
+      Value: {"Fn::GetAtt": ["WebhookDeadLetterQueue", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WebhookDeadLetterQueueArn
+
+    # Notification Queue
+    NotificationQueueUrl:
+      Description: Notification queue URL
+      Value: {"Ref": "NotificationQueue"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-NotificationQueueUrl
+
+    NotificationQueueArn:
+      Description: Notification queue ARN
+      Value: {"Fn::GetAtt": ["NotificationQueue", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-NotificationQueueArn
+
+    NotificationDeadLetterQueueUrl:
+      Description: Notification dead letter queue URL
+      Value: {"Ref": "NotificationDeadLetterQueue"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-NotificationDeadLetterQueueUrl
+
+    NotificationDeadLetterQueueArn:
+      Description: Notification dead letter queue ARN
+      Value: {"Fn::GetAtt": ["NotificationDeadLetterQueue", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-NotificationDeadLetterQueueArn
+
+    # Data Sync Queue
+    DataSyncQueueUrl:
+      Description: Data sync queue URL
+      Value: {"Ref": "DataSyncQueue"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DataSyncQueueUrl
+
+    DataSyncQueueArn:
+      Description: Data sync queue ARN
+      Value: {"Fn::GetAtt": ["DataSyncQueue", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DataSyncQueueArn
+
+    DataSyncDeadLetterQueueUrl:
+      Description: Data sync dead letter queue URL
+      Value: {"Ref": "DataSyncDeadLetterQueue"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DataSyncDeadLetterQueueUrl
+
+    DataSyncDeadLetterQueueArn:
+      Description: Data sync dead letter queue ARN
+      Value: {"Fn::GetAtt": ["DataSyncDeadLetterQueue", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DataSyncDeadLetterQueueArn

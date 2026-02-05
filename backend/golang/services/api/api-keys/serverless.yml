@@ -1,0 +1,149 @@
+service: mfh-api-keys
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 29
+  tracing:
+    lambda: true
+    apiGateway: true
+  httpApi:
+    id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+  environment:
+    SERVICE_VERSION: "2025.02.04.0001"
+    STAGE: ${self:provider.stage}
+    COGNITO_USER_POOL_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
+    COGNITO_CLIENT_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolClientId}
+    COGNITO_CLIENT_SECRET: ""
+    COGNITO_REGION: ${self:provider.region}
+    COGNITO_JWKS_URI: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoJwksUri}
+    COGNITO_ISSUER: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
+    USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
+    ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
+    USER_ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableName}
+    API_KEYS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ApiKeysTableName}
+    API_VERSION: v1
+    API_REFERENCE: mfh-api
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:BatchGetItem
+            - dynamodb:DescribeTable
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ApiKeysTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ApiKeysTableArn}/index/*"
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+functions:
+  api-keys-list:
+    handler: cmd/handlers/api-keys/main.go
+    description: "List API keys"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: api-keys-list
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: api-keys-list
+      ENDPOINT_PATH: /api-keys
+    events:
+      - httpApi:
+          path: /api-keys
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  api-keys-create:
+    handler: cmd/handlers/api-keys/main.go
+    description: "Create API key"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: api-keys-create
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: api-keys-create
+      ENDPOINT_PATH: /api-keys
+    events:
+      - httpApi:
+          path: /api-keys
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  api-keys-revoke:
+    handler: cmd/handlers/api-keys/main.go
+    description: "Revoke API key"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: api-keys-revoke
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: api-keys-revoke
+      ENDPOINT_PATH: /api-keys/{key_id}
+    events:
+      - httpApi:
+          path: /api-keys/{key_id}
+          method: delete
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  api-keys-health:
+    handler: cmd/handlers/api-keys/main.go
+    description: "Health check endpoint"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: api-keys-health
+    memorySize: 128
+    timeout: 5
+    environment:
+      FUNCTION_NAME: api-keys-health
+      ENDPOINT_PATH: /api-keys/health
+    events:
+      - httpApi:
+          path: /api-keys/health
+          method: get

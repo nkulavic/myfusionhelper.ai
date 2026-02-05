@@ -1,0 +1,136 @@
+service: mfh-api-gateway
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  environment:
+    STAGE: ${self:provider.stage}
+    # Cognito configuration from infrastructure-cognito service
+    COGNITO_USER_POOL_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
+    COGNITO_CLIENT_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolClientId}
+    COGNITO_CLIENT_SECRET: ""  # No secret for public client
+    COGNITO_REGION: ${self:provider.region}
+    COGNITO_JWKS_URI: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoJwksUri}
+    COGNITO_ISSUER: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
+    # DynamoDB table references from infrastructure-dynamodb service
+    DYNAMODB_TABLE_PREFIX: mfh-${self:provider.stage}
+    USERS_TABLE_NAME: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
+    ACCOUNTS_TABLE_NAME: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
+    USER_ACCOUNTS_TABLE_NAME: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableName}
+    # S3 bucket references from infrastructure-s3 service
+    DATA_BUCKET_NAME: ${cf:mfh-infrastructure-s3-${self:provider.stage}.DataBucketName}
+    # API configuration
+    API_VERSION: v1
+    API_REFERENCE: mfh-api-gateway
+  deploymentBucket:
+    blockPublicAccess: true
+  httpApi:
+    cors:
+      allowedOrigins:
+        - '*'
+      allowedHeaders:
+        - content-type
+        - authorization
+        - x-amz-date
+        - x-api-key
+        - x-amz-security-token
+        - x-platform
+        - x-app-version
+      allowedMethods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+      maxAge: 86400
+    authorizers:
+      cognitoAuthorizer:
+        type: jwt
+        identitySource:
+          - $request.header.Authorization
+        issuerUrl: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
+        audience:
+          - ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolClientId}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - apigateway:GET
+            - apigateway:POST
+          Resource:
+            - "arn:aws:apigateway:${self:provider.region}::/apis/*"
+        # DynamoDB permissions
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:DescribeTable
+          Resource:
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/mfh-${self:provider.stage}-*"
+            - "arn:aws:dynamodb:${self:provider.region}:*:table/mfh-${self:provider.stage}-*/index/*"
+        # S3 permissions for data bucket access
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:DeleteObject
+            - s3:ListBucket
+          Resource:
+            - ${cf:mfh-infrastructure-s3-${self:provider.stage}.DataBucketArn}
+            - "${cf:mfh-infrastructure-s3-${self:provider.stage}.DataBucketArn}/*"
+
+package:
+  individually: true
+
+functions:
+  # Minimal health endpoint to create HttpApi
+  health:
+    handler: index.handler
+    runtime: nodejs20.x
+    description: Check the health status of the API
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: health
+    events:
+      - httpApi:
+          path: /health
+          method: get
+
+resources:
+  Outputs:
+    HttpApiId:
+      Description: "HTTP API Gateway ID"
+      Value:
+        Ref: HttpApi
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HttpApiId
+    HttpApiEndpoint:
+      Description: "HTTP API Gateway Endpoint"
+      Value:
+        Fn::Join:
+          - ''
+          - - 'https://'
+            - Ref: HttpApi
+            - '.execute-api.'
+            - ${self:provider.region}
+            - '.amazonaws.com'
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HttpApiEndpoint
+    CognitoAuthorizerId:
+      Description: "Cognito JWT Authorizer ID"
+      Value:
+        Ref: HttpApiAuthorizerCognitoAuthorizer
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CognitoAuthorizerId
