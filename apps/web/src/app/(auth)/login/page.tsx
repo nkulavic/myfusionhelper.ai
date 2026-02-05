@@ -25,13 +25,7 @@ export default function LoginPage() {
         },
         onError: (err) => {
           const message = err instanceof Error ? err.message : 'An error occurred'
-          if (message.includes('UserNotConfirmedException')) {
-            setError('Please verify your email before signing in.')
-          } else if (message.includes('NotAuthorizedException')) {
-            setError('Invalid email or password.')
-          } else {
-            setError(message)
-          }
+          setError(message)
         },
       }
     )

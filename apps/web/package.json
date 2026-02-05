@@ -14,7 +14,6 @@
     "@ai-sdk/groq": "^3.0.21",
     "@ai-sdk/openai": "^3.0.25",
     "@ai-sdk/react": "^3.0.73",
-    "aws-amplify": "^6.13.0",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",

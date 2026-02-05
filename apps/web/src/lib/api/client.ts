@@ -1,5 +1,5 @@
 import type { APIResponse } from '@myfusionhelper/types'
-import { fetchAuthSession } from 'aws-amplify/auth'
+import { getAccessToken, getRefreshToken, setTokens, clearTokens } from '@/lib/auth-client'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.myfusionhelper.ai'
 
@@ -45,20 +45,52 @@ function toSnakeCase(data: unknown): unknown {
   return transformKeys(data, camelToSnake)
 }
 
-async function getAuthToken(): Promise<string | null> {
-  try {
-    const session = await fetchAuthSession()
-    return session.tokens?.accessToken?.toString() ?? null
-  } catch {
-    return null
+// Token refresh state to prevent concurrent refresh attempts
+let isRefreshing = false
+let refreshPromise: Promise<boolean> | null = null
+
+async function attemptTokenRefresh(): Promise<boolean> {
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise
   }
+
+  isRefreshing = true
+  refreshPromise = (async () => {
+    try {
+      const refreshToken = getRefreshToken()
+      if (!refreshToken) return false
+
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      })
+
+      if (!response.ok) return false
+
+      const data = await response.json()
+      if (data.data?.token) {
+        setTokens(data.data.token, data.data.refresh_token)
+        return true
+      }
+      return false
+    } catch {
+      return false
+    } finally {
+      isRefreshing = false
+      refreshPromise = null
+    }
+  })()
+
+  return refreshPromise
 }
 
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  isRetry = false
 ): Promise<APIResponse<T>> {
-  const token = await getAuthToken()
+  const token = getAccessToken()
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -73,6 +105,16 @@ async function request<T>(
     ...options,
     headers,
   })
+
+  // On 401, try to refresh the token and retry once
+  if (response.status === 401 && !isRetry && !path.includes('/auth/')) {
+    const refreshed = await attemptTokenRefresh()
+    if (refreshed) {
+      return request<T>(path, options, true)
+    }
+    // Refresh failed — clear auth and let the error propagate
+    clearTokens()
+  }
 
   if (!response.ok) {
     let errorData: { error?: { code?: string; message?: string } } = {}

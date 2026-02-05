@@ -17,13 +17,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check for Cognito auth cookies (Amplify v6 stores tokens as CognitoIdentityServiceProvider.* cookies)
-  const hasCognitoCookie = request.cookies.getAll().some(
-    (cookie) => cookie.name.startsWith('CognitoIdentityServiceProvider.')
-  )
+  // Check for auth indicator cookie (set by auth-client when tokens are stored)
+  const isAuthenticated = request.cookies.has('mfh_authenticated')
 
-  // If no Cognito session and trying to access protected route, redirect to login
-  if (!hasCognitoCookie) {
+  // If not authenticated and trying to access protected route, redirect to login
+  if (!isAuthenticated) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)

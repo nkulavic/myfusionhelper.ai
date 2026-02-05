@@ -1,13 +1,15 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { User } from '@myfusionhelper/types'
+import { setTokens, clearTokens } from '@/lib/auth-client'
 
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
 
-  setUser: (user: User) => void
+  setUser: (user: User, token: string, refreshToken?: string) => void
+  updateToken: (token: string) => void
   clearAuth: () => void
   setLoading: (loading: boolean) => void
 }
@@ -19,11 +21,17 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: true,
 
-      setUser: (user) => {
+      setUser: (user, token, refreshToken) => {
+        setTokens(token, refreshToken)
         set({ user, isAuthenticated: true, isLoading: false })
       },
 
+      updateToken: (token) => {
+        setTokens(token)
+      },
+
       clearAuth: () => {
+        clearTokens()
         set({ user: null, isAuthenticated: false, isLoading: false })
       },
 

@@ -17,18 +17,19 @@ export interface AuthStatusResponse {
   account: Account
 }
 
+interface AuthResponse {
+  token: string
+  refreshToken: string
+  user: User
+  account: Account
+}
+
 export const authApi = {
   login: (input: LoginInput) =>
-    apiClient.post<{ token: string; user: User; account: Account }>(
-      '/auth/login',
-      input
-    ),
+    apiClient.post<AuthResponse>('/auth/login', input),
 
   register: (input: RegisterInput) =>
-    apiClient.post<{ token: string; user: User; account: Account }>(
-      '/auth/register',
-      input
-    ),
+    apiClient.post<AuthResponse>('/auth/register', input),
 
   status: () =>
     apiClient.get<AuthStatusResponse>('/auth/status'),
