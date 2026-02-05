@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - dev
     paths:
       - 'backend/golang/**'
   workflow_dispatch:
@@ -16,6 +17,8 @@ on:
 
 env:
   AWS_REGION: us-west-2
+  # Map branch to stage: dev→dev, main→prod. Manual dispatch uses input.
+  DEPLOY_STAGE: ${{ github.event.inputs.stage || (github.ref_name == 'main' && 'prod' || 'dev') }}
 
 jobs:
   # ──────────────────────────────────────────────
@@ -86,7 +89,7 @@ jobs:
 
       - name: "Deploy ${{ matrix.service }}"
         working-directory: backend/golang/${{ matrix.path }}
-        run: npx sls deploy --stage ${{ github.event.inputs.stage || 'dev' }} --region us-west-2
+        run: npx sls deploy --stage ${{ env.DEPLOY_STAGE }} --region us-west-2
         env:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
@@ -121,7 +124,7 @@ jobs:
 
       - name: Deploy gateway
         working-directory: backend/golang/services/api/gateway
-        run: npx sls deploy --stage ${{ github.event.inputs.stage || 'dev' }} --region us-west-2
+        run: npx sls deploy --stage ${{ env.DEPLOY_STAGE }} --region us-west-2
         env:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
@@ -166,7 +169,7 @@ jobs:
 
       - name: "Deploy ${{ matrix.service }}"
         working-directory: backend/golang/services/api/${{ matrix.service }}
-        run: npx sls deploy --stage ${{ github.event.inputs.stage || 'dev' }} --region us-west-2
+        run: npx sls deploy --stage ${{ env.DEPLOY_STAGE }} --region us-west-2
         env:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
@@ -207,7 +210,7 @@ jobs:
 
       - name: "Deploy ${{ matrix.service }}"
         working-directory: backend/golang/services/workers/${{ matrix.service }}
-        run: npx sls deploy --stage ${{ github.event.inputs.stage || 'dev' }} --region us-west-2
+        run: npx sls deploy --stage ${{ env.DEPLOY_STAGE }} --region us-west-2
         env:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
@@ -239,8 +242,8 @@ jobs:
 
       - name: Seed platforms
         working-directory: backend/golang/services/api/platforms/ci_cd/seed
-        run: bash seed.sh ${{ github.event.inputs.stage || 'dev' }} us-west-2
+        run: bash seed.sh ${{ env.DEPLOY_STAGE }} us-west-2
 
       - name: Verify deployment
         working-directory: backend/golang/scripts
-        run: bash verify-deploy.sh ${{ github.event.inputs.stage || 'dev' }} us-west-2
+        run: bash verify-deploy.sh ${{ env.DEPLOY_STAGE }} us-west-2

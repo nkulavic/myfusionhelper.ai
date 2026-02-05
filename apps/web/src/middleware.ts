@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // Routes that don't require authentication
-const publicRoutes = ['/', '/login', '/register', '/api/auth']
+const publicRoutes = ['/', '/login', '/register']
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -17,11 +17,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check for session cookie (Better Auth uses 'better-auth.session_token')
-  const sessionToken = request.cookies.get('better-auth.session_token')
+  // Check for Cognito auth cookies (Amplify v6 stores tokens as CognitoIdentityServiceProvider.* cookies)
+  const hasCognitoCookie = request.cookies.getAll().some(
+    (cookie) => cookie.name.startsWith('CognitoIdentityServiceProvider.')
+  )
 
-  // If no session and trying to access protected route, redirect to login
-  if (!sessionToken) {
+  // If no Cognito session and trying to access protected route, redirect to login
+  if (!hasCognitoCookie) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)

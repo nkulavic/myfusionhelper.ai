@@ -1,4 +1,5 @@
 import type { APIResponse } from '@myfusionhelper/types'
+import { fetchAuthSession } from 'aws-amplify/auth'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.myfusionhelper.ai'
 
@@ -45,8 +46,12 @@ function toSnakeCase(data: unknown): unknown {
 }
 
 async function getAuthToken(): Promise<string | null> {
-  if (typeof window === 'undefined') return null
-  return localStorage.getItem('auth_token')
+  try {
+    const session = await fetchAuthSession()
+    return session.tokens?.accessToken?.toString() ?? null
+  } catch {
+    return null
+  }
 }
 
 async function request<T>(
