@@ -1,8 +1,12 @@
-import { sql } from '@vercel/postgres'
-import { drizzle } from 'drizzle-orm/vercel-postgres'
+import { neon } from '@neondatabase/serverless'
+import { drizzle } from 'drizzle-orm/neon-http'
 
-// For Vercel Postgres
-export const db = drizzle(sql)
-
-// Database schema will be defined here
-// When ready for AWS migration, we can add sync hooks
+// Lazy initialization - only connect when DATABASE_URL is available
+export function getDb() {
+  const databaseUrl = process.env.DATABASE_URL
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL environment variable is not set')
+  }
+  const sql = neon(databaseUrl)
+  return drizzle(sql)
+}
