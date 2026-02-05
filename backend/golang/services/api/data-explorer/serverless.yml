@@ -10,7 +10,10 @@ custom:
     baseDir: ../../..
     supportedRuntimes: ["provided.al2023"]
     buildProvidedRuntimeAsBootstrap: true
-    cmd: 'CGO_ENABLED=1 GOARCH=amd64 GOOS=linux go build -ldflags="-s -w"'
+    # data-explorer uses pre-built DuckDB binary (CGO, built in AL2023 Docker container).
+    # The plugin passes: cmd -o <output_path> <source_path>
+    # For data-explorer handler: copy pre-built binary. For others: normal go build.
+    cmd: 'bash -c ''for i in "$@"; do case "$i" in *data-explorer*) cp services/api/data-explorer/.bin/bootstrap "$2" && exit 0;; esac; done; CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" "$@"'' _'
 
 provider:
   name: aws

@@ -179,6 +179,22 @@ jobs:
         working-directory: backend/golang
         run: npm install
 
+      - name: Build DuckDB handler in AL2023 container
+        if: matrix.service == 'data-explorer'
+        working-directory: backend/golang
+        run: |
+          docker build -t mfh-lambda-builder -f docker/Dockerfile.lambda-builder .
+          mkdir -p services/api/data-explorer/.bin
+          docker run --rm \
+            -v $(pwd):/workspace \
+            -w /workspace \
+            -e GOCACHE=/workspace/.cache/go-build \
+            -e GOMODCACHE=/workspace/.cache/go-mod \
+            mfh-lambda-builder \
+            bash scripts/build-duckdb-handler.sh
+          file services/api/data-explorer/.bin/bootstrap
+          ls -lh services/api/data-explorer/.bin/bootstrap
+
       - name: "Deploy ${{ matrix.service }}"
         working-directory: backend/golang/services/api/${{ matrix.service }}
         run: npx sls deploy --stage ${{ env.DEPLOY_STAGE }} --region us-west-2

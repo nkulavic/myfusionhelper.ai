@@ -159,6 +159,8 @@ build/
 backend/golang/data-sync
 backend/golang/data-sync-scheduler
 backend/golang/bootstrap
+backend/golang/**/.bin/
+backend/golang/.cache/
 *.exe
 
 # Local env files
