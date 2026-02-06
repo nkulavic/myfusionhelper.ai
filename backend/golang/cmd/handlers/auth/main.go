@@ -10,14 +10,17 @@ import (
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 
 	// Protected endpoints (require auth)
-	statusClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/status"
 	logoutClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/logout"
+	profileClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/profile"
+	statusClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/status"
 
 	// Public endpoints (no auth required)
+	forgotPasswordClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/forgot-password"
 	healthClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/health"
 	loginClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/login"
-	registerClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/register"
 	refreshClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/refresh"
+	registerClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/register"
+	resetPasswordClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/reset-password"
 )
 
 // Handle is the main entry point for the consolidated auth service
@@ -30,7 +33,7 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 			StatusCode: 200,
 			Headers: map[string]string{
 				"Access-Control-Allow-Origin":  "*",
-				"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+				"Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
 				"Access-Control-Allow-Headers": "Content-Type, Authorization, X-Account-Context",
 			},
 			Body: "",
@@ -42,6 +45,8 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	// Protected endpoints
 	case "/auth/status":
 		return routeToProtectedHandler(ctx, event, statusClient.HandleWithAuth)
+	case "/auth/profile":
+		return routeToProtectedHandler(ctx, event, profileClient.HandleWithAuth)
 	case "/auth/logout":
 		return routeToProtectedHandler(ctx, event, logoutClient.HandleWithAuth)
 
@@ -54,6 +59,10 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return registerClient.Handle(ctx, event)
 	case "/auth/refresh":
 		return refreshClient.Handle(ctx, event)
+	case "/auth/forgot-password":
+		return forgotPasswordClient.Handle(ctx, event)
+	case "/auth/reset-password":
+		return resetPasswordClient.Handle(ctx, event)
 
 	default:
 		log.Printf("No handler found for path: %s", event.RequestContext.HTTP.Path)

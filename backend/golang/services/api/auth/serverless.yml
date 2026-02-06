@@ -112,6 +112,25 @@ functions:
           authorizer:
             id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
+  auth-profile:
+    handler: cmd/handlers/auth/main.go
+    description: "Update user profile"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-profile
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-profile
+      ENDPOINT_PATH: /auth/profile
+    events:
+      - httpApi:
+          path: /auth/profile
+          method: put
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
   auth-logout:
     handler: cmd/handlers/auth/main.go
     description: "Session logout and token revocation"
@@ -199,4 +218,38 @@ functions:
     events:
       - httpApi:
           path: /auth/register
+          method: post
+
+  auth-forgot-password:
+    handler: cmd/handlers/auth/main.go
+    description: "Trigger password reset email"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-forgot-password
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-forgot-password
+      ENDPOINT_PATH: /auth/forgot-password
+    events:
+      - httpApi:
+          path: /auth/forgot-password
+          method: post
+
+  auth-reset-password:
+    handler: cmd/handlers/auth/main.go
+    description: "Confirm password reset with code"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-reset-password
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-reset-password
+      ENDPOINT_PATH: /auth/reset-password
+    events:
+      - httpApi:
+          path: /auth/reset-password
           method: post
