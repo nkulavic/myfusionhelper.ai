@@ -22,6 +22,7 @@ import (
 
 var (
 	usersTable        = os.Getenv("USERS_TABLE")
+	accountsTable     = os.Getenv("ACCOUNTS_TABLE")
 	userAccountsTable = os.Getenv("USER_ACCOUNTS_TABLE")
 )
 
@@ -159,6 +160,36 @@ func inviteTeamMember(ctx context.Context, event events.APIGatewayV2HTTPRequest,
 		return authMiddleware.CreateErrorResponse(500, "Internal server error"), nil
 	}
 	db := dynamodb.NewFromConfig(cfg)
+
+	// Check team member limit
+	if accountsTable != "" {
+		acctResult, err := db.GetItem(ctx, &dynamodb.GetItemInput{
+			TableName: aws.String(accountsTable),
+			Key: map[string]ddbtypes.AttributeValue{
+				"account_id": &ddbtypes.AttributeValueMemberS{Value: authCtx.AccountID},
+			},
+		})
+		if err == nil && acctResult.Item != nil {
+			var account apitypes.Account
+			if err := attributevalue.UnmarshalMap(acctResult.Item, &account); err == nil {
+				if account.Settings.MaxTeamMembers > 0 {
+					// Count current team members
+					countResult, err := db.Query(ctx, &dynamodb.QueryInput{
+						TableName:              aws.String(userAccountsTable),
+						IndexName:              aws.String("AccountIdIndex"),
+						KeyConditionExpression: aws.String("account_id = :account_id"),
+						ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+							":account_id": &ddbtypes.AttributeValueMemberS{Value: authCtx.AccountID},
+						},
+						Select: ddbtypes.SelectCount,
+					})
+					if err == nil && countResult.Count >= int32(account.Settings.MaxTeamMembers) {
+						return authMiddleware.CreateErrorResponse(403, "Team member limit reached. Upgrade your plan to add more members."), nil
+					}
+				}
+			}
+		}
+	}
 
 	// Look up user by email in the EmailIndex GSI
 	emailResult, err := db.Query(ctx, &dynamodb.QueryInput{
@@ -328,6 +359,25 @@ func updateTeamMember(ctx context.Context, event events.APIGatewayV2HTTPRequest,
 	}
 	db := dynamodb.NewFromConfig(cfg)
 
+	// Prevent changing the account owner's role
+	if accountsTable != "" {
+		acctResult, err := db.GetItem(ctx, &dynamodb.GetItemInput{
+			TableName: aws.String(accountsTable),
+			Key: map[string]ddbtypes.AttributeValue{
+				"account_id": &ddbtypes.AttributeValueMemberS{Value: authCtx.AccountID},
+			},
+			ProjectionExpression: aws.String("owner_user_id"),
+		})
+		if err == nil && acctResult.Item != nil {
+			if ownerAttr, ok := acctResult.Item["owner_user_id"]; ok {
+				ownerID := ownerAttr.(*ddbtypes.AttributeValueMemberS).Value
+				if targetUserID == ownerID {
+					return authMiddleware.CreateErrorResponse(403, "Cannot change the account owner's role"), nil
+				}
+			}
+		}
+	}
+
 	permissions := permissionsForRole(req.Role)
 	permAV, err := attributevalue.MarshalMap(permissions)
 	if err != nil {
@@ -391,6 +441,25 @@ func removeTeamMember(ctx context.Context, event events.APIGatewayV2HTTPRequest,
 		return authMiddleware.CreateErrorResponse(500, "Internal server error"), nil
 	}
 	db := dynamodb.NewFromConfig(cfg)
+
+	// Prevent removing the account owner
+	if accountsTable != "" {
+		acctResult, err := db.GetItem(ctx, &dynamodb.GetItemInput{
+			TableName: aws.String(accountsTable),
+			Key: map[string]ddbtypes.AttributeValue{
+				"account_id": &ddbtypes.AttributeValueMemberS{Value: authCtx.AccountID},
+			},
+			ProjectionExpression: aws.String("owner_user_id"),
+		})
+		if err == nil && acctResult.Item != nil {
+			if ownerAttr, ok := acctResult.Item["owner_user_id"]; ok {
+				ownerID := ownerAttr.(*ddbtypes.AttributeValueMemberS).Value
+				if targetUserID == ownerID {
+					return authMiddleware.CreateErrorResponse(403, "Cannot remove the account owner"), nil
+				}
+			}
+		}
+	}
 
 	_, err = db.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(userAccountsTable),
