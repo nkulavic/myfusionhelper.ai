@@ -4,33 +4,28 @@ import { motion } from 'framer-motion'
 import { fadeUp, staggerContainer } from './animation-variants'
 import { crmPlatforms } from '@/lib/crm-platforms'
 import { PlatformLogo } from '@/components/platform-logo'
-import { Check, Zap } from 'lucide-react'
+import { Check } from 'lucide-react'
 
-const platformDetails: Record<string, { tagline: string; helperCount: number }> = {
+const platformDetails: Record<string, { tagline: string }> = {
   keap: {
     tagline:
-      'Intelligent tag management, lead scoring automation, and deep contact field manipulation.',
-    helperCount: 18,
+      'Go beyond Keap\'s native automation limits. Format data, calculate dates, split-test campaigns, and chain automation sequences.',
   },
   gohighlevel: {
     tagline:
-      'AI-driven contact segmentation, pipeline optimization, and automated workflow triggers.',
-    helperCount: 15,
+      'Fill the gaps in GHL workflows with lead scoring, data formatting, tag-based routing, and A/B testing.',
   },
   activecampaign: {
     tagline:
-      'Advanced tag logic, deal stage tracking, and predictive engagement scoring.',
-    helperCount: 14,
+      'Extend ActiveCampaign with powerful data operations. Format fields, score contacts, and chain complex multi-step workflows.',
   },
   ontraport: {
     tagline:
-      'Powerful data formatting, sequence management, and cross-platform contact synchronization.',
-    helperCount: 10,
+      'Unlock capabilities Ontraport does not offer natively. Tag-based scoring, data normalization, and conditional routing.',
   },
   hubspot: {
     tagline:
-      'Intelligent pipeline management, property automation, and list-based workflow triggers.',
-    helperCount: 12,
+      'Complement HubSpot\'s native tools with deal stage management, property mapping, list sync, and data formatting.',
   },
 }
 
@@ -93,17 +88,16 @@ export function PlatformShowcaseSection() {
                 <p className="mb-4 text-sm leading-relaxed text-muted-foreground">
                   {details?.tagline}
                 </p>
-                <ul className="mb-4 space-y-1.5">
-                  {platform.capabilities.slice(0, 4).map((cap) => (
-                    <li key={cap} className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Check className="h-3.5 w-3.5 flex-shrink-0 text-brand-green" />
+                <div className="flex flex-wrap gap-1.5">
+                  {platform.capabilities.map((cap) => (
+                    <span
+                      key={cap}
+                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground"
+                    >
+                      <Check className="h-3 w-3 text-brand-green" />
                       {cap}
-                    </li>
+                    </span>
                   ))}
-                </ul>
-                <div className="flex items-center gap-1.5 text-sm font-medium text-brand-green">
-                  <Zap className="h-4 w-4" />
-                  {details?.helperCount}+ helpers available
                 </div>
               </motion.div>
             )

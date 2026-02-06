@@ -77,7 +77,7 @@ export function LandingHeader() {
             href="/register"
             className="inline-flex h-9 items-center rounded-md bg-brand-green px-5 text-sm font-semibold text-white shadow transition-colors hover:bg-brand-green/90"
           >
-            Start Free Trial
+            Get Started
           </Link>
         </nav>
 

@@ -43,9 +43,19 @@ const faqs = [
       'Yes. All plans are month-to-month with no long-term commitments. You can cancel from your Settings page at any time. Annual plans are billed upfront but can be canceled with a prorated refund.',
   },
   {
+    question: 'What CRM platforms do you support?',
+    answer:
+      'We currently support Keap (Infusionsoft), GoHighLevel, ActiveCampaign, Ontraport, and HubSpot. Each platform connects through OAuth or API key authentication. The same 62 helpers work across all supported CRMs through a unified connector layer.',
+  },
+  {
     question: 'How is MyFusion Helper different from Zapier or Make?',
     answer:
-      'MyFusion Helper is purpose-built for CRM professionals. Unlike general automation platforms, every helper is designed specifically for CRM operations — tagging, scoring, field manipulation, contact management. Plus, our AI layer provides insights, recommendations, and email composition that generic tools do not offer.',
+      'Zapier and Make are general-purpose integration platforms. MyFusion Helper is purpose-built for CRM automation. Our 62 helpers are designed specifically for CRM operations -- tagging, scoring, formatting, date calculations, contact merging, and more. They run faster, cost less, and require no multi-step flow building.',
+  },
+  {
+    question: 'What kind of support do you offer?',
+    answer:
+      'All plans include email support. The Grow plan adds priority support with faster response times. The Deliver plan includes phone support for direct, immediate help. We also provide documentation, in-app AI chat assistance, and a knowledge base with setup guides.',
   },
 ]
 
@@ -107,7 +117,7 @@ export function FAQSection() {
             variants={fadeUp}
             className="mx-auto max-w-2xl text-3xl font-bold md:text-4xl"
           >
-            Frequently asked questions
+            Common questions, clear answers
           </motion.h2>
         </motion.div>
 

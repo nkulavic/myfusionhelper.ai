@@ -17,7 +17,7 @@ export function TrustedBySection() {
           className="text-center"
         >
           <p className="mb-8 text-sm font-medium uppercase tracking-widest text-muted-foreground">
-            Works with the CRMs you already use
+            Connects with the CRMs you already use
           </p>
           <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12 md:gap-16">
             {crmPlatforms.map((platform) => (
