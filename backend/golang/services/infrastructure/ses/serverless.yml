@@ -1,0 +1,47 @@
+service: mfh-infrastructure-ses
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  deploymentBucket:
+    blockPublicAccess: true
+
+# No functions - this is infrastructure only
+functions: {}
+
+resources:
+  Description: "SES email infrastructure for MyFusionHelper.ai - transactional email sending"
+
+  Resources:
+    # SES Email Identity for the domain
+    # NOTE: Domain verification (DNS records) must be done manually in the AWS console
+    # after this stack is deployed. SES will provide DKIM/SPF records to add to DNS.
+    SESEmailIdentity:
+      Type: AWS::SES::EmailIdentity
+      Properties:
+        EmailIdentity: myfusionhelper.ai
+        DkimAttributes:
+          SigningEnabled: true
+
+    # SES Configuration Set for tracking email delivery
+    SESConfigurationSet:
+      Type: AWS::SES::ConfigurationSet
+      Properties:
+        Name: mfh-${self:provider.stage}-transactional
+
+  Outputs:
+    SESEmailIdentityName:
+      Description: SES verified email identity
+      Value: myfusionhelper.ai
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailIdentity
+
+    SESConfigurationSetName:
+      Description: SES configuration set name
+      Value: !Ref SESConfigurationSet
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ConfigurationSetName
