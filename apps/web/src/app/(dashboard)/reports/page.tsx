@@ -16,6 +16,8 @@ import {
   ArrowRight,
   Search,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 const reportTemplates = [
   {
@@ -110,30 +112,32 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-bold">Reports</h1>
           <p className="text-muted-foreground">Generate and schedule automated reports</p>
         </div>
-        <button className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+        <Button>
           <Plus className="h-4 w-4" />
           New Report
-        </button>
+        </Button>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-lg border bg-muted p-1">
-        <button
+        <Button
+          variant="ghost"
           onClick={() => setActiveTab('saved')}
-          className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'saved' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+          className={`flex-1 ${
+            activeTab === 'saved' ? 'bg-background shadow-sm hover:bg-background' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           Saved Reports
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
           onClick={() => setActiveTab('templates')}
-          className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'templates' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+          className={`flex-1 ${
+            activeTab === 'templates' ? 'bg-background shadow-sm hover:bg-background' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           Templates
-        </button>
+        </Button>
       </div>
 
       {activeTab === 'saved' ? (
@@ -145,12 +149,9 @@ export default function ReportsPage() {
               <p className="mt-2 text-sm text-muted-foreground">
                 Create your first report from a template to start tracking your data.
               </p>
-              <button
-                onClick={() => setActiveTab('templates')}
-                className="mt-4 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              >
+              <Button onClick={() => setActiveTab('templates')} className="mt-4">
                 Browse Templates
-              </button>
+              </Button>
             </div>
           ) : (
             <div className="divide-y rounded-lg border bg-card">
@@ -198,12 +199,12 @@ export default function ReportsPage() {
           <div className="flex gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
+              <Input
                 type="text"
                 placeholder="Search templates..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-md border bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                className="pl-9"
               />
             </div>
             <div className="flex gap-1 rounded-md border bg-background p-1">
@@ -238,12 +239,12 @@ export default function ReportsPage() {
                 </div>
                 <p className="text-sm text-muted-foreground">{template.description}</p>
                 <div className="mt-4 flex items-center gap-2">
-                  <button className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90">
+                  <Button size="sm">
                     Use Template
-                  </button>
-                  <button className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent">
+                  </Button>
+                  <Button variant="outline" size="sm">
                     Preview
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}

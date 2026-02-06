@@ -27,7 +27,20 @@ import {
   useTestConnection,
   useStartOAuth,
 } from '@/lib/hooks/use-connections'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import type { PlatformDefinition } from '@/lib/api/connections'
 import { getCRMPlatform } from '@/lib/crm-platforms'
 import { PlatformLogo } from '@/components/platform-logo'
@@ -101,7 +114,7 @@ export default function ConnectionsPage() {
 
   const platforms = apiPlatforms && apiPlatforms.length > 0 ? apiPlatforms : fallbackPlatforms
 
-  const selectedConnection = connections?.find((c) => c.id === selectedConnectionId)
+  const selectedConnection = connections?.find((c) => c.connectionId === selectedConnectionId)
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -185,9 +198,9 @@ export default function ConnectionsPage() {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
         <div className="flex items-center gap-4">
-          <button onClick={() => { setView('list'); setSelectedPlatform(null) }} className="rounded-md p-2 hover:bg-accent">
+          <Button variant="ghost" size="icon" onClick={() => { setView('list'); setSelectedPlatform(null) }}>
             <ArrowLeft className="h-4 w-4" />
-          </button>
+          </Button>
           <div>
             <h1 className="text-2xl font-bold">Add Connection</h1>
             <p className="text-muted-foreground">
@@ -269,12 +282,11 @@ export default function ConnectionsPage() {
             <div className="rounded-lg border bg-card p-5 space-y-4">
               <div>
                 <label className="mb-2 block text-sm font-medium">Connection Name</label>
-                <input
+                <Input
                   type="text"
                   value={connectionName}
                   onChange={(e) => setConnectionName(e.target.value)}
                   placeholder={`e.g. ${selectedPlatform.name} (Production)`}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
 
@@ -283,12 +295,12 @@ export default function ConnectionsPage() {
                   {selectedPlatform.id === 'activecampaign' && (
                     <div>
                       <label className="mb-2 block text-sm font-medium">Account URL</label>
-                      <input
+                      <Input
                         type="url"
                         value={apiUrlInput}
                         onChange={(e) => setApiUrlInput(e.target.value)}
                         placeholder="https://yourname.api-us1.com"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="font-mono"
                       />
                       <p className="mt-1.5 text-xs text-muted-foreground">
                         Found in Settings &rarr; Developer &rarr; API Access
@@ -298,23 +310,23 @@ export default function ConnectionsPage() {
                   {selectedPlatform.id === 'ontraport' && (
                     <div>
                       <label className="mb-2 block text-sm font-medium">App ID</label>
-                      <input
+                      <Input
                         type="text"
                         value={appIdInput}
                         onChange={(e) => setAppIdInput(e.target.value)}
                         placeholder="Your Ontraport App ID"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="font-mono"
                       />
                     </div>
                   )}
                   <div>
                     <label className="mb-2 block text-sm font-medium">API Key</label>
-                    <input
+                    <Input
                       type="password"
                       value={apiKeyInput}
                       onChange={(e) => setApiKeyInput(e.target.value)}
                       placeholder="Enter your API key"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="font-mono"
                     />
                     <p className="mt-1.5 text-xs text-muted-foreground">
                       Your API key is encrypted and stored securely
@@ -325,16 +337,16 @@ export default function ConnectionsPage() {
             </div>
 
             <div className="flex items-center justify-between">
-              <button
+              <Button
+                variant="link"
                 onClick={() => setSelectedPlatform(null)}
-                className="text-sm text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground"
               >
                 Choose a different platform
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleConnect}
                 disabled={createConnection.isPending || startOAuth.isPending}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 {(createConnection.isPending || startOAuth.isPending) && (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -350,7 +362,7 @@ export default function ConnectionsPage() {
                     Save Connection
                   </>
                 )}
-              </button>
+              </Button>
             </div>
 
             {createConnection.isError && (
@@ -375,13 +387,13 @@ export default function ConnectionsPage() {
 
   // Connection Detail View
   if (view === 'detail' && selectedConnection) {
-    const platform = getPlatformInfo(selectedConnection.platform)
+    const platform = getPlatformInfo(selectedConnection.platformId)
     return (
       <div className="mx-auto max-w-3xl space-y-6">
         <div className="flex items-center gap-4">
-          <button onClick={() => { setView('list'); setSelectedConnectionId(null) }} className="rounded-md p-2 hover:bg-accent">
+          <Button variant="ghost" size="icon" onClick={() => { setView('list'); setSelectedConnectionId(null) }}>
             <ArrowLeft className="h-4 w-4" />
-          </button>
+          </Button>
           <div className="flex-1">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">{selectedConnection.name}</h1>
@@ -390,10 +402,11 @@ export default function ConnectionsPage() {
             <p className="text-sm text-muted-foreground">{platform?.name} connection</p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleTest(selectedConnection.platform, selectedConnection.id)}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleTest(selectedConnection.platformId, selectedConnection.connectionId)}
               disabled={testConnection.isPending}
-              className="inline-flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
             >
               {testConnection.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -401,17 +414,17 @@ export default function ConnectionsPage() {
                 <RefreshCw className="h-4 w-4" />
               )}
               Test Connection
-            </button>
+            </Button>
             {selectedConnection.status === 'error' && platform?.authType === 'oauth2' && (
-              <button
-                onClick={() => startOAuth.mutate(selectedConnection.platform, {
+              <Button
+                size="sm"
+                onClick={() => startOAuth.mutate(selectedConnection.platformId, {
                   onSuccess: (res) => { if (res.data?.url) window.location.href = res.data.url },
                 })}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
                 <ExternalLink className="h-4 w-4" />
                 Re-authorize
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -464,7 +477,7 @@ export default function ConnectionsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Connection ID</span>
-                  <span className="font-mono text-xs">{selectedConnection.id}</span>
+                  <span className="font-mono text-xs">{selectedConnection.connectionId}</span>
                 </div>
               </div>
             </div>
@@ -496,14 +509,37 @@ export default function ConnectionsPage() {
             <div className="rounded-lg border bg-card p-5 space-y-3">
               <h3 className="font-semibold">Actions</h3>
               <div className="space-y-2">
-                <button
-                  onClick={() => handleDelete(selectedConnection.platform, selectedConnection.id)}
-                  disabled={deleteConnection.isPending}
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {deleteConnection.isPending ? 'Deleting...' : 'Delete Connection'}
-                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      disabled={deleteConnection.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {deleteConnection.isPending ? 'Deleting...' : 'Delete Connection'}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Connection</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete &ldquo;{selectedConnection.name}&rdquo;? This will
+                        remove all associated data and cannot be undone. Any helpers using this
+                        connection will stop working.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDelete(selectedConnection.platformId, selectedConnection.connectionId)}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Delete Connection
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
           </div>
@@ -520,13 +556,10 @@ export default function ConnectionsPage() {
           <h1 className="text-2xl font-bold">Connections</h1>
           <p className="text-muted-foreground">Connect and manage your CRM platforms</p>
         </div>
-        <button
-          onClick={() => setView('add')}
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
+        <Button onClick={() => setView('add')}>
           <Plus className="h-4 w-4" />
           Add Connection
-        </button>
+        </Button>
       </div>
 
       {/* Active Connections */}
@@ -555,12 +588,12 @@ export default function ConnectionsPage() {
         ) : connections && connections.length > 0 ? (
           <div className="space-y-3">
             {connections.map((connection) => {
-              const platform = getPlatformInfo(connection.platform)
-              const crm = getCRMPlatform(connection.platform)
+              const platform = getPlatformInfo(connection.platformId)
+              const crm = getCRMPlatform(connection.platformId)
               return (
                 <button
-                  key={connection.id}
-                  onClick={() => { setSelectedConnectionId(connection.id); setView('detail') }}
+                  key={connection.connectionId}
+                  onClick={() => { setSelectedConnectionId(connection.connectionId); setView('detail') }}
                   className="flex w-full items-center justify-between rounded-lg border bg-card p-4 text-left transition-all hover:border-primary/50 hover:shadow-sm"
                 >
                   <div className="flex items-center gap-4">
@@ -577,7 +610,7 @@ export default function ConnectionsPage() {
                         {getStatusBadge(connection.status)}
                       </div>
                       <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                        <span>{platform?.name || connection.platform}</span>
+                        <span>{platform?.name || connection.platformId}</span>
                         <span className="text-border">&middot;</span>
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
@@ -604,13 +637,10 @@ export default function ConnectionsPage() {
             <p className="mb-4 text-sm text-muted-foreground">
               Connect your first CRM platform to start automating
             </p>
-            <button
-              onClick={() => setView('add')}
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
+            <Button onClick={() => setView('add')}>
               <Plus className="h-4 w-4" />
               Add Connection
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -621,7 +651,7 @@ export default function ConnectionsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {platforms.map((platform) => {
             const crm = getCRMPlatform(platform.id)
-            const connectedCount = connections?.filter((c) => c.platform === platform.id).length || 0
+            const connectedCount = connections?.filter((c) => c.platformId === platform.id).length || 0
             return (
               <div
                 key={platform.id}
@@ -647,13 +677,14 @@ export default function ConnectionsPage() {
                     </span>
                   )}
                 </div>
-                <button
+                <Button
+                  variant="outline"
+                  className="w-full"
                   onClick={() => { setSelectedPlatform(platform); setView('add') }}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
                 >
                   <ExternalLink className="h-4 w-4" />
                   Connect
-                </button>
+                </Button>
               </div>
             )
           })}

@@ -17,6 +17,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useExecutionsPaginated } from '@/lib/hooks/use-helpers'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 
 const PAGE_SIZE = 20
@@ -34,7 +36,7 @@ export default function ExecutionsPage() {
   })
 
   const executions = data?.executions ?? []
-  const hasMore = data?.has_more ?? false
+  const hasMore = data?.hasMore ?? false
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -56,7 +58,7 @@ export default function ExecutionsPage() {
     if (!searchQuery) return executions
     return executions.filter(
       (exec) =>
-        exec.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        exec.executionId.toLowerCase().includes(searchQuery.toLowerCase()) ||
         exec.helperId.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (exec.contactId && exec.contactId.toLowerCase().includes(searchQuery.toLowerCase()))
     )
@@ -135,12 +137,12 @@ export default function ExecutionsPage() {
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
+          <Input
             type="text"
             placeholder="Search by helper, contact, or execution ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-4 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="pl-10"
           />
         </div>
         <select
@@ -189,7 +191,7 @@ export default function ExecutionsPage() {
             <tbody>
               {filteredExecutions.map((execution) => (
                 <tr
-                  key={execution.id}
+                  key={execution.executionId}
                   className="border-b last:border-0 hover:bg-muted/50"
                 >
                   <td className="p-4">
@@ -210,10 +212,10 @@ export default function ExecutionsPage() {
                   </td>
                   <td className="p-4">
                     <Link
-                      href={`/executions/${execution.id}`}
+                      href={`/executions/${execution.executionId}`}
                       className="font-mono text-xs text-primary hover:underline"
                     >
-                      {execution.id}
+                      {execution.executionId}
                     </Link>
                   </td>
                   <td className="p-4">
@@ -253,32 +255,34 @@ export default function ExecutionsPage() {
       {/* Pagination */}
       {(tokenHistory.length > 1 || hasMore) && (
         <div className="flex items-center justify-end gap-2">
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => {
               const prev = tokenHistory.slice(0, -1)
               setTokenHistory(prev)
               setNextToken(prev[prev.length - 1])
             }}
             disabled={tokenHistory.length <= 1}
-            className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
           >
             <ChevronLeft className="h-4 w-4" />
             Previous
-          </button>
+          </Button>
           <span className="text-sm text-muted-foreground">Page {tokenHistory.length}</span>
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => {
-              if (data?.next_token) {
-                setTokenHistory([...tokenHistory, data.next_token])
-                setNextToken(data.next_token)
+              if (data?.nextToken) {
+                setTokenHistory([...tokenHistory, data.nextToken])
+                setNextToken(data.nextToken)
               }
             }}
             disabled={!hasMore}
-            className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
           >
             Next
             <ChevronRight className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -20,6 +20,8 @@ import {
   AlignLeft,
   Wand2,
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 const toneOptions = [
   { id: 'professional', label: 'Professional' },
@@ -93,17 +95,18 @@ export default function EmailsPage() {
       {/* Tabs */}
       <div className="flex gap-1 rounded-lg border bg-muted p-1">
         {(['compose', 'sent', 'templates'] as const).map((tab) => (
-          <button
+          <Button
             key={tab}
+            variant="ghost"
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium capitalize transition-colors ${
+            className={`flex-1 ${
               activeTab === tab
-                ? 'bg-background shadow-sm'
+                ? 'bg-background shadow-sm hover:bg-background'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {tab === 'compose' ? 'Compose' : tab === 'sent' ? 'Sent & Drafts' : 'Templates'}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -114,27 +117,37 @@ export default function EmailsPage() {
             <div className="rounded-lg border bg-card">
               {/* Subject */}
               <div className="border-b px-4 py-3">
-                <input
+                <Input
                   type="text"
                   placeholder="Email subject..."
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="w-full bg-transparent text-lg font-medium placeholder:text-muted-foreground focus:outline-none"
+                  className="border-0 bg-transparent text-lg font-medium shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
               </div>
 
               {/* Toolbar */}
               <div className="flex items-center gap-1 border-b px-4 py-2">
-                <button className="rounded p-1.5 hover:bg-accent"><Bold className="h-4 w-4" /></button>
-                <button className="rounded p-1.5 hover:bg-accent"><Italic className="h-4 w-4" /></button>
-                <button className="rounded p-1.5 hover:bg-accent"><Link2 className="h-4 w-4" /></button>
-                <button className="rounded p-1.5 hover:bg-accent"><List className="h-4 w-4" /></button>
-                <button className="rounded p-1.5 hover:bg-accent"><AlignLeft className="h-4 w-4" /></button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Bold">
+                  <Bold className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Italic">
+                  <Italic className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Insert link">
+                  <Link2 className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Bulleted list">
+                  <List className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Align text">
+                  <AlignLeft className="h-4 w-4" />
+                </Button>
                 <div className="mx-2 h-5 w-px bg-border" />
-                <button className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10">
+                <Button variant="ghost" size="sm" className="text-primary hover:bg-primary/10 hover:text-primary">
                   <Sparkles className="h-3 w-3" />
                   AI Improve
-                </button>
+                </Button>
               </div>
 
               {/* Body */}
@@ -149,19 +162,19 @@ export default function EmailsPage() {
               {/* Actions */}
               <div className="flex items-center justify-between border-t px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <button className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent">
+                  <Button variant="outline" size="sm">
                     <Clock className="h-3 w-3" />
                     Schedule
-                  </button>
-                  <button className="inline-flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent">
+                  </Button>
+                  <Button variant="outline" size="sm">
                     <Copy className="h-3 w-3" />
                     Save as Template
-                  </button>
+                  </Button>
                 </div>
-                <button className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+                <Button>
                   <Send className="h-4 w-4" />
                   Send Email
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -205,19 +218,19 @@ export default function EmailsPage() {
                 </div>
               </div>
 
-              <button className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+              <Button className="w-full">
                 <Wand2 className="h-4 w-4" />
                 Generate Email
-              </button>
+              </Button>
             </div>
 
             {/* Subject Line Generator */}
             <div className="rounded-lg border bg-card p-4">
               <h3 className="mb-2 font-semibold text-sm">Subject Line Ideas</h3>
-              <button className="mb-3 inline-flex w-full items-center justify-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent">
+              <Button variant="outline" size="sm" className="mb-3 w-full">
                 <Sparkles className="h-3 w-3" />
                 Generate Subject Lines
-              </button>
+              </Button>
               <div className="space-y-2">
                 {[
                   'Unlock your CRM potential today',

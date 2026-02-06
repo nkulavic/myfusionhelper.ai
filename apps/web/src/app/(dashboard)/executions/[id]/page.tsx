@@ -119,7 +119,7 @@ export default function ExecutionDetailPage() {
           </Link>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold font-mono">{execution.id}</h1>
+              <h1 className="text-2xl font-bold font-mono">{execution.executionId}</h1>
               {getStatusBadge(execution.status)}
             </div>
             <p className="text-sm text-muted-foreground">
@@ -129,7 +129,7 @@ export default function ExecutionDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigator.clipboard.writeText(execution.id)}
+            onClick={() => navigator.clipboard.writeText(execution.executionId)}
             className="inline-flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm font-medium hover:bg-accent"
           >
             <Copy className="h-4 w-4" />
@@ -139,12 +139,12 @@ export default function ExecutionDetailPage() {
       </div>
 
       {/* Error Banner */}
-      {execution.error && (
+      {execution.errorMessage && (
         <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-destructive" />
           <div>
             <p className="text-sm font-medium text-destructive">Execution Failed</p>
-            <p className="mt-0.5 text-sm text-destructive/80">{execution.error}</p>
+            <p className="mt-0.5 text-sm text-destructive/80">{execution.errorMessage}</p>
           </div>
         </div>
       )}
@@ -170,7 +170,7 @@ export default function ExecutionDetailPage() {
                     time={execution.completedAt}
                     label={execution.status === 'failed' ? 'Failed' : 'Completed'}
                     description={
-                      execution.error || `Execution completed in ${durationStr}`
+                      execution.errorMessage || `Execution completed in ${durationStr}`
                     }
                     status={execution.status === 'failed' ? 'failed' : 'completed'}
                     isLast

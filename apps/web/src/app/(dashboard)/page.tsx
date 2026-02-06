@@ -150,8 +150,8 @@ export default function DashboardPage() {
             <div className="divide-y">
               {executions.map((exec) => (
                 <Link
-                  key={exec.id}
-                  href={`/executions/${exec.id}`}
+                  key={exec.executionId}
+                  href={`/executions/${exec.executionId}`}
                   className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-accent/50"
                 >
                   <div className="flex-shrink-0">
@@ -228,7 +228,7 @@ export default function DashboardPage() {
             ) : connections && connections.length > 0 ? (
               <div className="space-y-3">
                 {connections.map((conn) => (
-                  <div key={conn.id} className="flex items-center gap-3">
+                  <div key={conn.connectionId} className="flex items-center gap-3">
                     <div
                       className={`h-2 w-2 rounded-full ${
                         conn.status === 'active'
