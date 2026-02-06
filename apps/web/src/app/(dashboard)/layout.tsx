@@ -19,15 +19,18 @@ import {
   Database,
   Menu,
   X,
+  Search,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useWorkspaceStore } from '@/lib/stores/workspace-store'
 import { useUIStore } from '@/lib/stores/ui-store'
 import { useLogout } from '@/lib/hooks/use-auth'
+import { useGlobalKeyboardShortcuts } from '@/lib/hooks/use-keyboard-shortcuts'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { AIChatPanel } from '@/components/ai-chat-panel'
+import { CommandPalette } from '@/components/command-palette'
 import { Button } from '@/components/ui/button'
 
 const navigation = [
@@ -45,11 +48,19 @@ const navigation = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const [aiChatOpen, setAiChatOpen] = useState(false)
   const { user } = useAuthStore()
   const { currentAccount, onboardingComplete } = useWorkspaceStore()
-  const { sidebarCollapsed, setSidebarCollapsed } = useUIStore()
+  const {
+    sidebarCollapsed,
+    setSidebarCollapsed,
+    aiChatOpen,
+    setAIChatOpen,
+    setCommandPaletteOpen,
+  } = useUIStore()
   const logout = useLogout()
+
+  // Register global keyboard shortcuts
+  useGlobalKeyboardShortcuts()
 
   // Redirect to onboarding if not completed
   useEffect(() => {
@@ -138,6 +149,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
           </div>
 
+          {/* Search / Command Palette Trigger */}
+          <div className="px-4 pt-4">
+            <button
+              onClick={() => setCommandPaletteOpen(true)}
+              className="flex w-full items-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent/50 px-3 py-2 text-sm text-sidebar-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
+              <Search className="h-3.5 w-3.5" />
+              <span className="flex-1 text-left">Search...</span>
+              <kbd className="hidden rounded border border-sidebar-border bg-sidebar px-1.5 py-0.5 font-mono text-[10px] text-sidebar-muted-foreground sm:inline-block">
+                &#8984;K
+              </kbd>
+            </button>
+          </div>
+
           {/* Navigation */}
           <nav className="flex-1 space-y-1 overflow-y-auto p-4">
             {navigation.map((item) => {
@@ -212,15 +237,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* AI Chat Floating Button */}
       <Button
         size="icon"
-        onClick={() => setAiChatOpen(!aiChatOpen)}
+        onClick={() => setAIChatOpen(!aiChatOpen)}
         className="fixed bottom-6 right-6 z-30 h-14 w-14 rounded-full shadow-lg transition-transform hover:scale-105"
         aria-label="Open AI chat"
+        title="AI Chat (&#8984;/)"
       >
         <MessageSquare className="h-6 w-6" />
       </Button>
 
       {/* AI Chat Panel */}
-      {aiChatOpen && <AIChatPanel onClose={() => setAiChatOpen(false)} />}
+      {aiChatOpen && <AIChatPanel onClose={() => setAIChatOpen(false)} />}
+
+      {/* Command Palette */}
+      <CommandPalette />
     </div>
   )
 }
