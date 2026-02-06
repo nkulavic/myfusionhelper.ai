@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useLogin } from '@/lib/hooks/use-auth'
+import { useWorkspaceStore } from '@/lib/stores/workspace-store'
 import { APIError } from '@/lib/api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,6 +33,7 @@ type LoginFormValues = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const router = useRouter()
+  const { onboardingComplete } = useWorkspaceStore()
   const [error, setError] = useState('')
   const [errorKey, setErrorKey] = useState(0)
   const loginMutation = useLogin()
@@ -54,7 +56,7 @@ export default function LoginPage() {
     setError('')
     loginMutation.mutate(values, {
       onSuccess: () => {
-        router.push('/helpers')
+        router.push(onboardingComplete ? '/helpers' : '/onboarding')
       },
       onError: (err) => {
         if (err instanceof APIError) {
