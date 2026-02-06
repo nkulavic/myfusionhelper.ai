@@ -244,7 +244,7 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: Helpe
       </div>
 
       {/* Helpers Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="animate-stagger-in grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filteredHelpers.map((helper) => (
           <CatalogCard
             key={helper.id}
@@ -291,7 +291,7 @@ function CatalogCard({
       className={cn(
         'group relative flex flex-col overflow-hidden rounded-lg border bg-card p-5 text-left transition-all',
         isAvailable
-          ? 'hover:-translate-y-0.5 hover:shadow-md cursor-pointer'
+          ? 'hover:-translate-y-1 hover:shadow-md cursor-pointer active:scale-[0.98]'
           : 'opacity-60 cursor-default'
       )}
     >

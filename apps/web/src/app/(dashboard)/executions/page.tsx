@@ -45,7 +45,7 @@ export default function ExecutionsPage() {
       case 'failed':
         return <XCircle className="h-4 w-4 text-destructive" />
       case 'running':
-        return <RefreshCw className="h-4 w-4 animate-spin text-info" />
+        return <RefreshCw className="h-4 w-4 animate-spin text-info animate-status-pulse" />
       case 'pending':
         return <Clock className="h-4 w-4 text-warning" />
       default:
@@ -83,7 +83,7 @@ export default function ExecutionsPage() {
   }, [executions])
 
   return (
-    <div className="space-y-6">
+    <div className="animate-fade-in-up space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Executions</h1>
         <p className="text-muted-foreground">View and monitor helper execution history</p>
@@ -101,28 +101,28 @@ export default function ExecutionsPage() {
           ))
         ) : (
           <>
-            <div className="rounded-lg border bg-card p-4">
+            <div className="card-hover rounded-lg border bg-card p-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">Total</p>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </div>
               <p className="mt-1 text-2xl font-bold">{stats.total.toLocaleString()}</p>
             </div>
-            <div className="rounded-lg border bg-card p-4">
+            <div className="card-hover rounded-lg border bg-card p-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">Success Rate</p>
                 <CheckCircle className="h-4 w-4 text-success" />
               </div>
               <p className="mt-1 text-2xl font-bold text-success">{stats.successRate}%</p>
             </div>
-            <div className="rounded-lg border bg-card p-4">
+            <div className="card-hover rounded-lg border bg-card p-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">Avg Duration</p>
                 <Clock className="h-4 w-4 text-muted-foreground" />
               </div>
               <p className="mt-1 text-2xl font-bold">{stats.avgDuration}ms</p>
             </div>
-            <div className="rounded-lg border bg-card p-4">
+            <div className="card-hover rounded-lg border bg-card p-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">Failed</p>
                 <AlertTriangle className="h-4 w-4 text-destructive" />
@@ -176,7 +176,7 @@ export default function ExecutionsPage() {
           ))}
         </div>
       ) : filteredExecutions.length > 0 ? (
-        <div className="rounded-lg border overflow-x-auto">
+        <div className="skeleton-fade-enter rounded-lg border overflow-x-auto">
           <table className="w-full min-w-[640px]">
             <thead>
               <tr className="border-b bg-muted/50">

@@ -221,7 +221,7 @@ export default function ConnectionsPage() {
   // Add Connection Flow
   if (view === 'add') {
     return (
-      <div className="mx-auto max-w-2xl space-y-6">
+      <div className="animate-slide-in-right mx-auto max-w-2xl space-y-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => { setView('list'); setSelectedPlatform(null) }}>
             <ArrowLeft className="h-4 w-4" />
@@ -235,12 +235,12 @@ export default function ConnectionsPage() {
         </div>
 
         {!selectedPlatform ? (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="animate-stagger-in grid gap-4 sm:grid-cols-2">
             {platforms.map((platform) => (
               <button
                 key={platform.platformId}
                 onClick={() => setSelectedPlatform(platform)}
-                className="flex flex-col items-start rounded-lg border bg-card p-5 text-left transition-all hover:border-primary hover:shadow-md"
+                className="card-hover flex flex-col items-start rounded-lg border bg-card p-5 text-left transition-all hover:border-primary active:scale-[0.98]"
               >
                 {(() => {
                   const crm = getCRMPlatform(platform.slug)
@@ -455,8 +455,8 @@ export default function ConnectionsPage() {
         </div>
 
         {testConnection.isSuccess && (
-          <div className="flex items-start gap-3 rounded-lg border border-success/30 bg-success/10 p-4">
-            <CheckCircle className="mt-0.5 h-5 w-5 text-success" />
+          <div className="animate-scale-in flex items-start gap-3 rounded-lg border border-success/30 bg-success/10 p-4">
+            <CheckCircle className="mt-0.5 h-5 w-5 animate-success-check text-success" />
             <p className="text-sm text-success">
               Connection test passed successfully.
             </p>
@@ -464,7 +464,7 @@ export default function ConnectionsPage() {
         )}
 
         {testConnection.isError && (
-          <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+          <div className="animate-scale-in flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4">
             <XCircle className="mt-0.5 h-5 w-5 text-destructive" />
             <div>
               <p className="text-sm font-medium text-destructive">Connection test failed</p>
@@ -575,7 +575,7 @@ export default function ConnectionsPage() {
 
   // Main List View
   return (
-    <div className="space-y-6">
+    <div className="animate-fade-in-up space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Connections</h1>
@@ -611,7 +611,7 @@ export default function ConnectionsPage() {
             ))}
           </div>
         ) : connections && connections.length > 0 ? (
-          <div className="space-y-3">
+          <div className="animate-stagger-in space-y-3">
             {connections.map((connection) => {
               const platform = getPlatformInfo(connection.platformId)
               const crm = getCRMPlatform(connection.platformId)
@@ -673,14 +673,14 @@ export default function ConnectionsPage() {
       {/* Available Platforms */}
       <div>
         <h2 className="mb-4 text-lg font-semibold">Available Platforms</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="animate-stagger-in grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {platforms.map((platform) => {
             const crm = getCRMPlatform(platform.slug)
             const connectedCount = connections?.filter((c) => c.platformId === platform.platformId).length || 0
             return (
               <div
                 key={platform.platformId}
-                className="relative overflow-hidden rounded-lg border bg-card p-4 transition-all hover:border-primary/50 hover:shadow-sm"
+                className="card-hover relative overflow-hidden rounded-lg border bg-card p-4 transition-all hover:border-primary/50"
               >
                 <div
                   className="absolute inset-x-0 top-0 h-[3px]"

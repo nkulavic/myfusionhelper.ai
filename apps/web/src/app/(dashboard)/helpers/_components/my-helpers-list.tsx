@@ -120,22 +120,22 @@ export function MyHelpersList({ onSelectHelper, onNewHelper }: MyHelpersListProp
       <MyHelpersHeader onNewHelper={onNewHelper} total={stats.total} />
 
       {/* Stats Row */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border bg-card p-4">
+      <div className="animate-stagger-in grid gap-4 sm:grid-cols-3">
+        <div className="card-hover rounded-lg border bg-card p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Total Helpers</p>
             <Blocks className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="mt-1 text-2xl font-bold">{stats.total}</p>
         </div>
-        <div className="rounded-lg border bg-card p-4">
+        <div className="card-hover rounded-lg border bg-card p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Active</p>
             <CheckCircle className="h-4 w-4 text-success" />
           </div>
           <p className="mt-1 text-2xl font-bold text-success">{stats.active}</p>
         </div>
-        <div className="rounded-lg border bg-card p-4">
+        <div className="card-hover rounded-lg border bg-card p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">Inactive</p>
             <ToggleLeft className="h-4 w-4 text-muted-foreground" />
@@ -183,7 +183,7 @@ export function MyHelpersList({ onSelectHelper, onNewHelper }: MyHelpersListProp
 
       {/* Helpers List */}
       {filteredHelpers.length > 0 ? (
-        <div className="space-y-3">
+        <div className="animate-stagger-in space-y-3">
           {filteredHelpers.map((helper) => (
             <HelperRow
               key={helper.helperId}
@@ -267,7 +267,7 @@ function HelperRow({
     <>
       <div
         className={cn(
-          'group relative flex items-center gap-4 rounded-lg border bg-card p-4 transition-all hover:shadow-sm',
+          'group relative flex items-center gap-4 rounded-lg border bg-card p-4 transition-all card-hover',
           !helper.enabled && 'opacity-70'
         )}
       >

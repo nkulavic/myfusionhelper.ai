@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { connectionsApi, type CreateConnectionInput, type UpdateConnectionInput } from '@/lib/api/connections'
+import { toast } from 'sonner'
 
 export function useConnections() {
   return useQuery({
@@ -44,6 +45,10 @@ export function useCreateConnection() {
     }) => connectionsApi.create(platformId, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connections'] })
+      toast.success('Connection created')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to create connection')
     },
   })
 }
@@ -60,6 +65,10 @@ export function useDeleteConnection() {
     }) => connectionsApi.delete(platformId, connectionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connections'] })
+      toast.success('Connection deleted')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete connection')
     },
   })
 }
@@ -73,6 +82,12 @@ export function useTestConnection() {
       platformId: string
       connectionId: string
     }) => connectionsApi.test(platformId, connectionId),
+    onSuccess: () => {
+      toast.success('Connection test passed')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Connection test failed')
+    },
   })
 }
 

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { Helper, HelperTypeDefinition } from '@myfusionhelper/types'
 import { helpersApi, type CreateHelperInput, type UpdateHelperInput, type ExecuteHelperInput, type ListExecutionsParams } from '@/lib/api/helpers'
+import { toast } from 'sonner'
 
 export function useHelpers() {
   return useQuery({
@@ -36,6 +37,10 @@ export function useCreateHelper() {
     mutationFn: (input: CreateHelperInput) => helpersApi.create(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['helpers'] })
+      toast.success('Helper created')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to create helper')
     },
   })
 }
@@ -48,6 +53,10 @@ export function useUpdateHelper() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['helpers'] })
       queryClient.invalidateQueries({ queryKey: ['helpers', id] })
+      toast.success('Helper updated')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to update helper')
     },
   })
 }
@@ -58,6 +67,10 @@ export function useDeleteHelper() {
     mutationFn: (id: string) => helpersApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['helpers'] })
+      toast.success('Helper deleted')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete helper')
     },
   })
 }
@@ -69,6 +82,10 @@ export function useExecuteHelper() {
       helpersApi.execute(id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['executions'] })
+      toast.success('Execution started')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to execute helper')
     },
   })
 }
