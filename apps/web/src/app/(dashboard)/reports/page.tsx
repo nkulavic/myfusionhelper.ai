@@ -121,7 +121,7 @@ export default function ReportsPage() {
   const summary = reportStats?.summary
 
   return (
-    <div className="space-y-6">
+    <div className="animate-fade-in-up space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">Reports</h1>

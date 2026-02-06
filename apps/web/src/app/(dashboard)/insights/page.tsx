@@ -217,7 +217,7 @@ export default function InsightsPage() {
   }, [executions])
 
   return (
-    <div className="space-y-8">
+    <div className="animate-fade-in-up space-y-8">
       {/* Header */}
       <div>
         <div className="flex items-center gap-2">

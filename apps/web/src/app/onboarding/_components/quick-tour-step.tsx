@@ -25,7 +25,7 @@ const tourItems = [
     title: 'Helpers',
     path: '/helpers',
     description:
-      'Your automation toolkit. Browse 60+ helpers, configure them with your CRM fields, and activate them with a single click. Each helper runs automatically when triggered.',
+      'Your automation toolkit. Browse 62 helpers across 7 categories, configure them through a visual UI, and activate with a single click. Each helper runs automatically when triggered from your CRM.',
   },
   {
     icon: Link2,

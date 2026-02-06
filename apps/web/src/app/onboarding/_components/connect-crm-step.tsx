@@ -68,8 +68,8 @@ export function ConnectCRMStep({ onNext, onBack, onSkip }: ConnectCRMStepProps) 
         <h2 className="text-2xl font-bold">Connect Your CRM</h2>
         <p className="mt-1 text-muted-foreground">
           {hasConnection
-            ? 'Great, you have a connection! Add more or continue to the next step.'
-            : 'Choose your CRM platform to get started. You can add more later.'}
+            ? 'Great, you are connected! Add more platforms or continue to the next step.'
+            : 'Choose your CRM platform to get started. Your credentials are encrypted and we only request the minimum permissions needed. You can add more platforms later.'}
         </p>
       </div>
 

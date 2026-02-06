@@ -139,7 +139,7 @@ export default function EmailTemplatesPage() {
   const isSaving = createTemplate.isPending || updateTemplate.isPending
 
   return (
-    <div className="space-y-6">
+    <div className="animate-fade-in-up space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/emails">

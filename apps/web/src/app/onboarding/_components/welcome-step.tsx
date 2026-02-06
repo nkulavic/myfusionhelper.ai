@@ -12,22 +12,22 @@ const highlights = [
   {
     icon: Link2,
     title: 'Connect Your CRM',
-    description: 'Link Keap, HubSpot, GoHighLevel, and more in seconds',
+    description: 'Link Keap, GoHighLevel, ActiveCampaign, Ontraport, or HubSpot in under 60 seconds',
   },
   {
     icon: Blocks,
-    title: '60+ Automation Helpers',
-    description: 'Copy fields, apply tags, trigger sequences, and more',
+    title: '62 Pre-Built Helpers',
+    description: 'Tag contacts, format data, score leads, sync to Google Sheets, and much more',
   },
   {
     icon: Sparkles,
     title: 'AI-Powered Insights',
-    description: 'Get smart suggestions to optimize your workflows',
+    description: 'Get intelligent recommendations to optimize your automations and spot issues early',
   },
   {
     icon: BarChart3,
-    title: 'Track Everything',
-    description: 'Monitor executions, performance, and ROI in real time',
+    title: 'Track Every Execution',
+    description: 'Monitor success rates, debug failures, and measure the impact of every helper run',
   },
 ]
 
@@ -37,8 +37,8 @@ export function WelcomeStep({ firstName, onNext, onSkip }: WelcomeStepProps) {
       <div className="text-center">
         <h1 className="text-3xl font-bold">Welcome, {firstName}!</h1>
         <p className="mt-2 text-lg text-muted-foreground">
-          Let&apos;s get you set up in just a few steps. You&apos;ll be automating your CRM in no
-          time.
+          Let&apos;s get you set up in just a few steps. You&apos;ll have your first automation
+          running in minutes.
         </p>
       </div>
 

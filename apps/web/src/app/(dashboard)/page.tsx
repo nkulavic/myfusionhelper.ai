@@ -185,9 +185,9 @@ export default function DashboardPage() {
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Activity className="mb-3 h-8 w-8 text-muted-foreground/50" />
-              <p className="text-sm text-muted-foreground">No executions yet</p>
-              <p className="text-xs text-muted-foreground">
-                Configure a helper and run it to see results here
+              <p className="text-sm font-medium text-muted-foreground">No executions yet</p>
+              <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+                Once you configure and trigger a helper from your CRM, every execution will appear here with status, timing, and contact details.
               </p>
             </div>
           )}
@@ -259,7 +259,10 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="text-center py-4">
-                <p className="text-sm text-muted-foreground">No connections</p>
+                <p className="text-sm font-medium text-muted-foreground">No connections yet</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Connect your CRM to start using helpers
+                </p>
                 <Link
                   href="/connections"
                   className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"

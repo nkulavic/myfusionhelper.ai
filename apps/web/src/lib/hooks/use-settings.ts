@@ -9,6 +9,7 @@ import {
   type UpdateTeamMemberInput,
   type NotificationPreferences,
 } from '@/lib/api/settings'
+import { toast } from 'sonner'
 
 export function useUpdateProfile() {
   const queryClient = useQueryClient()
@@ -16,6 +17,10 @@ export function useUpdateProfile() {
     mutationFn: (input: UpdateProfileInput) => settingsApi.updateProfile(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth-status'] })
+      toast.success('Profile updated')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to update profile')
     },
   })
 }
@@ -23,6 +28,12 @@ export function useUpdateProfile() {
 export function useUpdatePassword() {
   return useMutation({
     mutationFn: (input: UpdatePasswordInput) => settingsApi.updatePassword(input),
+    onSuccess: () => {
+      toast.success('Password updated')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to update password')
+    },
   })
 }
 
@@ -69,6 +80,10 @@ export function useCreateAPIKey() {
     mutationFn: (input: CreateAPIKeyInput) => settingsApi.createAPIKey(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+      toast.success('API key created')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to create API key')
     },
   })
 }
@@ -79,6 +94,10 @@ export function useRevokeAPIKey() {
     mutationFn: (id: string) => settingsApi.revokeAPIKey(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+      toast.success('API key revoked')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to revoke API key')
     },
   })
 }
@@ -139,6 +158,10 @@ export function useInviteTeamMember() {
     }) => settingsApi.inviteTeamMember(accountId, input),
     onSuccess: (_, { accountId }) => {
       queryClient.invalidateQueries({ queryKey: ['team-members', accountId] })
+      toast.success('Team member invited')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to invite team member')
     },
   })
 }
@@ -157,6 +180,10 @@ export function useUpdateTeamMember() {
     }) => settingsApi.updateTeamMember(accountId, userId, input),
     onSuccess: (_, { accountId }) => {
       queryClient.invalidateQueries({ queryKey: ['team-members', accountId] })
+      toast.success('Team member updated')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to update team member')
     },
   })
 }
@@ -173,6 +200,10 @@ export function useRemoveTeamMember() {
     }) => settingsApi.removeTeamMember(accountId, userId),
     onSuccess: (_, { accountId }) => {
       queryClient.invalidateQueries({ queryKey: ['team-members', accountId] })
+      toast.success('Team member removed')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove team member')
     },
   })
 }
@@ -194,6 +225,10 @@ export function useUpdateNotificationPreferences() {
       settingsApi.updateNotificationPreferences(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notification-preferences'] })
+      toast.success('Notification preferences saved')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to save preferences')
     },
   })
 }
