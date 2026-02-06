@@ -1,177 +1,392 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
   ArrowLeft,
   BarChart3,
-  Calendar,
-  Download,
-  RefreshCw,
   Clock,
   TrendingUp,
   TrendingDown,
-  Share2,
-  MoreHorizontal,
+  AlertTriangle,
+  Activity,
+  CheckCircle,
+  XCircle,
+  Blocks,
+  Users,
+  Zap,
 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
+import { useReportStats } from '@/lib/hooks/use-reports'
+import { useHelpers } from '@/lib/hooks/use-helpers'
 
-const mockReport = {
-  id: 'rpt_001',
-  name: 'January 2026 Monthly Summary',
-  template: 'Weekly Summary',
-  description: 'Overview of all helper activity and key metrics for January 2026.',
-  createdAt: '2026-01-31',
-  lastRun: '2026-01-31T18:00:00Z',
-  schedule: 'monthly',
-  dateRange: { start: '2026-01-01', end: '2026-01-31' },
-  metrics: {
-    totalExecutions: 45_892,
-    successRate: 98.7,
-    contactsProcessed: 12_847,
-    avgDuration: 124,
-    errorsCount: 596,
-    uniqueHelpers: 14,
+const reportMeta: Record<string, { title: string; description: string }> = {
+  'execution-overview': {
+    title: 'Execution Overview',
+    description: 'Live dashboard of all execution activity and key metrics.',
   },
-  topHelpers: [
-    { name: 'Tag It', executions: 12_450, successRate: 99.2 },
-    { name: 'Copy It', executions: 8_732, successRate: 98.9 },
-    { name: 'Date Calculator', executions: 6_421, successRate: 97.8 },
-    { name: 'Format It', executions: 5_843, successRate: 99.1 },
-    { name: 'Score It', executions: 4_210, successRate: 96.5 },
-  ],
-  dailyExecutions: [
-    { date: 'Jan 1', count: 1200 },
-    { date: 'Jan 5', count: 1450 },
-    { date: 'Jan 10', count: 1800 },
-    { date: 'Jan 15', count: 1650 },
-    { date: 'Jan 20', count: 2100 },
-    { date: 'Jan 25', count: 1900 },
-    { date: 'Jan 31', count: 2200 },
-  ],
+  'helper-performance': {
+    title: 'Helper Performance',
+    description: 'Execution success rates, duration, and error analysis per helper.',
+  },
+  'execution-trends': {
+    title: 'Execution Trends',
+    description: 'Daily execution volume and processing trends over the last 30 days.',
+  },
+  'error-analysis': {
+    title: 'Error Analysis',
+    description: 'Breakdown of failed executions by error type and affected helpers.',
+  },
+  'contact-activity': {
+    title: 'Contact Activity',
+    description: 'Unique contacts processed and execution patterns.',
+  },
+  'helper-catalog': {
+    title: 'Helper Catalog',
+    description: 'Summary of all configured helpers and their usage.',
+  },
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Skeleton className="h-10 w-10" />
+        <div className="flex-1">
+          <Skeleton className="h-7 w-48" />
+          <Skeleton className="mt-1 h-4 w-72" />
+        </div>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="rounded-lg border bg-card p-4">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="mt-2 h-7 w-16" />
+          </div>
+        ))}
+      </div>
+      <Skeleton className="h-64 w-full rounded-lg" />
+    </div>
+  )
 }
 
 export default function ReportDetailPage() {
   const params = useParams()
-  const report = mockReport
+  const reportId = params.id as string
 
-  const maxExec = Math.max(...report.dailyExecutions.map((d) => d.count))
+  const { data: stats, isLoading, error } = useReportStats()
+  const { data: helpers } = useHelpers()
+
+  const meta = reportMeta[reportId] || {
+    title: 'Report',
+    description: 'Execution analytics report.',
+  }
+
+  const helperNameMap = useMemo(() => {
+    const map = new Map<string, string>()
+    if (helpers) {
+      for (const h of helpers) {
+        map.set(h.helperId, h.name)
+      }
+    }
+    return map
+  }, [helpers])
+
+  if (isLoading) return <LoadingSkeleton />
+
+  if (error || !stats) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Link href="/reports" className="rounded-md p-2 hover:bg-accent">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold">{meta.title}</h1>
+            <p className="text-muted-foreground">{meta.description}</p>
+          </div>
+        </div>
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
+          <Activity className="mb-4 h-12 w-12 text-muted-foreground/50" />
+          <h3 className="mb-1 font-semibold">Unable to load report data</h3>
+          <p className="text-sm text-muted-foreground">
+            The executions endpoint may not be available yet. Execute some helpers first.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  const { summary, dailyTrend, topHelpers, errorBreakdown } = stats
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link
-          href="/reports"
-          className="rounded-md p-2 hover:bg-accent"
-        >
+        <Link href="/reports" className="rounded-md p-2 hover:bg-accent">
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">{report.name}</h1>
-          <p className="text-muted-foreground">{report.description}</p>
+          <h1 className="text-2xl font-bold">{meta.title}</h1>
+          <p className="text-muted-foreground">{meta.description}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </button>
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">
-            <Download className="h-4 w-4" />
-            Export
-          </button>
-          <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent">
-            <Share2 className="h-4 w-4" />
-            Share
-          </button>
-        </div>
-      </div>
-
-      {/* Report Meta */}
-      <div className="flex items-center gap-6 text-sm text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <Calendar className="h-4 w-4" />
-          {report.dateRange.start} to {report.dateRange.end}
-        </span>
-        <span className="flex items-center gap-1">
-          <Clock className="h-4 w-4" />
-          Last run: {new Date(report.lastRun).toLocaleString()}
-        </span>
-        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-          report.schedule === 'monthly'
-            ? 'bg-primary/10 text-primary'
-            : 'bg-info/10 text-info'
-        }`}>
-          {report.schedule}
-        </span>
       </div>
 
       {/* KPI Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {[
-          { label: 'Total Executions', value: report.metrics.totalExecutions.toLocaleString(), icon: BarChart3 },
-          { label: 'Success Rate', value: `${report.metrics.successRate}%`, icon: TrendingUp },
-          { label: 'Contacts Processed', value: report.metrics.contactsProcessed.toLocaleString(), icon: null },
-          { label: 'Avg Duration', value: `${report.metrics.avgDuration}ms`, icon: Clock },
-          { label: 'Errors', value: report.metrics.errorsCount.toLocaleString(), icon: TrendingDown },
-          { label: 'Active Helpers', value: report.metrics.uniqueHelpers.toString(), icon: null },
-        ].map((kpi) => (
-          <div key={kpi.label} className="rounded-lg border bg-card p-4">
-            <p className="text-xs text-muted-foreground">{kpi.label}</p>
-            <p className="mt-1 text-xl font-bold">{kpi.value}</p>
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Total Executions</p>
+            <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
           </div>
-        ))}
+          <p className="mt-1 text-xl font-bold">{summary.total.toLocaleString()}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Success Rate</p>
+            <TrendingUp className="h-3.5 w-3.5 text-success" />
+          </div>
+          <p className={cn('mt-1 text-xl font-bold', summary.successRate >= 95 ? 'text-success' : summary.successRate >= 80 ? 'text-warning' : 'text-destructive')}>
+            {summary.successRate}%
+          </p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Contacts Processed</p>
+            <Users className="h-3.5 w-3.5 text-muted-foreground" />
+          </div>
+          <p className="mt-1 text-xl font-bold">{summary.uniqueContacts.toLocaleString()}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Avg Duration</p>
+            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+          </div>
+          <p className="mt-1 text-xl font-bold">{summary.avgDurationMs}ms</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Errors</p>
+            <TrendingDown className="h-3.5 w-3.5 text-destructive" />
+          </div>
+          <p className={cn('mt-1 text-xl font-bold', summary.failed > 0 ? 'text-destructive' : '')}>
+            {summary.failed.toLocaleString()}
+          </p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Active Helpers</p>
+            <Blocks className="h-3.5 w-3.5 text-muted-foreground" />
+          </div>
+          <p className="mt-1 text-xl font-bold">{summary.uniqueHelpers}</p>
+        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Execution Trend Chart (simple bar chart) */}
-        <div className="rounded-lg border bg-card p-5">
-          <h3 className="mb-4 font-semibold">Execution Trend</h3>
-          <div className="flex items-end gap-2" style={{ height: 200 }}>
-            {report.dailyExecutions.map((day) => (
-              <div key={day.date} className="flex flex-1 flex-col items-center gap-1">
-                <span className="text-xs text-muted-foreground">{day.count}</span>
-                <div
-                  className="w-full rounded-t bg-primary"
-                  style={{ height: `${(day.count / maxExec) * 160}px` }}
-                />
-                <span className="text-xs text-muted-foreground">{day.date}</span>
+      {/* Report-specific content */}
+      {(reportId === 'execution-overview' || reportId === 'execution-trends') && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Execution Trend Chart */}
+          <div className="rounded-lg border bg-card p-5 lg:col-span-2">
+            <h3 className="mb-4 font-semibold">Daily Execution Volume (Last 30 Days)</h3>
+            {dailyTrend.length > 0 ? (
+              <>
+                <div className="flex items-end gap-0.5" style={{ height: 220 }}>
+                  {(() => {
+                    const maxVal = Math.max(...dailyTrend.map((d) => d.total), 1)
+                    return dailyTrend.map((day) => {
+                      const failedHeight = day.total > 0 ? (day.failed / maxVal) * 200 : 0
+                      const completedHeight = day.total > 0 ? ((day.total - day.failed) / maxVal) * 200 : 0
+                      return (
+                        <div key={day.date} className="flex flex-1 flex-col items-center group relative">
+                          <div className="w-full flex flex-col-reverse">
+                            <div
+                              className="w-full bg-primary/80 hover:bg-primary transition-colors rounded-t"
+                              style={{ height: `${Math.max(completedHeight, 1)}px` }}
+                            />
+                            {failedHeight > 0 && (
+                              <div
+                                className="w-full bg-destructive/70"
+                                style={{ height: `${failedHeight}px` }}
+                              />
+                            )}
+                          </div>
+                          <div className="absolute bottom-full mb-1 hidden group-hover:block rounded bg-popover px-2 py-1 text-xs shadow-md border whitespace-nowrap z-10">
+                            <p className="font-medium">
+                              {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </p>
+                            <p>{day.total} total</p>
+                            <p className="text-success">{day.completed} completed</p>
+                            {day.failed > 0 && <p className="text-destructive">{day.failed} failed</p>}
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+                <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+                  <span>
+                    {new Date(dailyTrend[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                  <span>
+                    {new Date(dailyTrend[dailyTrend.length - 1].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-primary/80" /> Completed
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-destructive/70" /> Failed
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">
+                No execution data for the last 30 days
               </div>
-            ))}
+            )}
           </div>
         </div>
+      )}
 
-        {/* Top Helpers */}
+      {(reportId === 'execution-overview' || reportId === 'helper-performance' || reportId === 'helper-catalog') && (
         <div className="rounded-lg border bg-card p-5">
-          <h3 className="mb-4 font-semibold">Top Helpers</h3>
+          <h3 className="mb-4 font-semibold">Helper Performance</h3>
+          {topHelpers.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="pb-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">#</th>
+                    <th className="pb-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Helper</th>
+                    <th className="pb-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Executions</th>
+                    <th className="pb-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Completed</th>
+                    <th className="pb-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Failed</th>
+                    <th className="pb-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Success Rate</th>
+                    <th className="pb-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Avg Duration</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {topHelpers.map((helper, i) => {
+                    const name = helperNameMap.get(helper.helperId) || helper.helperId
+                    const successRate = helper.total > 0
+                      ? Math.round((helper.completed / helper.total) * 1000) / 10
+                      : 0
+                    return (
+                      <tr key={helper.helperId} className="hover:bg-muted/50">
+                        <td className="py-3 text-sm text-muted-foreground">{i + 1}</td>
+                        <td className="py-3">
+                          <div className="flex items-center gap-2">
+                            <Zap className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-sm font-medium">{name}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 text-right font-mono text-sm">{helper.total.toLocaleString()}</td>
+                        <td className="py-3 text-right font-mono text-sm text-success">{helper.completed.toLocaleString()}</td>
+                        <td className="py-3 text-right font-mono text-sm text-destructive">{helper.failed > 0 ? helper.failed.toLocaleString() : '-'}</td>
+                        <td className="py-3 text-right">
+                          <span className={cn(
+                            'font-mono text-sm',
+                            successRate >= 95 ? 'text-success' : successRate >= 80 ? 'text-warning' : 'text-destructive'
+                          )}>
+                            {successRate}%
+                          </span>
+                        </td>
+                        <td className="py-3 text-right font-mono text-sm text-muted-foreground">
+                          {helper.avgDurationMs > 0 ? `${helper.avgDurationMs}ms` : '-'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              No helper execution data available
+            </div>
+          )}
+        </div>
+      )}
+
+      {(reportId === 'execution-overview' || reportId === 'error-analysis') && errorBreakdown.length > 0 && (
+        <div className="rounded-lg border bg-card p-5">
+          <h3 className="mb-4 font-semibold">Error Breakdown</h3>
           <div className="space-y-3">
-            {report.topHelpers.map((helper, i) => (
-              <div key={helper.name} className="flex items-center gap-3">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                  {i + 1}
-                </span>
-                <div className="flex-1">
+            {errorBreakdown.map((entry) => {
+              const percentage = summary.failed > 0
+                ? Math.round((entry.count / summary.failed) * 100)
+                : 0
+              return (
+                <div key={entry.error} className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">{helper.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {helper.executions.toLocaleString()} runs
-                    </p>
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <XCircle className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
+                      <p className="text-sm truncate">{entry.error}</p>
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground ml-2 flex-shrink-0">
+                      {entry.count}x ({percentage}%)
+                    </span>
                   </div>
-                  <div className="mt-1 h-2 w-full rounded-full bg-muted">
+                  <div className="h-1.5 w-full rounded-full bg-muted">
                     <div
-                      className="h-full rounded-full bg-primary"
-                      style={{
-                        width: `${(helper.executions / report.topHelpers[0].executions) * 100}%`,
-                      }}
+                      className="h-full rounded-full bg-destructive/60"
+                      style={{ width: `${percentage}%` }}
                     />
                   </div>
                 </div>
-                <span className="text-xs text-success">{helper.successRate}%</span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
-      </div>
+      )}
+
+      {reportId === 'contact-activity' && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-lg border bg-card p-5">
+            <h3 className="mb-4 font-semibold">Contact Processing Summary</h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Unique Contacts Processed</span>
+                <span className="text-lg font-bold">{summary.uniqueContacts.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Total Executions</span>
+                <span className="text-lg font-bold">{summary.total.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Avg Executions per Contact</span>
+                <span className="text-lg font-bold">
+                  {summary.uniqueContacts > 0
+                    ? (summary.total / summary.uniqueContacts).toFixed(1)
+                    : '-'}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="rounded-lg border bg-card p-5">
+            <h3 className="mb-4 font-semibold">Processing Performance</h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Average Duration</span>
+                <span className="text-lg font-bold">{summary.avgDurationMs}ms</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Success Rate</span>
+                <span className={cn('text-lg font-bold', summary.successRate >= 95 ? 'text-success' : 'text-warning')}>
+                  {summary.successRate}%
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Active Helpers</span>
+                <span className="text-lg font-bold">{summary.uniqueHelpers}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
