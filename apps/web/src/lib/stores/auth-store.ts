@@ -9,6 +9,7 @@ interface AuthState {
   isLoading: boolean
 
   setUser: (user: User, token: string, refreshToken?: string) => void
+  updateUserData: (updates: Partial<User>) => void
   updateToken: (token: string) => void
   clearAuth: () => void
   setLoading: (loading: boolean) => void
@@ -25,6 +26,11 @@ export const useAuthStore = create<AuthState>()(
         setTokens(token, refreshToken)
         set({ user, isAuthenticated: true, isLoading: false })
       },
+
+      updateUserData: (updates) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...updates } : null,
+        })),
 
       updateToken: (token) => {
         setTokens(token)

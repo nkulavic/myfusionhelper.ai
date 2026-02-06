@@ -1,11 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   settingsApi,
+  type UpdateProfileInput,
   type UpdateAccountInput,
   type CreateAPIKeyInput,
   type InviteTeamMemberInput,
   type NotificationPreferences,
 } from '@/lib/api/settings'
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: UpdateProfileInput) => settingsApi.updateProfile(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth-status'] })
+    },
+  })
+}
 
 export function useAccount(accountId: string) {
   return useQuery({
@@ -81,6 +92,19 @@ export function useInvoices() {
       const res = await settingsApi.listInvoices()
       return res.data ?? []
     },
+  })
+}
+
+export function useCreatePortalSession() {
+  return useMutation({
+    mutationFn: () => settingsApi.createPortalSession(),
+  })
+}
+
+export function useCreateCheckoutSession() {
+  return useMutation({
+    mutationFn: (plan: 'start' | 'grow' | 'deliver') =>
+      settingsApi.createCheckoutSession(plan),
   })
 }
 

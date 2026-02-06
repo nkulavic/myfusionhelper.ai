@@ -15,21 +15,26 @@ import {
   Sparkles,
   Eye,
   EyeOff,
+  Check,
   CheckCircle,
   ExternalLink,
   Receipt,
   Shield,
+  Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useWorkspaceStore } from '@/lib/stores/workspace-store'
 import {
+  useUpdateProfile,
   useAPIKeys,
   useCreateAPIKey,
   useRevokeAPIKey,
   useUpdateAccount,
   useBillingInfo,
   useInvoices,
+  useCreatePortalSession,
+  useCreateCheckoutSession,
   useTeamMembers,
   useInviteTeamMember,
   useNotificationPreferences,
@@ -73,26 +78,45 @@ export default function SettingsPage() {
         <p className="text-muted-foreground">Manage your account and preferences</p>
       </div>
 
+      {/* Mobile: horizontal scrolling tabs */}
+      <div className="flex gap-1.5 overflow-x-auto pb-2 md:hidden">
+        {tabs.map((tab) => (
+          <Button
+            key={tab.id}
+            variant={activeTab === tab.id ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              'flex-shrink-0',
+              activeTab !== tab.id && 'text-muted-foreground'
+            )}
+          >
+            <tab.icon className="h-4 w-4" />
+            {tab.name}
+          </Button>
+        ))}
+      </div>
+
       <div className="flex gap-6">
-        <nav className="w-48 space-y-1">
+        {/* Desktop: vertical side nav */}
+        <nav className="hidden w-48 space-y-1 md:block">
           {tabs.map((tab) => (
-            <button
+            <Button
               key={tab.id}
+              variant={activeTab === tab.id ? 'default' : 'ghost'}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                activeTab === tab.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                'w-full justify-start',
+                activeTab !== tab.id && 'text-muted-foreground'
               )}
             >
               <tab.icon className="h-4 w-4" />
               {tab.name}
-            </button>
+            </Button>
           ))}
         </nav>
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           {activeTab === 'profile' && <ProfileTab />}
           {activeTab === 'account' && <AccountTab />}
           {activeTab === 'api-keys' && <APIKeysTab />}
@@ -110,10 +134,24 @@ export default function SettingsPage() {
 // Profile Tab
 // ---------------------------------------------------------------------------
 function ProfileTab() {
-  const { user } = useAuthStore()
+  const { user, updateUserData } = useAuthStore()
   const [name, setName] = useState(user?.name || '')
   const [email, setEmail] = useState(user?.email || '')
   const [phone, setPhone] = useState(user?.phoneNumber || '')
+  const updateProfile = useUpdateProfile()
+
+  const handleSaveProfile = () => {
+    updateProfile.mutate(
+      { name, email },
+      {
+        onSuccess: (res) => {
+          if (res.data) {
+            updateUserData({ name: res.data.name, email: res.data.email })
+          }
+        },
+      }
+    )
+  }
 
   const initials = name
     ? name
@@ -177,7 +215,10 @@ function ProfileTab() {
           </div>
         </CardContent>
         <CardFooter className="justify-end">
-          <Button>Save Changes</Button>
+          <Button onClick={handleSaveProfile} disabled={updateProfile.isPending}>
+            {updateProfile.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Save Changes
+          </Button>
         </CardFooter>
       </Card>
 
@@ -648,18 +689,91 @@ function AITab() {
 function BillingTab() {
   const { data: billing, isLoading: billingLoading } = useBillingInfo()
   const { data: invoices, isLoading: invoicesLoading } = useInvoices()
+  const createPortal = useCreatePortalSession()
+  const createCheckout = useCreateCheckoutSession()
+  const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null)
 
   const planLabels: Record<string, string> = {
     free: 'Free',
-    pro: 'Pro',
-    business: 'Business',
+    start: 'Start',
+    grow: 'Grow',
+    deliver: 'Deliver',
   }
 
-  const planPrices: Record<string, string> = {
-    free: '$0/month',
-    pro: '$49/month',
-    business: '$149/month',
+  const plans = [
+    {
+      id: 'start' as const,
+      name: 'Start',
+      price: 39,
+      description: 'For solopreneurs getting started with CRM automation',
+      features: [
+        '10 active helpers',
+        '2 CRM connections',
+        '1,000 monthly executions',
+        '2 API keys',
+        'Email support',
+      ],
+    },
+    {
+      id: 'grow' as const,
+      name: 'Grow',
+      price: 59,
+      description: 'For growing businesses scaling their automations',
+      popular: true,
+      features: [
+        '50 active helpers',
+        '5 CRM connections',
+        '10,000 monthly executions',
+        '10 API keys',
+        '5 team members',
+        'Priority support',
+        'Webhook notifications',
+      ],
+    },
+    {
+      id: 'deliver' as const,
+      name: 'Deliver',
+      price: 79,
+      description: 'For teams that need unlimited power and support',
+      features: [
+        'Unlimited helpers',
+        'Unlimited connections',
+        '100,000 monthly executions',
+        'Unlimited API keys',
+        'Unlimited team members',
+        'Dedicated support',
+        'Webhook notifications',
+        'Full API access',
+      ],
+    },
+  ]
+
+  const handleManageSubscription = () => {
+    createPortal.mutate(undefined, {
+      onSuccess: (res: { data?: { url: string } }) => {
+        if (res.data?.url) {
+          window.open(res.data.url, '_blank')
+        }
+      },
+    })
   }
+
+  const handleSelectPlan = (planId: 'start' | 'grow' | 'deliver') => {
+    setCheckoutPlan(planId)
+    createCheckout.mutate(planId, {
+      onSuccess: (res) => {
+        if (res.data?.url) {
+          window.open(res.data.url, '_blank')
+        }
+        setCheckoutPlan(null)
+      },
+      onError: () => {
+        setCheckoutPlan(null)
+      },
+    })
+  }
+
+  const currentPlan = billing?.plan || 'free'
 
   return (
     <div className="space-y-6">
@@ -674,22 +788,129 @@ function BillingTab() {
           ) : billing ? (
             <div className="flex items-center justify-between rounded-lg bg-primary/10 p-4">
               <div>
-                <p className="text-lg font-bold">{planLabels[billing.plan] || billing.plan} Plan</p>
-                <p className="text-sm text-muted-foreground">
-                  {planPrices[billing.plan] || ''}
+                <p className="text-lg font-bold">
+                  {planLabels[billing.plan] || billing.plan} Plan
                 </p>
+                {billing.priceMonthly > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    ${billing.priceMonthly}/month
+                  </p>
+                )}
                 {billing.renewsAt && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Renews {new Date(billing.renewsAt).toLocaleDateString()}
+                    Renews {new Date(billing.renewsAt * 1000).toLocaleDateString()}
+                  </p>
+                )}
+                {billing.trialEndsAt && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Trial ends {new Date(billing.trialEndsAt * 1000).toLocaleDateString()}
+                  </p>
+                )}
+                {billing.cancelAt && (
+                  <p className="mt-1 text-xs text-destructive">
+                    Cancels {new Date(billing.cancelAt * 1000).toLocaleDateString()}
                   </p>
                 )}
               </div>
-              <Button variant="outline">
-                <ExternalLink className="h-4 w-4" />
-                Manage Subscription
-              </Button>
+              {billing.plan !== 'free' && (
+                <Button
+                  variant="outline"
+                  onClick={handleManageSubscription}
+                  disabled={createPortal.isPending}
+                >
+                  {createPortal.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ExternalLink className="h-4 w-4" />
+                  )}
+                  Manage Subscription
+                </Button>
+              )}
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      {/* Plan Tiers */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">
+            {currentPlan === 'free' ? 'Choose a Plan' : 'Change Plan'}
+          </CardTitle>
+          <CardDescription>
+            {currentPlan === 'free'
+              ? 'Select the plan that best fits your needs'
+              : 'Upgrade or change your current plan'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            {plans.map((plan) => {
+              const isCurrentPlan = currentPlan === plan.id
+              const isPlanLoading = checkoutPlan === plan.id && createCheckout.isPending
+              return (
+                <div
+                  key={plan.id}
+                  className={cn(
+                    'relative flex flex-col rounded-lg border p-5 transition-all',
+                    plan.popular && 'border-primary shadow-sm',
+                    isCurrentPlan && 'bg-primary/5 ring-1 ring-primary'
+                  )}
+                >
+                  {plan.popular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <Badge className="gap-1">
+                        <Zap className="h-3 w-3" />
+                        Most Popular
+                      </Badge>
+                    </div>
+                  )}
+                  <div className="mb-4">
+                    <h3 className="text-lg font-bold">{plan.name}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">{plan.description}</p>
+                  </div>
+                  <div className="mb-4">
+                    <span className="text-3xl font-bold">${plan.price}</span>
+                    <span className="text-sm text-muted-foreground">/month</span>
+                  </div>
+                  <ul className="mb-6 flex-1 space-y-2">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2 text-sm">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {isCurrentPlan ? (
+                    <Button variant="outline" disabled className="w-full">
+                      <CheckCircle className="h-4 w-4" />
+                      Current Plan
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={plan.popular ? 'default' : 'outline'}
+                      className="w-full"
+                      onClick={() => handleSelectPlan(plan.id)}
+                      disabled={isPlanLoading || createCheckout.isPending}
+                    >
+                      {isPlanLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {currentPlan === 'free'
+                        ? 'Get Started'
+                        : plans.findIndex((p) => p.id === currentPlan) <
+                            plans.findIndex((p) => p.id === plan.id)
+                          ? 'Upgrade'
+                          : 'Downgrade'}
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {createCheckout.isError && (
+            <p className="mt-4 text-center text-sm text-destructive">
+              Failed to create checkout session. Please try again.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -705,15 +926,31 @@ function BillingTab() {
                 <Skeleton key={i} className="h-8 w-full" />
               ))}
             </div>
-          ) : billing?.usage ? (
+          ) : billing?.usage && billing?.limits ? (
             <div className="space-y-5">
               {[
-                { label: 'Helper Executions', ...billing.usage.executions },
-                { label: 'API Calls', ...billing.usage.apiCalls },
-                { label: 'Active Helpers', ...billing.usage.helpers },
-                { label: 'Connections', ...billing.usage.connections },
+                {
+                  label: 'Helper Executions',
+                  used: billing.usage.monthlyExecutions,
+                  limit: billing.limits.maxExecutions,
+                },
+                {
+                  label: 'Active Helpers',
+                  used: billing.usage.helpers,
+                  limit: billing.limits.maxHelpers,
+                },
+                {
+                  label: 'Connections',
+                  used: billing.usage.connections,
+                  limit: billing.limits.maxConnections,
+                },
+                {
+                  label: 'API Keys',
+                  used: billing.usage.apiKeys,
+                  limit: billing.limits.maxApiKeys,
+                },
               ].map((item) => {
-                const pct = Math.min((item.used / item.limit) * 100, 100)
+                const pct = item.limit > 0 ? Math.min((item.used / item.limit) * 100, 100) : 0
                 return (
                   <div key={item.label}>
                     <div className="mb-2 flex justify-between text-sm">
@@ -753,11 +990,9 @@ function BillingTab() {
                   <div className="flex items-center gap-3">
                     <Receipt className="h-4 w-4 text-muted-foreground" />
                     <div>
-                      <p className="text-sm font-medium">
-                        ${inv.amount.toFixed(2)}
-                      </p>
+                      <p className="text-sm font-medium">${inv.amount.toFixed(2)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(inv.date).toLocaleDateString('en-US', {
+                        {new Date(inv.date * 1000).toLocaleDateString('en-US', {
                           year: 'numeric',
                           month: 'long',
                         })}
