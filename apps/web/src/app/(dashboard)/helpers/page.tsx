@@ -7,10 +7,9 @@ import { Blocks, Grid3X3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MyHelpersList } from './_components/my-helpers-list'
 import { HelpersCatalog } from './_components/helpers-catalog'
-import { HelperDetail } from './_components/helper-detail'
 import { HelperBuilder } from './_components/helper-builder'
 
-type HelperView = 'my-helpers' | 'catalog' | 'detail' | 'new'
+type HelperView = 'my-helpers' | 'catalog' | 'new'
 
 const slideIn = {
   initial: { opacity: 0, x: 24 },
@@ -35,13 +34,13 @@ function HelpersContent() {
 
   const view: HelperView =
     (searchParams.get('view') as HelperView) || 'my-helpers'
-  const helperId = searchParams.get('id') || ''
+  const helperTypeId = searchParams.get('type') || ''
 
   const navigate = useCallback(
-    (newView: HelperView, id?: string) => {
+    (newView: HelperView, typeId?: string) => {
       const params = new URLSearchParams()
       if (newView !== 'my-helpers') params.set('view', newView)
-      if (id) params.set('id', id)
+      if (typeId) params.set('type', typeId)
       const qs = params.toString()
       router.push(`/helpers${qs ? `?${qs}` : ''}`, { scroll: false })
     },
@@ -52,7 +51,7 @@ function HelpersContent() {
 
   return (
     <div>
-      {/* Tabs — only visible in list views */}
+      {/* Tabs -- only visible in list views */}
       {isListView && (
         <div className="mb-6 flex items-center gap-1 rounded-lg bg-muted p-1 w-fit">
           <button
@@ -86,7 +85,7 @@ function HelpersContent() {
         {view === 'my-helpers' && (
           <motion.div key="my-helpers" {...slideBack} transition={transition}>
             <MyHelpersList
-              onSelectHelper={(id) => navigate('detail', id)}
+              onSelectHelper={(id) => router.push(`/helpers/${id}`)}
               onNewHelper={() => navigate('catalog')}
             />
           </motion.div>
@@ -95,35 +94,22 @@ function HelpersContent() {
         {view === 'catalog' && (
           <motion.div key="catalog" {...slideBack} transition={transition}>
             <HelpersCatalog
-              onSelectHelper={(id) => navigate('new', id)}
+              onSelectHelper={(typeId) => navigate('new', typeId)}
               onNewHelper={() => navigate('new')}
-            />
-          </motion.div>
-        )}
-
-        {view === 'detail' && helperId && (
-          <motion.div
-            key={`detail-${helperId}`}
-            {...slideIn}
-            transition={transition}
-          >
-            <HelperDetail
-              helperId={helperId}
-              onBack={() => navigate('my-helpers')}
             />
           </motion.div>
         )}
 
         {view === 'new' && (
           <motion.div
-            key={`new-${helperId}`}
+            key={`new-${helperTypeId}`}
             {...slideIn}
             transition={transition}
           >
             <HelperBuilder
-              initialType={helperId || undefined}
+              initialType={helperTypeId || undefined}
               onBack={() => navigate('catalog')}
-              onCreated={(id) => navigate('detail', id)}
+              onCreated={(id) => router.push(`/helpers/${id}`)}
             />
           </motion.div>
         )}

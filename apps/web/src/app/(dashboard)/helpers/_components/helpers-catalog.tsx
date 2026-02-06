@@ -1,31 +1,122 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Search, Plus, Filter, Sparkles } from 'lucide-react'
+import { Search, Plus, Filter, Sparkles, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { HelperTypeDefinition } from '@myfusionhelper/types'
 import {
   helpersCatalog,
   categoryInfo,
   getCategoryCounts,
   type HelperDefinition,
 } from '@/lib/helpers-catalog'
+import { useHelperTypes } from '@/lib/hooks/use-helpers'
 import { getCRMPlatform } from '@/lib/crm-platforms'
 import { CRMBadges } from '@/components/crm-badges'
+
+/** Merged view: backend type data + static catalog metadata (icon, popular, status) */
+interface CatalogItem {
+  id: string
+  name: string
+  description: string
+  category: string
+  requiresCRM: boolean
+  supportedCRMs: string[]
+  configSchema?: Record<string, unknown>
+  // From static catalog (enrichment)
+  icon?: HelperDefinition['icon']
+  popular: boolean
+  status: 'available' | 'coming_soon' | 'beta'
+}
+
+function mergeBackendWithCatalog(
+  backendTypes: HelperTypeDefinition[],
+  staticCatalog: HelperDefinition[]
+): CatalogItem[] {
+  const staticMap = new Map(staticCatalog.map((h) => [h.id, h]))
+  const seen = new Set<string>()
+  const merged: CatalogItem[] = []
+
+  // Backend types take priority
+  for (const bt of backendTypes) {
+    seen.add(bt.type)
+    const staticEntry = staticMap.get(bt.type)
+    merged.push({
+      id: bt.type,
+      name: bt.name,
+      description: bt.description,
+      category: bt.category,
+      requiresCRM: bt.requiresCrm,
+      supportedCRMs: bt.supportedCrms ?? [],
+      configSchema: bt.configSchema,
+      icon: staticEntry?.icon,
+      popular: staticEntry?.popular ?? false,
+      status: staticEntry?.status ?? 'available',
+    })
+  }
+
+  // Add any static-only entries not in backend (e.g. coming_soon)
+  for (const entry of staticCatalog) {
+    if (!seen.has(entry.id)) {
+      merged.push({
+        id: entry.id,
+        name: entry.name,
+        description: entry.description,
+        category: entry.category,
+        requiresCRM: entry.requiresCRM,
+        supportedCRMs: entry.supportedCRMs,
+        icon: entry.icon,
+        popular: entry.popular,
+        status: entry.status,
+      })
+    }
+  }
+
+  return merged
+}
 
 interface HelpersCatalogProps {
   onSelectHelper: (id: string) => void
   onNewHelper: () => void
+  crmFilter?: string
 }
 
-export function HelpersCatalog({ onSelectHelper, onNewHelper }: HelpersCatalogProps) {
+export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: HelpersCatalogProps) {
+  const { data: backendData, isLoading: typesLoading } = useHelperTypes()
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [showAvailableOnly, setShowAvailableOnly] = useState(false)
+  const [selectedCRM, setSelectedCRM] = useState(crmFilter ?? 'all')
 
-  const categoryCounts = useMemo(() => getCategoryCounts(), [])
+  // Merge backend types with static catalog for icons/popularity metadata
+  const catalogItems = useMemo(() => {
+    if (backendData?.types && backendData.types.length > 0) {
+      return mergeBackendWithCatalog(backendData.types, helpersCatalog)
+    }
+    // Fallback to static catalog if backend hasn't loaded
+    return helpersCatalog.map((h) => ({
+      id: h.id,
+      name: h.name,
+      description: h.description,
+      category: h.category,
+      requiresCRM: h.requiresCRM,
+      supportedCRMs: h.supportedCRMs,
+      icon: h.icon,
+      popular: h.popular,
+      status: h.status,
+    }))
+  }, [backendData])
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: catalogItems.length }
+    for (const item of catalogItems) {
+      counts[item.category] = (counts[item.category] || 0) + 1
+    }
+    return counts
+  }, [catalogItems])
 
   const filteredHelpers = useMemo(() => {
-    return helpersCatalog.filter((helper) => {
+    return catalogItems.filter((helper) => {
       const matchesCategory =
         selectedCategory === 'all' || helper.category === selectedCategory
       const matchesSearch =
@@ -33,9 +124,13 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper }: HelpersCatalogPr
         helper.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         helper.description.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesAvailability = !showAvailableOnly || helper.status === 'available'
-      return matchesCategory && matchesSearch && matchesAvailability
+      const matchesCRM =
+        selectedCRM === 'all' ||
+        helper.supportedCRMs.length === 0 ||
+        helper.supportedCRMs.includes(selectedCRM)
+      return matchesCategory && matchesSearch && matchesAvailability && matchesCRM
     })
-  }, [selectedCategory, searchQuery, showAvailableOnly])
+  }, [catalogItems, selectedCategory, searchQuery, showAvailableOnly, selectedCRM])
 
   const availableCount = filteredHelpers.filter((h) => h.status === 'available').length
   const comingSoonCount = filteredHelpers.filter((h) => h.status === 'coming_soon').length
@@ -45,10 +140,16 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper }: HelpersCatalogPr
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Helpers</h1>
+          <h1 className="text-2xl font-bold">Helper Catalog</h1>
           <p className="text-muted-foreground">
-            {helpersCatalog.length} automation helpers across{' '}
-            {categoryInfo.length - 1} categories
+            {catalogItems.length} automation helpers across{' '}
+            {Object.keys(categoryCounts).length - 1} categories
+            {typesLoading && (
+              <span className="ml-2 inline-flex items-center gap-1 text-xs">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Syncing...
+              </span>
+            )}
           </p>
         </div>
         <button
@@ -72,6 +173,18 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper }: HelpersCatalogPr
             className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-4 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
+        <select
+          value={selectedCRM}
+          onChange={(e) => setSelectedCRM(e.target.value)}
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="all">All CRMs</option>
+          <option value="keap">Keap</option>
+          <option value="gohighlevel">GoHighLevel</option>
+          <option value="activecampaign">ActiveCampaign</option>
+          <option value="ontraport">Ontraport</option>
+          <option value="hubspot">HubSpot</option>
+        </select>
         <button
           onClick={() => setShowAvailableOnly(!showAvailableOnly)}
           className={cn(
@@ -136,9 +249,9 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper }: HelpersCatalogPr
       {/* Helpers Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filteredHelpers.map((helper) => (
-          <HelperCard
+          <CatalogCard
             key={helper.id}
-            helper={helper}
+            item={helper}
             onSelect={onSelectHelper}
           />
         ))}
@@ -157,24 +270,27 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper }: HelpersCatalogPr
   )
 }
 
-function HelperCard({
-  helper,
+function CatalogCard({
+  item,
   onSelect,
 }: {
-  helper: HelperDefinition
+  item: CatalogItem
   onSelect: (id: string) => void
 }) {
-  const isAvailable = helper.status === 'available'
+  const isAvailable = item.status === 'available'
 
   // Determine accent color from first supported CRM, or use primary
   const accentCRM =
-    helper.supportedCRMs.length > 0
-      ? getCRMPlatform(helper.supportedCRMs[0])
+    item.supportedCRMs.length > 0
+      ? getCRMPlatform(item.supportedCRMs[0])
       : null
+
+  // Fallback icon from static catalog
+  const IconComponent = item.icon
 
   return (
     <button
-      onClick={() => isAvailable && onSelect(helper.id)}
+      onClick={() => isAvailable && onSelect(item.id)}
       className={cn(
         'group relative flex flex-col overflow-hidden rounded-lg border bg-card p-5 text-left transition-all',
         isAvailable
@@ -182,7 +298,7 @@ function HelperCard({
           : 'opacity-60 cursor-default'
       )}
     >
-      {/* Bottom accent stripe — gradient from brand green to blue */}
+      {/* Bottom accent stripe */}
       <div
         className="absolute inset-x-0 bottom-0 h-[3px]"
         style={{
@@ -195,18 +311,18 @@ function HelperCard({
 
       {/* Badges */}
       <div className="absolute right-3 top-3 flex gap-1.5">
-        {helper.popular && (
+        {item.popular && (
           <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
             <Sparkles className="h-3 w-3" />
             Popular
           </span>
         )}
-        {helper.status === 'coming_soon' && (
+        {item.status === 'coming_soon' && (
           <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
             Soon
           </span>
         )}
-        {helper.status === 'beta' && (
+        {item.status === 'beta' && (
           <span className="rounded-full bg-info/10 px-2 py-0.5 text-xs font-medium text-info">
             Beta
           </span>
@@ -222,25 +338,34 @@ function HelperCard({
             : 'hsl(var(--primary) / 0.1)',
         }}
       >
-        <helper.icon
-          className="h-5 w-5"
-          style={{
-            color: accentCRM ? accentCRM.color : 'hsl(var(--primary))',
-          }}
-        />
+        {IconComponent ? (
+          <IconComponent
+            className="h-5 w-5"
+            style={{
+              color: accentCRM ? accentCRM.color : 'hsl(var(--primary))',
+            }}
+          />
+        ) : (
+          <Sparkles
+            className="h-5 w-5"
+            style={{
+              color: accentCRM ? accentCRM.color : 'hsl(var(--primary))',
+            }}
+          />
+        )}
       </div>
 
       {/* Content */}
       <h3 className="mb-1 text-sm font-semibold group-hover:text-primary">
-        {helper.name}
+        {item.name}
       </h3>
       <p className="flex-1 text-xs text-muted-foreground leading-relaxed">
-        {helper.description}
+        {item.description}
       </p>
 
       {/* CRM Badges */}
       <div className="mt-auto pt-3 border-t border-border/50">
-        <CRMBadges crmIds={helper.supportedCRMs} />
+        <CRMBadges crmIds={item.supportedCRMs} />
       </div>
     </button>
   )

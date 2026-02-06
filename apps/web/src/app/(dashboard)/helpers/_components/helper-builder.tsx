@@ -13,10 +13,9 @@ import { cn } from '@/lib/utils'
 import {
   helpersCatalog,
   categoryInfo,
-  getCategoryCounts,
   type HelperDefinition,
 } from '@/lib/helpers-catalog'
-import { useCreateHelper } from '@/lib/hooks/use-helpers'
+import { useCreateHelper, useHelperTypes } from '@/lib/hooks/use-helpers'
 import { useConnections } from '@/lib/hooks/use-connections'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,11 +39,57 @@ export function HelperBuilder({ initialType, onBack, onCreated }: HelperBuilderP
   const [step, setStep] = useState<'select' | 'configure'>(initialHelper ? 'configure' : 'select')
   const configRef = useRef<Record<string, unknown>>({})
   const createHelper = useCreateHelper()
+  const { data: backendTypes } = useHelperTypes()
 
-  const categoryCounts = useMemo(() => getCategoryCounts(), [])
+  // Merge backend types with static catalog (backend takes priority)
+  const allHelpers = useMemo(() => {
+    const staticMap = new Map(helpersCatalog.map((h) => [h.id, h]))
+
+    if (backendTypes?.types && backendTypes.types.length > 0) {
+      const seen = new Set<string>()
+      const merged: HelperDefinition[] = []
+
+      for (const bt of backendTypes.types) {
+        seen.add(bt.type)
+        const staticEntry = staticMap.get(bt.type)
+        merged.push({
+          id: bt.type,
+          name: bt.name,
+          description: bt.description,
+          category: bt.category as HelperDefinition['category'],
+          requiresCRM: bt.requiresCrm,
+          supportedCRMs: bt.supportedCrms ?? [],
+          icon: staticEntry?.icon ?? Sparkles,
+          popular: staticEntry?.popular ?? false,
+          status: staticEntry?.status ?? 'available',
+        })
+      }
+
+      // Add static-only entries (e.g. coming_soon)
+      for (const entry of helpersCatalog) {
+        if (!seen.has(entry.id)) {
+          merged.push(entry)
+        }
+      }
+
+      return merged
+    }
+
+    return helpersCatalog
+  }, [backendTypes])
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: allHelpers.filter((h) => h.status === 'available').length }
+    for (const h of allHelpers) {
+      if (h.status === 'available') {
+        counts[h.category] = (counts[h.category] || 0) + 1
+      }
+    }
+    return counts
+  }, [allHelpers])
 
   const availableHelpers = useMemo(() => {
-    return helpersCatalog
+    return allHelpers
       .filter((h) => h.status === 'available')
       .filter((helper) => {
         const matchesCategory =
@@ -55,7 +100,7 @@ export function HelperBuilder({ initialType, onBack, onCreated }: HelperBuilderP
           helper.description.toLowerCase().includes(searchQuery.toLowerCase())
         return matchesCategory && matchesSearch
       })
-  }, [selectedCategory, searchQuery])
+  }, [allHelpers, selectedCategory, searchQuery])
 
   const handleSelectHelper = (helper: HelperDefinition) => {
     setSelectedHelper(helper)

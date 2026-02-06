@@ -8,19 +8,15 @@ import {
   ToggleLeft,
   ToggleRight,
   Trash2,
-  Play,
   Settings,
-  Clock,
   CheckCircle,
-  XCircle,
   AlertTriangle,
   ChevronRight,
   MoreVertical,
-  Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useHelpers, useUpdateHelper, useDeleteHelper, useExecuteHelper } from '@/lib/hooks/use-helpers'
-import { helpersCatalog, type HelperDefinition } from '@/lib/helpers-catalog'
+import { useHelpers, useHelperTypes, useUpdateHelper, useDeleteHelper } from '@/lib/hooks/use-helpers'
+import { helpersCatalog } from '@/lib/helpers-catalog'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { Helper } from '@myfusionhelper/types'
 
@@ -31,11 +27,26 @@ interface MyHelpersListProps {
 
 export function MyHelpersList({ onSelectHelper, onNewHelper }: MyHelpersListProps) {
   const { data: helpers, isLoading, error } = useHelpers()
+  const { data: helperTypesData } = useHelperTypes()
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const updateHelper = useUpdateHelper()
   const deleteHelper = useDeleteHelper()
+
+  // Build a lookup map: type id -> display name (backend first, then static)
+  const typeNameMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const h of helpersCatalog) {
+      map.set(h.id, h.name)
+    }
+    if (helperTypesData?.types) {
+      for (const t of helperTypesData.types) {
+        map.set(t.type, t.name)
+      }
+    }
+    return map
+  }, [helperTypesData])
 
   const filteredHelpers = useMemo(() => {
     if (!helpers) return []
@@ -161,6 +172,7 @@ export function MyHelpersList({ onSelectHelper, onNewHelper }: MyHelpersListProp
             <HelperRow
               key={helper.helperId}
               helper={helper}
+              typeName={typeNameMap.get(helper.helperType)}
               onSelect={() => onSelectHelper(helper.helperId)}
               onToggle={() => {
                 updateHelper.mutate({
@@ -219,6 +231,7 @@ function MyHelpersHeader({
 
 function HelperRow({
   helper,
+  typeName,
   onSelect,
   onToggle,
   onDelete,
@@ -226,6 +239,7 @@ function HelperRow({
   isDeleting,
 }: {
   helper: Helper
+  typeName?: string
   onSelect: () => void
   onToggle: () => void
   onDelete: () => void
@@ -275,7 +289,7 @@ function HelperRow({
           <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground">
             <span className="capitalize">{helper.category}</span>
             <span className="text-border">|</span>
-            <span>{template?.name || helper.helperType}</span>
+            <span>{typeName || template?.name || helper.helperType}</span>
             {helper.executionCount > 0 && (
               <>
                 <span className="text-border">|</span>

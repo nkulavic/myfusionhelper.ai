@@ -78,7 +78,9 @@ function DetailSkeleton() {
 }
 
 export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
+  const router = useRouter()
   const { data: helper, isLoading, error } = useHelper(helperId)
+  const { data: helperTypeData } = useHelperType(helper?.helperType ?? '')
   const { data: executions } = useExecutions({ helperId, limit: 10 })
   const deleteHelper = useDeleteHelper()
   const updateHelper = useUpdateHelper()
@@ -91,10 +93,19 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
   const [showTestRun, setShowTestRun] = useState(false)
   const [copiedEndpoint, setCopiedEndpoint] = useState(false)
 
+  // Use backend type data if available, fall back to static catalog
   const helperTemplate = useMemo(
     () => helpersCatalog.find((h) => h.id === helper?.helperType),
     [helper?.helperType]
   )
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack()
+    } else {
+      router.push('/helpers')
+    }
+  }
 
   if (isLoading) return <DetailSkeleton />
 
@@ -107,7 +118,7 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
           <p className="mt-1 text-sm text-muted-foreground">
             {error instanceof Error ? error.message : 'The helper could not be loaded.'}
           </p>
-          <Button onClick={onBack} className="mt-4">
+          <Button onClick={handleBack} className="mt-4">
             <ArrowLeft className="h-4 w-4" />
             Back to Helpers
           </Button>
@@ -127,7 +138,7 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
 
   const handleDelete = () => {
     deleteHelper.mutate(helperId, {
-      onSuccess: () => onBack(),
+      onSuccess: () => handleBack(),
     })
   }
 
@@ -170,7 +181,7 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={onBack}>
+          <Button variant="ghost" size="icon" onClick={handleBack}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -242,7 +253,7 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
               </span>
             </div>
             <p className="text-sm text-muted-foreground">
-              {helper.description || helperTemplate?.description || 'Custom automation helper'}
+              {helper.description || helperTypeData?.description || helperTemplate?.description || 'Custom automation helper'}
             </p>
           </div>
         </div>
@@ -327,7 +338,7 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
           <div className="grid grid-cols-3 gap-4">
             <div className="rounded-lg border bg-card p-4">
               <p className="text-xs text-muted-foreground">Type</p>
-              <p className="mt-1 text-sm font-bold">{helperTemplate?.name || helper.helperType}</p>
+              <p className="mt-1 text-sm font-bold">{helperTypeData?.name || helperTemplate?.name || helper.helperType}</p>
             </div>
             <div className="rounded-lg border bg-card p-4">
               <p className="text-xs text-muted-foreground">Category</p>
@@ -340,10 +351,10 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
           </div>
 
           {/* CRM Support */}
-          {helperTemplate && (
+          {(helperTypeData || helperTemplate) && (
             <div className="rounded-lg border bg-card p-5">
               <h2 className="text-sm font-semibold mb-3">Supported Platforms</h2>
-              <CRMBadges crmIds={helperTemplate.supportedCRMs} />
+              <CRMBadges crmIds={helperTypeData?.supportedCrms ?? helperTemplate?.supportedCRMs ?? []} />
             </div>
           )}
 
