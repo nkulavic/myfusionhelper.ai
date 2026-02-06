@@ -58,7 +58,7 @@ export function CommandPalette() {
   const { data: connections } = useConnections()
 
   const recentHelpers = useMemo(() => {
-    if (!helpers) return []
+    if (!helpers || !Array.isArray(helpers)) return []
     return helpers
       .slice()
       .sort((a, b) => {

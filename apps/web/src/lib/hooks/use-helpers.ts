@@ -15,7 +15,7 @@ export function useHelpers() {
         const nested = (data as { helpers: Helper[] }).helpers
         if (Array.isArray(nested)) return nested
       }
-      return (res.data ?? []) as Helper[]
+      return Array.isArray(res.data) ? (res.data as Helper[]) : []
     },
   })
 }

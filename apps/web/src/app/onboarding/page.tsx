@@ -43,18 +43,18 @@ const transition = {
 export default function OnboardingPage() {
   const router = useRouter()
   const { user } = useAuthStore()
-  const { completeOnboarding, onboardingComplete } = useWorkspaceStore()
+  const { completeOnboarding, onboardingComplete, _hasHydrated } = useWorkspaceStore()
   const [currentStep, setCurrentStep] = useState<Step>('welcome')
   const [direction, setDirection] = useState(0)
 
-  // If onboarding is already complete, redirect to helpers
+  // If onboarding is already complete, redirect to helpers (wait for hydration)
   useEffect(() => {
-    if (onboardingComplete) {
+    if (_hasHydrated && onboardingComplete) {
       router.replace('/helpers')
     }
-  }, [onboardingComplete, router])
+  }, [_hasHydrated, onboardingComplete, router])
 
-  if (onboardingComplete) {
+  if (!_hasHydrated || onboardingComplete) {
     return null
   }
 

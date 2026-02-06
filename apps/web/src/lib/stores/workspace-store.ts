@@ -7,6 +7,7 @@ interface WorkspaceState {
   connections: PlatformConnection[]
   activeConnectionId: string | null
   onboardingComplete: boolean
+  _hasHydrated: boolean
 
   setAccount: (account: Account) => void
   setConnections: (connections: PlatformConnection[]) => void
@@ -26,6 +27,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       connections: [],
       activeConnectionId: null,
       onboardingComplete: false,
+      _hasHydrated: false,
 
       setAccount: (account) => set({ currentAccount: account }),
 
@@ -67,6 +69,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         activeConnectionId: state.activeConnectionId,
         onboardingComplete: state.onboardingComplete,
       }),
+      onRehydrateStorage: () => () => {
+        useWorkspaceStore.setState({ _hasHydrated: true })
+      },
     }
   )
 )

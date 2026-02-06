@@ -49,7 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const router = useRouter()
   const { user } = useAuthStore()
-  const { currentAccount, onboardingComplete } = useWorkspaceStore()
+  const { currentAccount, onboardingComplete, _hasHydrated } = useWorkspaceStore()
   const {
     sidebarCollapsed,
     setSidebarCollapsed,
@@ -62,12 +62,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Register global keyboard shortcuts
   useGlobalKeyboardShortcuts()
 
-  // Redirect to onboarding if not completed
+  // Redirect to onboarding if not completed (wait for hydration first)
   useEffect(() => {
-    if (!onboardingComplete) {
+    if (_hasHydrated && !onboardingComplete) {
       router.replace('/onboarding')
     }
-  }, [onboardingComplete, router])
+  }, [_hasHydrated, onboardingComplete, router])
 
   const userInitials = user?.name
     ? user.name
