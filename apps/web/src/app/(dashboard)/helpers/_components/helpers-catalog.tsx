@@ -2,6 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { Search, Plus, Filter, Sparkles, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import type { HelperTypeDefinition } from '@myfusionhelper/types'
 import {
@@ -152,25 +154,22 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: Helpe
             )}
           </p>
         </div>
-        <button
-          onClick={onNewHelper}
-          className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
+        <Button onClick={onNewHelper}>
           <Plus className="h-4 w-4" />
           New Helper
-        </button>
+        </Button>
       </div>
 
       {/* Search and Filters */}
-      <div className="flex gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
+          <Input
             type="text"
             placeholder="Search helpers by name or description..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-4 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="pl-10"
           />
         </div>
         <select
@@ -185,18 +184,16 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: Helpe
           <option value="ontraport">Ontraport</option>
           <option value="hubspot">HubSpot</option>
         </select>
-        <button
+        <Button
+          variant={showAvailableOnly ? 'default' : 'outline'}
           onClick={() => setShowAvailableOnly(!showAvailableOnly)}
           className={cn(
-            'inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors',
-            showAvailableOnly
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'border-input bg-background text-muted-foreground hover:bg-accent'
+            showAvailableOnly && 'bg-primary/10 text-primary border-primary hover:bg-primary/20 hover:text-primary'
           )}
         >
           <Filter className="h-4 w-4" />
           Available Only
-        </button>
+        </Button>
       </div>
 
       {/* Category Tabs */}

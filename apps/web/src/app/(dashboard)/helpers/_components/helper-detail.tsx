@@ -25,6 +25,7 @@ import {
 import { cn } from '@/lib/utils'
 import { helpersCatalog } from '@/lib/helpers-catalog'
 import { useHelper, useHelperType, useExecutions, useDeleteHelper, useUpdateHelper, useExecuteHelper } from '@/lib/hooks/use-helpers'
+import { getConfigForm, hasConfigForm } from './config-forms'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -89,6 +90,7 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
   const [nameValue, setNameValue] = useState('')
   const [editingConfig, setEditingConfig] = useState(false)
   const [configValue, setConfigValue] = useState('')
+  const [showJsonEditor, setShowJsonEditor] = useState(false)
   const [testContactId, setTestContactId] = useState('')
   const [showTestRun, setShowTestRun] = useState(false)
   const [copiedEndpoint, setCopiedEndpoint] = useState(false)
@@ -161,6 +163,12 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
       // Invalid JSON - don't save
     }
   }
+
+  const handleFormConfigChange = (newConfig: Record<string, unknown>) => {
+    updateHelper.mutate({ id: helperId, input: { config: newConfig } })
+  }
+
+  const ConfigForm = helper ? getConfigForm(helper.helperType) : null
 
   const handleTestRun = () => {
     if (!testContactId.trim()) return
@@ -361,42 +369,73 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
           {/* Configuration */}
           <div className="rounded-lg border bg-card">
             <div className="flex items-center justify-between border-b px-5 py-4">
-              <h2 className="font-semibold">Configuration</h2>
-              {editingConfig ? (
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold">Configuration</h2>
+                {updateHelper.isPending && (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {ConfigForm && !showJsonEditor && !editingConfig && (
                   <Button
+                    variant="ghost"
                     size="sm"
-                    onClick={handleSaveConfig}
-                    disabled={updateHelper.isPending}
+                    onClick={() => {
+                      setConfigValue(JSON.stringify(helper.config, null, 2))
+                      setShowJsonEditor(true)
+                    }}
+                    className="text-xs text-muted-foreground"
                   >
-                    {updateHelper.isPending ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Save className="h-3 w-3" />
-                    )}
-                    Save
+                    JSON
                   </Button>
+                )}
+                {showJsonEditor && !editingConfig && ConfigForm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowJsonEditor(false)}
+                    className="text-xs text-muted-foreground"
+                  >
+                    Form
+                  </Button>
+                )}
+                {(showJsonEditor || !ConfigForm) && !editingConfig && (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setEditingConfig(false)}
+                    onClick={() => {
+                      setConfigValue(JSON.stringify(helper.config, null, 2))
+                      setEditingConfig(true)
+                    }}
                   >
-                    Cancel
+                    <Pencil className="h-3 w-3" />
+                    Edit JSON
                   </Button>
-                </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setConfigValue(JSON.stringify(helper.config, null, 2))
-                    setEditingConfig(true)
-                  }}
-                >
-                  <Pencil className="h-3 w-3" />
-                  Edit
-                </Button>
-              )}
+                )}
+                {editingConfig && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleSaveConfig}
+                      disabled={updateHelper.isPending}
+                    >
+                      {updateHelper.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Save className="h-3 w-3" />
+                      )}
+                      Save
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingConfig(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="p-5">
               {editingConfig ? (
@@ -406,6 +445,11 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
                   rows={Math.max(6, configValue.split('\n').length + 1)}
                   className="w-full rounded-md border border-input bg-muted p-4 text-sm font-mono resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   spellCheck={false}
+                />
+              ) : ConfigForm && !showJsonEditor ? (
+                <ConfigForm
+                  config={helper.config || {}}
+                  onChange={handleFormConfigChange}
                 />
               ) : (
                 <pre className="rounded-md bg-muted p-4 text-sm font-mono overflow-x-auto">

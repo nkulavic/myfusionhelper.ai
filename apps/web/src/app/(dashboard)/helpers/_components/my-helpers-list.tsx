@@ -17,6 +17,8 @@ import {
 import { cn } from '@/lib/utils'
 import { useHelpers, useHelperTypes, useUpdateHelper, useDeleteHelper } from '@/lib/hooks/use-helpers'
 import { helpersCatalog } from '@/lib/helpers-catalog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { Helper } from '@myfusionhelper/types'
 
@@ -132,12 +134,12 @@ export function MyHelpersList({ onSelectHelper, onNewHelper }: MyHelpersListProp
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
+          <Input
             type="text"
             placeholder="Search your helpers..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-4 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="pl-10"
           />
         </div>
         <select
@@ -218,13 +220,10 @@ function MyHelpersHeader({
             : 'Set up automation helpers for your CRM'}
         </p>
       </div>
-      <button
-        onClick={onNewHelper}
-        className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-      >
+      <Button onClick={onNewHelper}>
         <Plus className="h-4 w-4" />
         New Helper
-      </button>
+      </Button>
     </div>
   )
 }
@@ -370,13 +369,10 @@ function EmptyState({ onNewHelper }: { onNewHelper: () => void }) {
         Helpers are small automation tools that extend your CRM. Browse the
         catalog to find the perfect helpers for your workflow.
       </p>
-      <button
-        onClick={onNewHelper}
-        className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-      >
+      <Button onClick={onNewHelper}>
         <Plus className="h-4 w-4" />
         Browse Helper Catalog
-      </button>
+      </Button>
     </div>
   )
 }
