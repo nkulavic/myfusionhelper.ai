@@ -88,10 +88,9 @@ The PRODUCT_PLAN documents 9 dashboard pages + auth + onboarding + landing + leg
 ### Helper Count Discrepancy
 
 The product plan says "58+" but actual counts vary:
-- Go implementations: 61 files (some contain sub-helpers)
-- Frontend catalog: 55 entries + 4 HubSpot = 59 total
-- Landing page hero: "58+ helpers"
-- Onboarding welcome: "60+ Automation Helpers"
+- Go backend registry: 58 helpers registered
+- Frontend catalog: 58 backend + 4 HubSpot (frontend-only) = 62 total
+- Consistent messaging across app: "60+ Automation Helpers"
 
 **Recommendation**: Standardize on "60+" across all surfaces since the Go backend has 61 implementations.
 
