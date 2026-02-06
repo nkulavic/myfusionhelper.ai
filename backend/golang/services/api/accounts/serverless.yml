@@ -60,6 +60,13 @@ provider:
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}/index/*"
         - Effect: Allow
           Action:
+            - cognito-idp:AdminCreateUser
+            - cognito-idp:AdminGetUser
+            - cognito-idp:ListUsers
+          Resource:
+            - ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolArn}
+        - Effect: Allow
+          Action:
             - logs:CreateLogGroup
             - logs:CreateLogStream
             - logs:PutLogEvents
@@ -145,6 +152,122 @@ functions:
       - httpApi:
           path: /accounts/switch
           method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  # Notification preferences
+  accounts-preferences-get:
+    handler: cmd/handlers/accounts/main.go
+    description: "Get notification preferences"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: accounts-preferences-get
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: accounts-preferences-get
+      ENDPOINT_PATH: /accounts/preferences
+    events:
+      - httpApi:
+          path: /accounts/preferences
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  accounts-preferences-update:
+    handler: cmd/handlers/accounts/main.go
+    description: "Update notification preferences"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: accounts-preferences-update
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: accounts-preferences-update
+      ENDPOINT_PATH: /accounts/preferences
+    events:
+      - httpApi:
+          path: /accounts/preferences
+          method: put
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  # Team management
+  accounts-team-list:
+    handler: cmd/handlers/accounts/main.go
+    description: "List team members"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: accounts-team-list
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: accounts-team-list
+      ENDPOINT_PATH: /accounts/{account_id}/team
+    events:
+      - httpApi:
+          path: /accounts/{account_id}/team
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  accounts-team-invite:
+    handler: cmd/handlers/accounts/main.go
+    description: "Invite team member"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: accounts-team-invite
+    memorySize: 256
+    timeout: 29
+    environment:
+      FUNCTION_NAME: accounts-team-invite
+      ENDPOINT_PATH: /accounts/{account_id}/team
+    events:
+      - httpApi:
+          path: /accounts/{account_id}/team
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  accounts-team-update:
+    handler: cmd/handlers/accounts/main.go
+    description: "Update team member role"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: accounts-team-update
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: accounts-team-update
+      ENDPOINT_PATH: /accounts/{account_id}/team/{user_id}
+    events:
+      - httpApi:
+          path: /accounts/{account_id}/team/{user_id}
+          method: put
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  accounts-team-remove:
+    handler: cmd/handlers/accounts/main.go
+    description: "Remove team member"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: accounts-team-remove
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: accounts-team-remove
+      ENDPOINT_PATH: /accounts/{account_id}/team/{user_id}
+    events:
+      - httpApi:
+          path: /accounts/{account_id}/team/{user_id}
+          method: delete
           authorizer:
             id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 

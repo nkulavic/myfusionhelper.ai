@@ -12,6 +12,8 @@ import (
 
 	// Protected endpoints (require auth)
 	crudClient "github.com/myfusionhelper/api/cmd/handlers/accounts/clients/crud"
+	preferencesClient "github.com/myfusionhelper/api/cmd/handlers/accounts/clients/preferences"
+	teamClient "github.com/myfusionhelper/api/cmd/handlers/accounts/clients/team"
 
 	// Public endpoints (no auth required)
 	healthClient "github.com/myfusionhelper/api/cmd/handlers/accounts/clients/health"
@@ -43,7 +45,15 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	case path == "/accounts/health" && method == "GET":
 		return healthClient.Handle(ctx, event)
 
-	// Protected endpoints
+	// Notification preferences
+	case path == "/accounts/preferences" && (method == "GET" || method == "PUT"):
+		return routeToProtectedHandler(ctx, event, preferencesClient.HandleWithAuth)
+
+	// Team management (must be before generic /accounts/{id} routes)
+	case strings.Contains(path, "/team") && (method == "GET" || method == "POST" || method == "PUT" || method == "DELETE"):
+		return routeToProtectedHandler(ctx, event, teamClient.HandleWithAuth)
+
+	// Account CRUD
 	case path == "/accounts/switch" && method == "POST":
 		return routeToProtectedHandler(ctx, event, crudClient.HandleWithAuth)
 	case path == "/accounts" && method == "GET":
