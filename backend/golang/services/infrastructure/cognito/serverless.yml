@@ -10,9 +10,34 @@ provider:
 
 resources:
   Resources:
+    # IAM Role for Cognito to send SMS messages via SNS
+    CognitoSmsRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: mfh-${self:provider.stage}-cognito-sms-role
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: cognito-idp.amazonaws.com
+              Action: sts:AssumeRole
+              Condition:
+                StringEquals:
+                  sts:ExternalId: mfh-sms-mfa
+        Policies:
+          - PolicyName: CognitoSmsPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action: sns:Publish
+                  Resource: "*"
+
     # Cognito User Pool
     CognitoUserPool:
       Type: AWS::Cognito::UserPool
+      DependsOn: CognitoSmsRole
       DeletionPolicy: Retain
       Properties:
         UserPoolName: mfh-${self:provider.stage}-user-pool
@@ -37,7 +62,11 @@ resources:
             RequireSymbols: false
         MfaConfiguration: "OPTIONAL"
         EnabledMfas:
+          - SMS_MFA
           - SOFTWARE_TOKEN_MFA
+        SmsConfiguration:
+          SnsCallerArn: !GetAtt CognitoSmsRole.Arn
+          ExternalId: mfh-sms-mfa
         AccountRecoverySetting:
           RecoveryMechanisms:
             - Name: verified_email

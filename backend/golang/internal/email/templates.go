@@ -8,14 +8,32 @@ import (
 
 // TemplateData holds common template variables
 type TemplateData struct {
-	UserName   string
-	UserEmail  string
-	AppName    string
-	BaseURL    string
-	ResetCode  string
-	HelperName string
-	PlanName   string
-	ErrorMsg   string
+	UserName       string
+	UserEmail      string
+	AppName        string
+	BaseURL        string
+	ResetCode      string
+	HelperName     string
+	PlanName       string
+	ErrorMsg       string
+	ResourceName   string
+	UsagePercent   int
+	UsageCurrent   int
+	UsageLimit     int
+	TotalHelpers   int
+	TotalExecuted  int
+	TotalSucceeded int
+	TotalFailed    int
+	SuccessRate    string
+	TopHelper      string
+	WeekStart      string
+	WeekEnd        string
+	InviterName    string
+	InviterEmail   string
+	RoleName       string
+	AccountName    string
+	InviteToken    string
+	VerifyCode     string
 }
 
 // EmailTemplate represents a rendered email template
@@ -195,6 +213,40 @@ func GetBillingEventEmailTemplate(data TemplateData, eventType string) EmailTemp
 		`
 		textContent = "We were unable to process your most recent payment. Please update your payment method."
 
+	case "trial_ending":
+		subject = fmt.Sprintf("Your %s trial ends soon", data.AppName)
+		mainContent = fmt.Sprintf(`
+			<p>Your 14-day free trial is ending soon. To keep your Helpers running and avoid any interruption, choose a plan that fits your needs.</p>
+
+			<div style="background: #f0f4ff; border-radius: 8px; padding: 16px; margin: 16px 0;">
+				<strong>What happens next:</strong>
+				<ul style="margin: 8px 0 0 0; padding-left: 20px; color: #374151;">
+					<li>Your Helpers will pause when the trial expires</li>
+					<li>Your data and configurations are preserved</li>
+					<li>Subscribe to any plan to resume instantly</li>
+				</ul>
+			</div>
+
+			<p>Plans start at just $39/month for 10 active Helpers and 5,000 executions.</p>
+		`)
+		textContent = fmt.Sprintf("Your %s trial is ending soon. Subscribe to a plan to keep your Helpers running. Plans start at $39/month.", data.AppName)
+
+	case "plan_upgraded":
+		subject = fmt.Sprintf("Plan Upgraded to %s - %s", data.PlanName, data.AppName)
+		mainContent = fmt.Sprintf(`
+			<p>Your plan has been upgraded to <strong>%s</strong>. Your new features and limits are available immediately.</p>
+			<p>Thank you for growing with MyFusion Helper! Check your dashboard to take advantage of your expanded capabilities.</p>
+		`, data.PlanName)
+		textContent = fmt.Sprintf("Your plan has been upgraded to %s. New features are available immediately.", data.PlanName)
+
+	case "plan_downgraded":
+		subject = fmt.Sprintf("Plan Changed to %s - %s", data.PlanName, data.AppName)
+		mainContent = fmt.Sprintf(`
+			<p>Your plan has been changed to <strong>%s</strong>. The change will take effect at the start of your next billing cycle.</p>
+			<p>Until then, you'll continue to have access to your current plan features. If any of your active Helpers exceed the new plan limits, they'll be paused automatically.</p>
+		`, data.PlanName)
+		textContent = fmt.Sprintf("Your plan has been changed to %s. The change takes effect at your next billing cycle.", data.PlanName)
+
 	default:
 		subject = fmt.Sprintf("Billing Update - %s", data.AppName)
 		mainContent = "<p>There has been an update to your billing status. Check your Settings page for details.</p>"
@@ -258,6 +310,98 @@ This may affect any Helpers that use this connection. Please check your connecti
 View Connections: %s/connections
 
 -- %s`, data.AppName, connectionName, data.UserName, connectionName, data.ErrorMsg, data.BaseURL, data.AppName)
+
+	return EmailTemplate{Subject: subject, HTMLBody: htmlBody, TextBody: textBody}
+}
+
+// GetUsageAlertEmailTemplate returns usage limit warning emails
+func GetUsageAlertEmailTemplate(data TemplateData) EmailTemplate {
+	subject := fmt.Sprintf("[%s] Usage Alert: %s at %d%%", data.AppName, data.ResourceName, data.UsagePercent)
+
+	htmlBody := generateHTML(data, emailContent{
+		headerTitle:    "Usage Alert",
+		headerSubtitle: "Approaching your plan limit",
+		greetingIcon:   "warning",
+		mainContent: fmt.Sprintf(`
+			<p>You're approaching the limit for <strong>%s</strong> on your current plan.</p>
+
+			<div style="background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 4px; padding: 16px; margin: 16px 0;">
+				<strong>Resource:</strong> %s<br>
+				<strong>Usage:</strong> %d of %d (%d%% used)
+			</div>
+
+			<p>Consider upgrading your plan to avoid any interruptions to your automation workflows.</p>
+		`, data.ResourceName, data.ResourceName, data.UsageCurrent, data.UsageLimit, data.UsagePercent),
+		ctaText: "Upgrade Plan",
+		ctaURL:  fmt.Sprintf("%s/settings", data.BaseURL),
+	})
+
+	textBody := fmt.Sprintf(`[%s] Usage Alert
+
+Hello %s,
+
+You're approaching the limit for %s on your current plan.
+
+Resource: %s
+Usage: %d of %d (%d%% used)
+
+Consider upgrading your plan to avoid interruptions.
+
+Upgrade Plan: %s/settings
+
+-- %s`, data.AppName, data.UserName, data.ResourceName, data.ResourceName, data.UsageCurrent, data.UsageLimit, data.UsagePercent, data.BaseURL, data.AppName)
+
+	return EmailTemplate{Subject: subject, HTMLBody: htmlBody, TextBody: textBody}
+}
+
+// GetWeeklySummaryEmailTemplate returns weekly execution summary emails
+func GetWeeklySummaryEmailTemplate(data TemplateData) EmailTemplate {
+	subject := fmt.Sprintf("[%s] Weekly Summary: %s - %s", data.AppName, data.WeekStart, data.WeekEnd)
+
+	htmlBody := generateHTML(data, emailContent{
+		headerTitle:    "Weekly Summary",
+		headerSubtitle: fmt.Sprintf("%s - %s", data.WeekStart, data.WeekEnd),
+		greetingIcon:   "rocket",
+		mainContent: fmt.Sprintf(`
+			<p>Here's a summary of your CRM automation activity this week.</p>
+
+			<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0;">
+				<div style="background: #f0f4ff; border-radius: 8px; padding: 16px; text-align: center;">
+					<div style="font-size: 24px; font-weight: 700; color: #1b3a6b;">%d</div>
+					<div style="font-size: 13px; color: #6b7280;">Executions</div>
+				</div>
+				<div style="background: #f0fdf4; border-radius: 8px; padding: 16px; text-align: center;">
+					<div style="font-size: 24px; font-weight: 700; color: #16a34a;">%s</div>
+					<div style="font-size: 13px; color: #6b7280;">Success Rate</div>
+				</div>
+				<div style="background: #f0f4ff; border-radius: 8px; padding: 16px; text-align: center;">
+					<div style="font-size: 24px; font-weight: 700; color: #1b3a6b;">%d</div>
+					<div style="font-size: 13px; color: #6b7280;">Active Helpers</div>
+				</div>
+				<div style="background: #fef2f2; border-radius: 8px; padding: 16px; text-align: center;">
+					<div style="font-size: 24px; font-weight: 700; color: #dc2626;">%d</div>
+					<div style="font-size: 13px; color: #6b7280;">Failed</div>
+				</div>
+			</div>
+		`, data.TotalExecuted, data.SuccessRate, data.TotalHelpers, data.TotalFailed),
+		ctaText: "View Dashboard",
+		ctaURL:  data.BaseURL,
+	})
+
+	textBody := fmt.Sprintf(`[%s] Weekly Summary: %s - %s
+
+Hello %s,
+
+Here's a summary of your CRM automation activity this week.
+
+Executions: %d
+Success Rate: %s
+Active Helpers: %d
+Failed: %d
+
+View Dashboard: %s
+
+-- %s`, data.AppName, data.WeekStart, data.WeekEnd, data.UserName, data.TotalExecuted, data.SuccessRate, data.TotalHelpers, data.TotalFailed, data.BaseURL, data.AppName)
 
 	return EmailTemplate{Subject: subject, HTMLBody: htmlBody, TextBody: textBody}
 }

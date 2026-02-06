@@ -111,6 +111,67 @@ func (s *Service) SendBillingEvent(ctx context.Context, userName, userEmail, eve
 	return err
 }
 
+// SendUsageAlert sends a usage limit warning email if the user has it enabled
+func (s *Service) SendUsageAlert(ctx context.Context, userName, userEmail, resourceName string, current, limit, percent int, prefs *apitypes.NotificationPreferences) error {
+	if prefs != nil && !prefs.UsageAlerts {
+		log.Printf("Usage alert notifications disabled for %s, skipping", userEmail)
+		return nil
+	}
+
+	data := email.GetDefaultTemplateData()
+	data.UserName = userName
+	data.UserEmail = userEmail
+	data.ResourceName = resourceName
+	data.UsageCurrent = current
+	data.UsageLimit = limit
+	data.UsagePercent = percent
+
+	tpl := email.GetUsageAlertEmailTemplate(data)
+	_, err := s.sesClient.SendEmail(ctx, email.EmailMessage{
+		To:       []string{userEmail},
+		Subject:  tpl.Subject,
+		HTMLBody: tpl.HTMLBody,
+		TextBody: tpl.TextBody,
+		Tags:     map[string]string{"type": "usage_alert", "resource": resourceName},
+	})
+	if err != nil {
+		log.Printf("Failed to send usage alert email to %s: %v", userEmail, err)
+	}
+	return err
+}
+
+// SendWeeklySummary sends a weekly execution summary email if the user has it enabled
+func (s *Service) SendWeeklySummary(ctx context.Context, userName, userEmail string, totalHelpers, totalExecuted, totalSucceeded, totalFailed int, successRate, weekStart, weekEnd string, prefs *apitypes.NotificationPreferences) error {
+	if prefs != nil && !prefs.WeeklySummary {
+		log.Printf("Weekly summary notifications disabled for %s, skipping", userEmail)
+		return nil
+	}
+
+	data := email.GetDefaultTemplateData()
+	data.UserName = userName
+	data.UserEmail = userEmail
+	data.TotalHelpers = totalHelpers
+	data.TotalExecuted = totalExecuted
+	data.TotalSucceeded = totalSucceeded
+	data.TotalFailed = totalFailed
+	data.SuccessRate = successRate
+	data.WeekStart = weekStart
+	data.WeekEnd = weekEnd
+
+	tpl := email.GetWeeklySummaryEmailTemplate(data)
+	_, err := s.sesClient.SendEmail(ctx, email.EmailMessage{
+		To:       []string{userEmail},
+		Subject:  tpl.Subject,
+		HTMLBody: tpl.HTMLBody,
+		TextBody: tpl.TextBody,
+		Tags:     map[string]string{"type": "weekly_summary"},
+	})
+	if err != nil {
+		log.Printf("Failed to send weekly summary email to %s: %v", userEmail, err)
+	}
+	return err
+}
+
 // SendConnectionAlert sends a connection issue notification if the user has it enabled
 func (s *Service) SendConnectionAlert(ctx context.Context, userName, userEmail, connectionName, errorMsg string, prefs *apitypes.NotificationPreferences) error {
 	if prefs != nil && !prefs.ConnectionIssues {

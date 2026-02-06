@@ -20,9 +20,10 @@ type SESClient struct {
 
 // SESConfig holds configuration for SES operations
 type SESConfig struct {
-	Region           string
-	DefaultFromEmail string
-	DefaultFromName  string
+	Region               string
+	DefaultFromEmail     string
+	DefaultFromName      string
+	ConfigurationSetName string
 }
 
 // EmailMessage represents an email to be sent
@@ -56,9 +57,10 @@ func NewSESClient(ctx context.Context) (*SESClient, error) {
 	}
 
 	sesConfig := SESConfig{
-		Region:           region,
-		DefaultFromEmail: getEnvOrDefault("DEFAULT_FROM_EMAIL", "noreply@myfusionhelper.ai"),
-		DefaultFromName:  getEnvOrDefault("DEFAULT_FROM_NAME", "MyFusion Helper"),
+		Region:               region,
+		DefaultFromEmail:     getEnvOrDefault("DEFAULT_FROM_EMAIL", "noreply@myfusionhelper.ai"),
+		DefaultFromName:      getEnvOrDefault("DEFAULT_FROM_NAME", "MyFusion Helper"),
+		ConfigurationSetName: getEnvOrDefault("SES_CONFIGURATION_SET", ""),
 	}
 
 	return &SESClient{
@@ -112,6 +114,10 @@ func (s *SESClient) SendEmail(ctx context.Context, message EmailMessage) (*Email
 			},
 			Body: body,
 		},
+	}
+
+	if s.cfg.ConfigurationSetName != "" {
+		input.ConfigurationSetName = aws.String(s.cfg.ConfigurationSetName)
 	}
 
 	if len(message.Tags) > 0 {

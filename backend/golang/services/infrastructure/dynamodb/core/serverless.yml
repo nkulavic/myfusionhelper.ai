@@ -63,6 +63,8 @@ resources:
             AttributeType: S
           - AttributeName: owner_user_id
             AttributeType: S
+          - AttributeName: stripe_customer_id
+            AttributeType: S
         KeySchema:
           - AttributeName: account_id
             KeyType: HASH
@@ -73,6 +75,16 @@ resources:
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
+          - IndexName: StripeCustomerIdIndex
+            KeySchema:
+              - AttributeName: stripe_customer_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: INCLUDE
+              NonKeyAttributes:
+                - owner_user_id
+                - plan
+                - status
 
     # User-Accounts Relationship Table
     UserAccountsTable:
