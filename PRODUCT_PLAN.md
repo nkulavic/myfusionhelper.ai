@@ -38,7 +38,7 @@ The product evolved from **MyFusion Helper** (myfusionhelper.com), a WordPress/P
 
 ## 3. Core Value Proposition
 
-**"60+ automation helpers that extend your CRM, now enhanced with AI."**
+**"62 automation helpers that extend your CRM, now enhanced with AI."**
 
 Key differentiators:
 - **No code required**: Every helper is configured through a UI, not code
@@ -55,7 +55,7 @@ Key differentiators:
 
 Helpers are the fundamental unit of the product. Each helper is a configurable automation action that a user sets up once, then triggers repeatedly from their CRM via webhook.
 
-**7 categories, 60+ helpers implemented in Go:**
+**7 categories, 62 helpers implemented in Go:**
 
 | Category | Count | Examples |
 |----------|-------|---------|
@@ -182,7 +182,7 @@ myfusionhelper.ai/
 │       ├── internal/      # Shared Go packages
 │       │   ├── connectors/  # 5 CRM connector implementations
 │       │   ├── database/    # DynamoDB repository layer
-│       │   ├── helpers/     # 60+ helper implementations
+│       │   ├── helpers/     # 62 helper implementations
 │       │   ├── middleware/  # Auth, logging
 │       │   ├── services/    # Business logic
 │       │   └── types/       # Shared types
@@ -214,7 +214,7 @@ myfusionhelper.ai/
 **Backend (Go)**:
 - 32 Lambda handlers across 9 services (auth, accounts, api-keys, helpers, platforms, data-explorer, workers)
 - 5 CRM connectors fully implemented (Keap, GoHighLevel, ActiveCampaign, Ontraport, HubSpot) with unified interface and translation layer
-- 60+ helper implementations across 7 categories with real execution logic
+- 62 helper implementations across 7 categories with real execution logic
 - Data Explorer with Parquet writer, DuckDB query engine, and sync workers
 - All 13 serverless.yml infrastructure configs
 - DynamoDB repository layer (client + all repositories)

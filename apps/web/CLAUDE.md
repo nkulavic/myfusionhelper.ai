@@ -19,10 +19,13 @@ npm run type-check   # tsc --noEmit
 src/app/
 ├── (auth)/              # Auth pages (no sidebar, centered layout)
 │   ├── login/page.tsx
-│   └── register/page.tsx
+│   ├── register/page.tsx
+│   ├── forgot-password/page.tsx
+│   └── reset-password/page.tsx
 ├── (dashboard)/         # Main app (sidebar layout, auth-protected)
 │   ├── page.tsx                     # Dashboard home
 │   ├── helpers/page.tsx             # Helpers catalog + builder
+│   ├── helpers/[id]/page.tsx        # Single helper detail
 │   ├── connections/page.tsx         # CRM connections management
 │   ├── connections/callback/page.tsx # OAuth callback handler
 │   ├── data-explorer/page.tsx       # Query CRM data with filters/NL
@@ -33,13 +36,15 @@ src/app/
 │   ├── reports/[id]/page.tsx        # Single report
 │   ├── emails/page.tsx              # Email management
 │   ├── emails/templates/page.tsx    # Email templates
-│   └── settings/page.tsx            # Account/profile/API keys/billing
+│   ├── settings/page.tsx            # Account/profile/API keys/billing
+│   └── settings/billing/success/page.tsx # Post-checkout success (confetti)
 ├── (legal)/             # Legal pages (minimal layout)
 │   ├── terms/page.tsx
 │   ├── privacy/page.tsx
 │   └── eula/page.tsx
 ├── api/                 # Next.js API routes (server-side proxies)
 │   ├── chat/route.ts              # AI chat streaming (Vercel AI SDK)
+│   ├── reports/stats/route.ts     # Report stats proxy
 │   └── data/                      # Data explorer API proxies
 │       ├── catalog/route.ts
 │       ├── query/route.ts
@@ -63,7 +68,7 @@ src/app/
 **Middleware** (`src/middleware.ts`):
 - Checks for `mfh_authenticated` cookie
 - Redirects unauthenticated users to `/login?callbackUrl=...`
-- Public routes: `/`, `/login`, `/register`, `/terms`, `/privacy`, `/eula`
+- Public routes: `/`, `/login`, `/register`, `/forgot-password`, `/reset-password`, `/terms`, `/privacy`, `/eula`
 
 **Token refresh**: The API client auto-refreshes on 401 responses (single retry with mutex).
 
@@ -84,6 +89,7 @@ Central HTTP client with these features:
 | `helpers.ts` | CRUD helpers, types/templates, executions |
 | `settings.ts` | Account, API keys, team, notifications, billing |
 | `data-explorer.ts` | Catalog, query, record detail, export |
+| `emails.ts` | Email CRUD, template CRUD (mock fallback until backend built) |
 
 ### State Management
 
@@ -99,6 +105,15 @@ Central HTTP client with these features:
 | `ai-settings-store` | `mfh-ai-settings` | provider keys, model prefs | AI provider config |
 
 **React Query hooks** (`src/lib/hooks/`):
+
+| File | Key hooks |
+|------|-----------|
+| `use-auth.ts` | `useAuthStatus` |
+| `use-connections.ts` | `useConnections`, `usePlatforms`, `useCreateConnection` |
+| `use-helpers.ts` | `useHelpers`, `useCreateHelper`, `useExecutionsPaginated` |
+| `use-settings.ts` | `useAccount`, `useUpdateProfile`, `useBillingInfo`, `useInvoices`, `useCreateCheckoutSession`, `useCreatePortalSession`, `useAPIKeys`, `useTeamMembers`, `useNotificationPreferences` |
+| `use-emails.ts` | `useEmails`, `useSendEmail`, `useEmailTemplates`, `useCreateTemplate` (mock fallback) |
+| `use-reports.ts` | `useReportStats` (fetches from `/api/reports/stats`) |
 
 Pattern: each hook wraps an API call with `useQuery` or `useMutation` and handles cache invalidation.
 
@@ -236,9 +251,11 @@ Main content area: `pl-64` offset, `p-6` padding.
 
 All shared types are in `packages/types/src/index.ts`:
 - `User`, `Account`, `UserAccount`, `UserPermissions`
+- `NotificationPreferences`, `AccountSettings`, `AccountUsage`
 - `PlatformConnection`, `CRMPlatform`
 - `Helper`, `HelperExecution`, `HelperTypeDefinition`, `HelperCategory`
 - `APIKey`, `NormalizedContact`
+- `AuthContext`, `AccountAccess`, `PlanLimits`
 - `APIResponse<T>` (standard API envelope)
 
 ### Icons
@@ -265,4 +282,6 @@ All icons come from `lucide-react`. Do not use other icon libraries.
 
 ### Stubs and TODOs
 
-Some settings API endpoints return hardcoded mock data (team members, notifications, billing). These are marked with `// TODO` comments in `src/lib/api/settings.ts` and will be replaced when backend endpoints are built.
+- **Emails**: `use-emails.ts` hooks fall back to mock data when backend email endpoints return errors (backend email CRUD not yet implemented).
+- **Settings**: Team members and notification preferences still use stub API calls until backend endpoints are built.
+- **Billing**: Wired to real Stripe backend endpoints (`/billing`, `/billing/checkout/sessions`, `/billing/portal-session`, `/billing/invoices`).

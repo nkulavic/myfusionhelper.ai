@@ -78,21 +78,19 @@ The PRODUCT_PLAN documents 9 dashboard pages + auth + onboarding + landing + leg
 
 | Item | Product Plan | Actual Status |
 |------|-------------|---------------|
-| Helper implementations (Go) | 58+ across 7 categories | DONE -- 61 Go files in `internal/helpers/` |
-| Helper catalog (Frontend) | 58+ entries | DONE -- 55 entries in `helpers-catalog.ts` (+ 4 HubSpot-specific) |
+| Helper implementations (Go) | 62 across 7 categories | DONE -- 62 helpers registered |
+| Helper catalog (Frontend) | 62 entries | DONE -- 62 entries in `helpers-catalog.ts` |
 | Helper registry + executor | Documented | DONE |
 | My Helpers list (user's configured helpers) | Not explicitly documented | DONE -- New `my-helpers-list.tsx` component |
 | Helper Builder UI | Documented (P1) | EXISTS -- `helper-builder.tsx` present, being enhanced |
 | Helper Detail view | Documented (P1) | EXISTS -- `helper-detail.tsx` present |
 
-### Helper Count Discrepancy
+### Helper Count (Resolved)
 
-The product plan says "58+" but actual counts vary:
-- Go backend registry: 58 helpers registered
-- Frontend catalog: 58 backend + 4 HubSpot (frontend-only) = 62 total
-- Consistent messaging across app: "60+ Automation Helpers"
-
-**Recommendation**: Standardize on "60+" across all surfaces since the Go backend has 61 implementations.
+Helper count is now standardized at **62** across all surfaces:
+- Go backend: 62 helpers registered
+- Frontend catalog: 62 entries in `helpers-catalog.ts`
+- Product plan: Updated to reference "62 helpers"
 
 ---
 
@@ -192,7 +190,7 @@ All 5 planned CRM platforms are fully implemented with connectors, translation l
 
 4. **Settings "Save Changes" buttons**: Profile tab save button has no `onClick` handler (no wired mutation). Password change fields have no backend endpoint.
 
-5. **Helper count inconsistency**: Varies between "55", "58+", and "60+" across different surfaces.
+5. **Helper count**: ~~Inconsistency resolved~~ -- standardized at 62 across all surfaces.
 
 6. **Settings backend stubs**: Team and Billing API endpoints still return mock data from `lib/api/settings.ts`.
 
@@ -210,7 +208,7 @@ Based on cross-referencing the product plan with current implementation status:
 
 ### Should Do Before Launch (P0-P1)
 3. Add `/forgot-password` page
-4. Standardize helper count to "60+" everywhere
+4. ~~Standardize helper count~~ -- DONE (62 everywhere)
 5. Wire notification preferences to new backend endpoint
 6. Complete settings tab upgrades (Team mock -> real, Billing -> Stripe)
 

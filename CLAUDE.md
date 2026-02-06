@@ -15,7 +15,7 @@ myfusionhelper.ai/
 │   ├── types/                  # Shared TypeScript types (@myfusionhelper/types)
 │   └── ui/                     # Shared UI primitives (@myfusionhelper/ui)
 ├── docs/                       # Architecture docs
-└── .github/workflows/          # CI/CD (deploy-backend.yml)
+└── .github/workflows/          # CI/CD (deploy-backend.yml, sync-internal-secrets.yml)
 ```
 
 ## Tech Stack
@@ -42,6 +42,7 @@ myfusionhelper.ai/
 - **Cognito User Pool**: `us-west-2_1E74cZW97`
 - **DynamoDB table prefix**: `mfh-{stage}-` (e.g., `mfh-dev-users`)
 - **S3 data bucket**: `mfh-{stage}-data`
+- **Stripe SSM params**: `/{stage}/stripe/secret_key`, `/{stage}/stripe/webhook_secret`, `/{stage}/stripe/price_start`, `/{stage}/stripe/price_grow`, `/{stage}/stripe/price_deliver`
 
 ## Development Setup
 
@@ -108,7 +109,7 @@ Infrastructure must deploy before API services. The CI pipeline enforces this:
 1. **Build & test** Go code
 2. **Infrastructure** (parallel): cognito, dynamodb-core, s3, sqs
 3. **API Gateway** (creates HttpApi + Cognito authorizer)
-4. **API services** (parallel, max 3): auth, accounts, api-keys, helpers, platforms, data-explorer
+4. **API services** (parallel, max 3): auth, accounts, api-keys, helpers, platforms, data-explorer, billing
 5. **Workers** (parallel): helper-worker, data-sync
 6. **Post-deploy**: seed platform data + health check verification
 

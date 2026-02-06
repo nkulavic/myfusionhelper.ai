@@ -37,11 +37,22 @@ backend/golang/
 │   │       ├── refresh/main.go
 │   │       ├── status/main.go
 │   │       ├── logout/main.go
+│   │       ├── profile/main.go
+│   │       ├── forgot-password/main.go
+│   │       ├── reset-password/main.go
 │   │       └── health/main.go
 │   ├── accounts/                  # /accounts/* endpoints
 │   ├── api-keys/                  # /api-keys/* endpoints
 │   ├── helpers/                   # /helpers/* + /executions/* endpoints
 │   ├── platforms/                 # /platforms/* + /platform-connections/*
+│   ├── billing/                   # /billing/* endpoints (Stripe integration)
+│   │   ├── main.go                # Consolidated router
+│   │   └── clients/
+│   │       ├── get-billing/main.go
+│   │       ├── checkout/main.go
+│   │       ├── portal-session/main.go
+│   │       ├── invoices/main.go
+│   │       └── webhook/main.go
 │   ├── data-explorer/             # /data/* endpoints (DuckDB + Parquet)
 │   ├── data-sync/                 # SQS worker: sync CRM data → S3/Parquet
 │   ├── data-sync-scheduler/       # EventBridge trigger for data-sync
@@ -92,6 +103,7 @@ backend/golang/
 │   │   ├── api-keys/serverless.yml
 │   │   ├── helpers/serverless.yml
 │   │   ├── platforms/serverless.yml
+│   │   ├── billing/serverless.yml
 │   │   └── data-explorer/serverless.yml
 │   ├── infrastructure/
 │   │   ├── cognito/serverless.yml
@@ -336,7 +348,7 @@ custom:
 All services use the `mfh-` prefix:
 - Infrastructure: `mfh-infrastructure-cognito`, `mfh-infrastructure-dynamodb-core`, `mfh-infrastructure-s3`, `mfh-infrastructure-sqs`
 - API Gateway: `mfh-api-gateway`
-- API services: `mfh-auth`, `mfh-accounts`, `mfh-api-keys`, `mfh-helpers`, `mfh-platforms`, `mfh-data-explorer`
+- API services: `mfh-auth`, `mfh-accounts`, `mfh-api-keys`, `mfh-helpers`, `mfh-platforms`, `mfh-data-explorer`, `mfh-billing`
 - Workers: `mfh-helper-worker`, `mfh-data-sync`
 
 ### Cross-Stack References
@@ -377,12 +389,19 @@ Common env vars set by Serverless on all Lambda functions:
 - `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID`, `COGNITO_REGION`
 - `USERS_TABLE`, `ACCOUNTS_TABLE`, `USER_ACCOUNTS_TABLE`
 - Service-specific tables as needed
+- Billing service: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_START`, `STRIPE_PRICE_GROW`, `STRIPE_PRICE_DELIVER`, `APP_URL` (from SSM)
 
 ## CI/CD
 
-GitHub Actions workflow (`.github/workflows/deploy-backend.yml`):
+GitHub Actions workflows:
+
+**`deploy-backend.yml`** -- main deploy pipeline:
 - Triggered on push to `main`/`dev` (paths: `backend/golang/**`)
 - OIDC authentication: `GitHubActions-Deploy-Dev` IAM role
 - Branch mapping: `dev` -> dev stage, `main` -> prod stage
 - API services deploy with `max-parallel: 3` to avoid CloudFormation throttling
 - Post-deploy: seeds platform data + runs health check verification
+
+**`sync-internal-secrets.yml`** -- manual secrets sync:
+- `workflow_dispatch` triggered, syncs GitHub secrets to AWS SSM Parameter Store
+- Writes Stripe keys per stage (`/{stage}/stripe/secret_key`, etc.)
