@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useWorkspaceStore } from '@/lib/stores/workspace-store'
@@ -48,8 +48,13 @@ export default function OnboardingPage() {
   const [direction, setDirection] = useState(0)
 
   // If onboarding is already complete, redirect to helpers
+  useEffect(() => {
+    if (onboardingComplete) {
+      router.replace('/helpers')
+    }
+  }, [onboardingComplete, router])
+
   if (onboardingComplete) {
-    router.replace('/helpers')
     return null
   }
 
