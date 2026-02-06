@@ -114,6 +114,17 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 				log.Printf("Failed to send weekly summary: %v", err)
 			}
 
+		case "team_invite":
+			recipientEmail := getStringData(job.Data, "recipient_email")
+			inviterName := getStringData(job.Data, "inviter_name")
+			inviterEmail := getStringData(job.Data, "inviter_email")
+			roleName := getStringData(job.Data, "role_name")
+			accountName := getStringData(job.Data, "account_name")
+			inviteToken := getStringData(job.Data, "invite_token")
+			if err := notifSvc.SendTeamInviteEmail(ctx, recipientEmail, inviterName, inviterEmail, roleName, accountName, inviteToken); err != nil {
+				log.Printf("Failed to send team invite email: %v", err)
+			}
+
 		default:
 			log.Printf("Unknown notification type: %s", job.Type)
 		}

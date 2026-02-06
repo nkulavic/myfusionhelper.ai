@@ -406,6 +406,62 @@ View Dashboard: %s
 	return EmailTemplate{Subject: subject, HTMLBody: htmlBody, TextBody: textBody}
 }
 
+// GetTeamInviteEmailTemplate returns the team invitation email
+func GetTeamInviteEmailTemplate(data TemplateData) EmailTemplate {
+	subject := fmt.Sprintf("%s invited you to %s on MyFusion Helper", data.InviterName, data.AccountName)
+
+	roleDescription := getRoleDescription(data.RoleName)
+
+	htmlBody := generateHTML(data, emailContent{
+		headerTitle:    "You're Invited!",
+		headerSubtitle: fmt.Sprintf("Join %s on MyFusion Helper", data.AccountName),
+		greetingIcon:   "rocket",
+		mainContent: fmt.Sprintf(`
+			<p><strong>%s</strong> (%s) has invited you to join the <strong>%s</strong> team on MyFusion Helper.</p>
+
+			<div style="background: #f0f4ff; border-radius: 8px; padding: 16px; margin: 16px 0;">
+				<strong>Your role:</strong> %s<br>
+				<span style="font-size: 13px; color: #6b7280;">%s</span>
+			</div>
+
+			<p>MyFusion Helper is a CRM automation platform with 62 pre-built Helpers that extend Keap, GoHighLevel, ActiveCampaign, Ontraport, and HubSpot. Accept the invitation below to get started.</p>
+		`, data.InviterName, data.InviterEmail, data.AccountName, data.RoleName, roleDescription),
+		ctaText: "Accept Invitation",
+		ctaURL:  fmt.Sprintf("%s/invite/%s", data.BaseURL, data.InviteToken),
+	})
+
+	textBody := fmt.Sprintf(`You're Invited to %s on MyFusion Helper!
+
+%s (%s) has invited you to join the %s team.
+
+Your role: %s
+%s
+
+Accept Invitation: %s/invite/%s
+
+-- MyFusion Helper`, data.AccountName, data.InviterName, data.InviterEmail, data.AccountName, data.RoleName, roleDescription, data.BaseURL, data.InviteToken)
+
+	return EmailTemplate{Subject: subject, HTMLBody: htmlBody, TextBody: textBody}
+}
+
+func getRoleDescription(role string) string {
+	switch role {
+	case "admin":
+		return "Full access to manage Helpers, connections, team members, and billing."
+	case "member":
+		return "Can create and manage Helpers and connections. Cannot manage billing or team settings."
+	case "viewer":
+		return "Read-only access to view Helpers, executions, and reports."
+	default:
+		return "Access to the team workspace."
+	}
+}
+
+// GetSMSVerificationTemplate returns the 2FA SMS message body
+func GetSMSVerificationTemplate(code string) string {
+	return fmt.Sprintf("MyFusion Helper: Your verification code is %s. It expires in 10 minutes. Do not share this code.", code)
+}
+
 type emailContent struct {
 	headerTitle    string
 	headerSubtitle string

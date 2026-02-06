@@ -172,6 +172,31 @@ func (s *Service) SendWeeklySummary(ctx context.Context, userName, userEmail str
 	return err
 }
 
+// SendTeamInviteEmail sends a team invitation email
+func (s *Service) SendTeamInviteEmail(ctx context.Context, recipientEmail, inviterName, inviterEmail, roleName, accountName, inviteToken string) error {
+	data := email.GetDefaultTemplateData()
+	data.UserName = ""
+	data.UserEmail = recipientEmail
+	data.InviterName = inviterName
+	data.InviterEmail = inviterEmail
+	data.RoleName = roleName
+	data.AccountName = accountName
+	data.InviteToken = inviteToken
+
+	tpl := email.GetTeamInviteEmailTemplate(data)
+	_, err := s.sesClient.SendEmail(ctx, email.EmailMessage{
+		To:       []string{recipientEmail},
+		Subject:  tpl.Subject,
+		HTMLBody: tpl.HTMLBody,
+		TextBody: tpl.TextBody,
+		Tags:     map[string]string{"type": "team_invite"},
+	})
+	if err != nil {
+		log.Printf("Failed to send team invite email to %s: %v", recipientEmail, err)
+	}
+	return err
+}
+
 // SendConnectionAlert sends a connection issue notification if the user has it enabled
 func (s *Service) SendConnectionAlert(ctx context.Context, userName, userEmail, connectionName, errorMsg string, prefs *apitypes.NotificationPreferences) error {
 	if prefs != nil && !prefs.ConnectionIssues {
