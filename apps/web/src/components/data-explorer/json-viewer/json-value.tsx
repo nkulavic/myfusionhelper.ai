@@ -16,8 +16,8 @@ const typeColors: Record<JsonValueType, string> = {
   string: 'text-green-600 dark:text-green-400',
   number: 'text-blue-600 dark:text-blue-400',
   boolean: 'text-purple-600 dark:text-purple-400',
-  null: 'text-gray-500 dark:text-gray-400',
-  undefined: 'text-gray-500 dark:text-gray-400',
+  null: 'text-muted-foreground',
+  undefined: 'text-muted-foreground',
 }
 
 export function JsonValue({ value, type, isHighlighted = false, className }: JsonValueProps) {

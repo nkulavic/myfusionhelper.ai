@@ -176,8 +176,8 @@ export default function ExecutionsPage() {
           ))}
         </div>
       ) : filteredExecutions.length > 0 ? (
-        <div className="rounded-lg border">
-          <table className="w-full">
+        <div className="rounded-lg border overflow-x-auto">
+          <table className="w-full min-w-[640px]">
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="p-4 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Status</th>

@@ -59,16 +59,27 @@ export default function DataExplorerPage() {
   return (
     <div
       ref={containerRef}
-      className="-m-6 flex h-[calc(100vh-3.5rem)] overflow-hidden"
+      className="-m-6 flex h-[calc(100vh-7rem)] lg:h-[calc(100vh-3.5rem)] overflow-hidden"
     >
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       {sidebarOpen && (
         <div
-          className="flex shrink-0 border-r bg-card"
-          style={{ width: sidebarWidth }}
+          className={cn(
+            'flex shrink-0 border-r bg-card',
+            'fixed inset-y-0 left-0 z-50 w-72 lg:relative lg:z-auto lg:w-auto'
+          )}
+          style={{ ['--sidebar-w' as string]: `${sidebarWidth}px` }}
         >
           {/* Nav content */}
-          <div className="flex flex-1 flex-col min-w-0">
+          <div className="flex flex-1 flex-col min-w-0 lg:w-[var(--sidebar-w)]">
             {/* Sidebar header */}
             <div className="flex h-12 items-center justify-between border-b px-3">
               <h2 className="text-sm font-semibold">Data Explorer</h2>
@@ -89,10 +100,10 @@ export default function DataExplorerPage() {
             </div>
           </div>
 
-          {/* Resize handle */}
+          {/* Resize handle - hidden on mobile */}
           <div
             className={cn(
-              'flex w-1.5 cursor-col-resize items-center justify-center transition-colors hover:bg-primary/10',
+              'hidden lg:flex w-1.5 cursor-col-resize items-center justify-center transition-colors hover:bg-primary/10',
               isDragging && 'bg-primary/20'
             )}
             onMouseDown={handleMouseDown}
