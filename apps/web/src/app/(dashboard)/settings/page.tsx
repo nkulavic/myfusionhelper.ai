@@ -22,6 +22,7 @@ import {
   Shield,
   Smartphone,
   Lock,
+  Trash2,
   Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -40,6 +41,8 @@ import {
   useCreateCheckoutSession,
   useTeamMembers,
   useInviteTeamMember,
+  useUpdateTeamMember,
+  useRemoveTeamMember,
   useNotificationPreferences,
   useUpdateNotificationPreferences,
 } from '@/lib/hooks/use-settings'
@@ -1154,11 +1157,14 @@ function BillingTab() {
 function TeamTab() {
   const { user } = useAuthStore()
   const { currentAccount } = useWorkspaceStore()
-  const { data: members, isLoading } = useTeamMembers(currentAccount?.accountId || '')
+  const { data: members, isLoading, isError } = useTeamMembers(currentAccount?.accountId || '')
   const inviteMember = useInviteTeamMember()
+  const updateMember = useUpdateTeamMember()
+  const removeMember = useRemoveTeamMember()
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'admin' | 'member' | 'viewer'>('member')
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
 
   const handleInvite = () => {
     if (!currentAccount || !inviteEmail.trim()) return
@@ -1170,6 +1176,23 @@ function TeamTab() {
           setShowInvite(false)
         },
       }
+    )
+  }
+
+  const handleRoleChange = (userId: string, role: 'admin' | 'member' | 'viewer') => {
+    if (!currentAccount) return
+    updateMember.mutate({
+      accountId: currentAccount.accountId,
+      userId,
+      input: { role },
+    })
+  }
+
+  const handleRemove = (userId: string) => {
+    if (!currentAccount) return
+    removeMember.mutate(
+      { accountId: currentAccount.accountId, userId },
+      { onSuccess: () => setConfirmRemove(null) }
     )
   }
 
@@ -1196,6 +1219,13 @@ function TeamTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {inviteMember.isError && (
+            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              <XCircle className="h-4 w-4 shrink-0" />
+              {(inviteMember.error as Error)?.message || 'Failed to send invite'}
+            </div>
+          )}
+
           {showInvite && (
             <div className="flex items-center gap-2 rounded-md border p-4">
               <Input
@@ -1249,8 +1279,12 @@ function TeamTab() {
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
+          ) : isError ? (
+            <div className="py-4 text-center text-sm text-muted-foreground">
+              Failed to load team members. Please try again.
+            </div>
           ) : members && members.length > 0 ? (
-            members.map((member: { userId: string; name: string; email: string; role: string }) => (
+            members.map((member: { userId: string; name: string; email: string; role: string; status: string }) => (
               <div
                 key={member.userId}
                 className="flex items-center justify-between rounded-md border p-4"
@@ -1267,11 +1301,70 @@ function TeamTab() {
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="text-sm font-medium">{member.name}</p>
+                    <p className="text-sm font-medium">
+                      {member.name}
+                      {member.status === 'Pending' && (
+                        <span className="ml-2 text-xs text-muted-foreground">(pending)</span>
+                      )}
+                    </p>
                     <p className="text-xs text-muted-foreground">{member.email}</p>
                   </div>
                 </div>
-                <Badge variant="secondary">{member.role}</Badge>
+                <div className="flex items-center gap-2">
+                  {member.role !== 'Owner' ? (
+                    <>
+                      <select
+                        value={member.role.toLowerCase()}
+                        onChange={(e) =>
+                          handleRoleChange(
+                            member.userId,
+                            e.target.value as 'admin' | 'member' | 'viewer'
+                          )
+                        }
+                        disabled={updateMember.isPending}
+                        className="flex h-8 rounded-md border border-input bg-background px-2 py-1 text-xs"
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="member">Member</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                      {confirmRemove === member.userId ? (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleRemove(member.userId)}
+                            disabled={removeMember.isPending}
+                          >
+                            {removeMember.isPending ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              'Confirm'
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setConfirmRemove(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => setConfirmRemove(member.userId)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <Badge>Owner</Badge>
+                  )}
+                </div>
               </div>
             ))
           ) : null}

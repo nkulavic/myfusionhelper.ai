@@ -12,7 +12,7 @@ export function TrustedBySection() {
         <motion.div
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, margin: '-50px' }}
+          viewport={{ once: true, amount: 0.05 }}
           variants={fadeUp}
           className="text-center"
         >

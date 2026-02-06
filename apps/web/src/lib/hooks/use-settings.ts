@@ -6,6 +6,7 @@ import {
   type UpdateAccountInput,
   type CreateAPIKeyInput,
   type InviteTeamMemberInput,
+  type UpdateTeamMemberInput,
   type NotificationPreferences,
 } from '@/lib/api/settings'
 
@@ -136,6 +137,40 @@ export function useInviteTeamMember() {
       accountId: string
       input: InviteTeamMemberInput
     }) => settingsApi.inviteTeamMember(accountId, input),
+    onSuccess: (_, { accountId }) => {
+      queryClient.invalidateQueries({ queryKey: ['team-members', accountId] })
+    },
+  })
+}
+
+export function useUpdateTeamMember() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      accountId,
+      userId,
+      input,
+    }: {
+      accountId: string
+      userId: string
+      input: UpdateTeamMemberInput
+    }) => settingsApi.updateTeamMember(accountId, userId, input),
+    onSuccess: (_, { accountId }) => {
+      queryClient.invalidateQueries({ queryKey: ['team-members', accountId] })
+    },
+  })
+}
+
+export function useRemoveTeamMember() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      accountId,
+      userId,
+    }: {
+      accountId: string
+      userId: string
+    }) => settingsApi.removeTeamMember(accountId, userId),
     onSuccess: (_, { accountId }) => {
       queryClient.invalidateQueries({ queryKey: ['team-members', accountId] })
     },

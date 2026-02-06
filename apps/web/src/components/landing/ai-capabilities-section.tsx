@@ -35,7 +35,7 @@ export function AICapabilitiesSection() {
         <motion.div
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, margin: '-100px' }}
+          viewport={{ once: true, amount: 0.1 }}
           variants={staggerContainer}
           className="text-center"
         >
@@ -67,7 +67,7 @@ export function AICapabilitiesSection() {
                 key={cap.title}
                 initial="hidden"
                 whileInView="visible"
-                viewport={{ once: true, margin: '-50px' }}
+                viewport={{ once: true, amount: 0.05 }}
                 variants={staggerContainer}
                 className={`flex flex-col items-center gap-12 md:flex-row ${
                   isReversed ? 'md:flex-row-reverse' : ''

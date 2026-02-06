@@ -16,7 +16,7 @@ export function CTASection() {
         <motion.div
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, margin: '-50px' }}
+          viewport={{ once: true, amount: 0.05 }}
           variants={staggerContainer}
           className="mx-auto max-w-2xl text-center"
         >

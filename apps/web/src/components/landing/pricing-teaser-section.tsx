@@ -69,7 +69,7 @@ export function PricingTeaserSection() {
         <motion.div
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, margin: '-100px' }}
+          viewport={{ once: true, amount: 0.1 }}
           variants={staggerContainer}
           className="text-center"
         >
@@ -138,7 +138,7 @@ export function PricingTeaserSection() {
         <motion.div
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, margin: '-50px' }}
+          viewport={{ once: true, amount: 0.05 }}
           variants={staggerContainer}
           className="mt-12 grid gap-6 md:grid-cols-3"
         >

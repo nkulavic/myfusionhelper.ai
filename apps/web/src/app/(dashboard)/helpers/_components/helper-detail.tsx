@@ -170,11 +170,18 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
 
   const ConfigForm = helper ? getConfigForm(helper.helperType) : null
 
+  const [lastExecutionId, setLastExecutionId] = useState<string | null>(null)
+
   const handleTestRun = () => {
     if (!testContactId.trim()) return
+    setLastExecutionId(null)
     executeHelper.mutate(
       { id: helperId, input: { contactId: testContactId.trim() } },
-      { onSuccess: () => { setShowTestRun(false); setTestContactId('') } }
+      {
+        onSuccess: (res) => {
+          setLastExecutionId(res.data?.executionId ?? null)
+        },
+      }
     )
   }
 
@@ -272,7 +279,7 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
             onClick={() => setShowTestRun(!showTestRun)}
           >
             <Play className="h-4 w-4" />
-            Test Run
+            Run Helper
           </Button>
           <Button
             variant={isEnabled ? 'outline' : 'default'}
@@ -298,7 +305,7 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
       {/* Test Run Panel */}
       {showTestRun && (
         <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-          <h3 className="text-sm font-semibold mb-3">Test Run</h3>
+          <h3 className="text-sm font-semibold mb-3">Run Helper</h3>
           <div className="flex gap-3">
             <Input
               type="text"
@@ -327,14 +334,36 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
             </Button>
           </div>
           {executeHelper.isSuccess && (
-            <p className="mt-2 text-xs text-success">
-              Execution queued successfully. Check the Executions page for results.
-            </p>
+            <div className="mt-3 flex items-center gap-3 rounded-md border border-success/30 bg-success/10 p-3">
+              <CheckCircle className="h-4 w-4 shrink-0 text-success" />
+              <p className="flex-1 text-xs text-success">Execution started successfully.</p>
+              {lastExecutionId && (
+                <Link
+                  href={`/executions/${lastExecutionId}`}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  View details
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              )}
+            </div>
           )}
           {executeHelper.error && (
-            <p className="mt-2 text-xs text-destructive">
-              {executeHelper.error instanceof Error ? executeHelper.error.message : 'Execution failed'}
-            </p>
+            <div className="mt-3 flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-3">
+              <XCircle className="h-4 w-4 shrink-0 text-destructive" />
+              <p className="flex-1 text-xs text-destructive">
+                {executeHelper.error instanceof Error ? executeHelper.error.message : 'Execution failed'}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleTestRun}
+                disabled={executeHelper.isPending}
+              >
+                Retry
+              </Button>
+            </div>
           )}
         </div>
       )}

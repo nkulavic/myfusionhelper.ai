@@ -104,7 +104,7 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div className="space-y-8">
+    <div className="animate-fade-in-up space-y-8">
       {/* Welcome */}
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
@@ -117,9 +117,9 @@ export default function DashboardPage() {
       {statsLoading ? (
         <StatsSkeleton />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="animate-stagger-in grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (
-            <div key={stat.label} className="rounded-lg border bg-card p-5">
+            <div key={stat.label} className="card-hover rounded-lg border bg-card p-5">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">{stat.label}</p>
                 <stat.icon className="h-4 w-4 text-muted-foreground" />
@@ -147,7 +147,7 @@ export default function DashboardPage() {
           {executionsLoading ? (
             <ExecutionsSkeleton />
           ) : executions && executions.length > 0 ? (
-            <div className="divide-y">
+            <div className="skeleton-fade-enter divide-y">
               {executions.map((exec) => (
                 <Link
                   key={exec.executionId}
@@ -202,7 +202,7 @@ export default function DashboardPage() {
                 <Link
                   key={action.label}
                   href={action.href}
-                  className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent"
+                  className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all hover:bg-accent active:scale-[0.98]"
                 >
                   <action.icon className="h-4 w-4 text-primary" />
                   {action.label}
