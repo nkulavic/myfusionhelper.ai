@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { PlatformConnection, CRMPlatform } from '@myfusionhelper/types'
+import type { PlatformConnection } from '@myfusionhelper/types'
 
 export interface CreateConnectionInput {
   platformId: string
@@ -21,21 +21,38 @@ export interface UpdateConnectionInput {
 }
 
 export interface PlatformDefinition {
-  id: string
+  platformId: string
   name: string
+  slug: string
   category: string
-  authType: 'oauth2' | 'api_key'
-  oauthConfig?: {
-    authorizationUrl: string
+  description: string
+  status: string
+  version: string
+  logoUrl: string
+  documentationUrl: string
+  oauth?: {
+    authUrl: string
     tokenUrl: string
+    userInfoUrl: string
     scopes: string[]
+    responseType: string
   }
-  apiBaseUrl: string
-  rateLimit: {
-    requestsPerSecond: number
-    dailyLimit: number
+  apiConfig: {
+    baseUrl: string
+    authType: string
+    testEndpoint: string
+    rateLimits: {
+      requestsPerSecond: number
+      requestsPerMinute: number
+      requestsPerHour: number
+      burstLimit: number
+    }
+    requiredHeaders: Record<string, string>
+    version: string
   }
   capabilities: string[]
+  createdAt: string
+  updatedAt: string
 }
 
 export const connectionsApi = {

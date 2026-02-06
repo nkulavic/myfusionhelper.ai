@@ -50,49 +50,74 @@ type ViewState = 'list' | 'add' | 'detail'
 // Fallback platform list when API isn't available
 const fallbackPlatforms: PlatformDefinition[] = [
   {
-    id: 'keap',
+    platformId: 'keap',
     name: 'Keap',
+    slug: 'keap',
     category: 'crm',
-    authType: 'oauth2',
-    apiBaseUrl: 'https://api.infusionsoft.com',
-    rateLimit: { requestsPerSecond: 10, dailyLimit: 25000 },
+    description: 'CRM & marketing automation for small businesses',
+    status: 'active',
+    version: '1.0',
+    logoUrl: '/images/platforms/keap.png',
+    documentationUrl: 'https://developer.infusionsoft.com',
+    apiConfig: { baseUrl: 'https://api.infusionsoft.com', authType: 'oauth2', testEndpoint: '/crm/rest/v1/account/profile', rateLimits: { requestsPerSecond: 10, requestsPerMinute: 600, requestsPerHour: 25000, burstLimit: 20 }, requiredHeaders: {}, version: 'v1' },
     capabilities: ['Contacts', 'Tags', 'Custom Fields', 'Automations', 'Goals', 'Deals'],
+    createdAt: '', updatedAt: '',
   },
   {
-    id: 'gohighlevel',
+    platformId: 'gohighlevel',
     name: 'GoHighLevel',
+    slug: 'gohighlevel',
     category: 'crm',
-    authType: 'oauth2',
-    apiBaseUrl: 'https://services.leadconnectorhq.com',
-    rateLimit: { requestsPerSecond: 20, dailyLimit: 50000 },
+    description: 'All-in-one marketing & CRM platform',
+    status: 'active',
+    version: '1.0',
+    logoUrl: '/images/platforms/gohighlevel.png',
+    documentationUrl: 'https://highlevel.stoplight.io',
+    apiConfig: { baseUrl: 'https://services.leadconnectorhq.com', authType: 'oauth2', testEndpoint: '/locations', rateLimits: { requestsPerSecond: 20, requestsPerMinute: 1200, requestsPerHour: 50000, burstLimit: 40 }, requiredHeaders: {}, version: 'v1' },
     capabilities: ['Contacts', 'Tags', 'Custom Fields', 'Workflows', 'Pipelines', 'SMS'],
+    createdAt: '', updatedAt: '',
   },
   {
-    id: 'activecampaign',
+    platformId: 'activecampaign',
     name: 'ActiveCampaign',
+    slug: 'activecampaign',
     category: 'crm',
-    authType: 'api_key',
-    apiBaseUrl: '',
-    rateLimit: { requestsPerSecond: 5, dailyLimit: 100000 },
+    description: 'Email marketing & automation platform',
+    status: 'active',
+    version: '1.0',
+    logoUrl: '/images/platforms/activecampaign.png',
+    documentationUrl: 'https://developers.activecampaign.com',
+    apiConfig: { baseUrl: '', authType: 'api_key', testEndpoint: '/api/3/users/me', rateLimits: { requestsPerSecond: 5, requestsPerMinute: 300, requestsPerHour: 100000, burstLimit: 10 }, requiredHeaders: {}, version: 'v3' },
     capabilities: ['Contacts', 'Tags', 'Custom Fields', 'Automations', 'Deals', 'Campaigns'],
+    createdAt: '', updatedAt: '',
   },
   {
-    id: 'ontraport',
+    platformId: 'ontraport',
     name: 'Ontraport',
+    slug: 'ontraport',
     category: 'crm',
-    authType: 'api_key',
-    apiBaseUrl: 'https://api.ontraport.com',
-    rateLimit: { requestsPerSecond: 4, dailyLimit: 50000 },
+    description: 'Business automation platform',
+    status: 'active',
+    version: '1.0',
+    logoUrl: '/images/platforms/ontraport.png',
+    documentationUrl: 'https://api.ontraport.com/doc/',
+    apiConfig: { baseUrl: 'https://api.ontraport.com', authType: 'api_key', testEndpoint: '/1/Contacts', rateLimits: { requestsPerSecond: 4, requestsPerMinute: 240, requestsPerHour: 50000, burstLimit: 8 }, requiredHeaders: {}, version: 'v1' },
     capabilities: ['Contacts', 'Tags', 'Custom Fields', 'Sequences', 'Tasks'],
+    createdAt: '', updatedAt: '',
   },
   {
-    id: 'hubspot',
+    platformId: 'hubspot',
     name: 'HubSpot',
+    slug: 'hubspot',
     category: 'crm',
-    authType: 'oauth2',
-    apiBaseUrl: 'https://api.hubapi.com',
-    rateLimit: { requestsPerSecond: 10, dailyLimit: 250000 },
+    description: 'CRM platform for scaling businesses',
+    status: 'active',
+    version: '1.0',
+    logoUrl: '/images/platforms/hubspot.png',
+    documentationUrl: 'https://developers.hubspot.com',
+    apiConfig: { baseUrl: 'https://api.hubapi.com', authType: 'oauth2', testEndpoint: '/crm/v3/objects/contacts', rateLimits: { requestsPerSecond: 10, requestsPerMinute: 600, requestsPerHour: 250000, burstLimit: 20 }, requiredHeaders: {}, version: 'v3' },
     capabilities: ['Contacts', 'Deals', 'Lists', 'Workflows', 'Custom Properties', 'Pipelines'],
+    createdAt: '', updatedAt: '',
   },
 ]
 
@@ -142,13 +167,13 @@ export default function ConnectionsPage() {
     )
   }
 
-  const getPlatformInfo = (platformId: string) => platforms.find((p) => p.id === platformId)
+  const getPlatformInfo = (platformId: string) => platforms.find((p) => p.platformId === platformId || p.slug === platformId)
 
   const handleConnect = async () => {
     if (!selectedPlatform) return
 
-    if (selectedPlatform.authType === 'oauth2') {
-      startOAuth.mutate(selectedPlatform.id, {
+    if (selectedPlatform.apiConfig.authType === 'oauth2') {
+      startOAuth.mutate(selectedPlatform.platformId, {
         onSuccess: (res) => {
           if (res.data?.url) {
             window.location.href = res.data.url
@@ -158,7 +183,7 @@ export default function ConnectionsPage() {
     } else {
       createConnection.mutate(
         {
-          platformId: selectedPlatform.id,
+          platformId: selectedPlatform.platformId,
           input: {
             name: connectionName || `${selectedPlatform.name} Connection`,
             credentials: {
@@ -213,12 +238,12 @@ export default function ConnectionsPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             {platforms.map((platform) => (
               <button
-                key={platform.id}
+                key={platform.platformId}
                 onClick={() => setSelectedPlatform(platform)}
                 className="flex flex-col items-start rounded-lg border bg-card p-5 text-left transition-all hover:border-primary hover:shadow-md"
               >
                 {(() => {
-                  const crm = getCRMPlatform(platform.id)
+                  const crm = getCRMPlatform(platform.slug)
                   return crm ? (
                     <PlatformLogo platform={crm} size={48} className="mb-3" />
                   ) : (
@@ -236,7 +261,7 @@ export default function ConnectionsPage() {
                   ))}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  {platform.authType === 'oauth2' ? (
+                  {platform.apiConfig.authType === 'oauth2' ? (
                     <><Shield className="h-3 w-3" /> OAuth 2.0</>
                   ) : (
                     <><Key className="h-3 w-3" /> API Key</>
@@ -250,7 +275,7 @@ export default function ConnectionsPage() {
             <div className="rounded-lg border bg-card p-5">
               <div className="flex items-center gap-4">
                 {(() => {
-                  const crm = getCRMPlatform(selectedPlatform.id)
+                  const crm = getCRMPlatform(selectedPlatform.slug)
                   return crm ? (
                     <PlatformLogo platform={crm} size={48} />
                   ) : (
@@ -262,7 +287,7 @@ export default function ConnectionsPage() {
                 <div>
                   <h3 className="font-semibold">{selectedPlatform.name}</h3>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    {selectedPlatform.authType === 'oauth2' ? (
+                    {selectedPlatform.apiConfig.authType === 'oauth2' ? (
                       <><Shield className="h-3 w-3" /> OAuth 2.0 Authentication</>
                     ) : (
                       <><Key className="h-3 w-3" /> API Key Authentication</>
@@ -290,9 +315,9 @@ export default function ConnectionsPage() {
                 />
               </div>
 
-              {selectedPlatform.authType === 'api_key' && (
+              {selectedPlatform.apiConfig.authType === 'api_key' && (
                 <>
-                  {selectedPlatform.id === 'activecampaign' && (
+                  {selectedPlatform.slug === 'activecampaign' && (
                     <div>
                       <label className="mb-2 block text-sm font-medium">Account URL</label>
                       <Input
@@ -307,7 +332,7 @@ export default function ConnectionsPage() {
                       </p>
                     </div>
                   )}
-                  {selectedPlatform.id === 'ontraport' && (
+                  {selectedPlatform.slug === 'ontraport' && (
                     <div>
                       <label className="mb-2 block text-sm font-medium">App ID</label>
                       <Input
@@ -351,7 +376,7 @@ export default function ConnectionsPage() {
                 {(createConnection.isPending || startOAuth.isPending) && (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 )}
-                {selectedPlatform.authType === 'oauth2' ? (
+                {selectedPlatform.apiConfig.authType === 'oauth2' ? (
                   <>
                     <ExternalLink className="h-4 w-4" />
                     Connect with {selectedPlatform.name}
@@ -373,7 +398,7 @@ export default function ConnectionsPage() {
               </p>
             )}
 
-            {selectedPlatform.authType === 'oauth2' && (
+            {selectedPlatform.apiConfig.authType === 'oauth2' && (
               <p className="text-center text-xs text-muted-foreground">
                 You&apos;ll be redirected to {selectedPlatform.name} to authorize access.
                 We only request the minimum permissions needed.
@@ -415,7 +440,7 @@ export default function ConnectionsPage() {
               )}
               Test Connection
             </Button>
-            {selectedConnection.status === 'error' && platform?.authType === 'oauth2' && (
+            {selectedConnection.status === 'error' && platform?.apiConfig.authType === 'oauth2' && (
               <Button
                 size="sm"
                 onClick={() => startOAuth.mutate(selectedConnection.platformId, {
@@ -461,7 +486,7 @@ export default function ConnectionsPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Auth Type</span>
-                  <span className="font-medium capitalize">{platform?.authType === 'oauth2' ? 'OAuth 2.0' : 'API Key'}</span>
+                  <span className="font-medium capitalize">{platform?.apiConfig.authType === 'oauth2' ? 'OAuth 2.0' : 'API Key'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Status</span>
@@ -496,9 +521,9 @@ export default function ConnectionsPage() {
                     </span>
                   ))}
                 </div>
-                {platform.rateLimit && (
+                {platform.apiConfig.rateLimits && (
                   <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                    <p>{platform.rateLimit.requestsPerSecond} requests/sec &middot; {platform.rateLimit.dailyLimit.toLocaleString()} daily limit</p>
+                    <p>{platform.apiConfig.rateLimits.requestsPerSecond} requests/sec &middot; {platform.apiConfig.rateLimits.requestsPerHour.toLocaleString()} hourly limit</p>
                   </div>
                 )}
               </div>
@@ -650,11 +675,11 @@ export default function ConnectionsPage() {
         <h2 className="mb-4 text-lg font-semibold">Available Platforms</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {platforms.map((platform) => {
-            const crm = getCRMPlatform(platform.id)
-            const connectedCount = connections?.filter((c) => c.platformId === platform.id).length || 0
+            const crm = getCRMPlatform(platform.slug)
+            const connectedCount = connections?.filter((c) => c.platformId === platform.platformId).length || 0
             return (
               <div
-                key={platform.id}
+                key={platform.platformId}
                 className="relative overflow-hidden rounded-lg border bg-card p-4 transition-all hover:border-primary/50 hover:shadow-sm"
               >
                 <div
@@ -670,7 +695,7 @@ export default function ConnectionsPage() {
                 )}
                 <h3 className="font-semibold">{platform.name}</h3>
                 <div className="mb-3 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70">
-                  {platform.authType === 'oauth2' ? 'OAuth 2.0' : 'API Key'}
+                  {platform.apiConfig.authType === 'oauth2' ? 'OAuth 2.0' : 'API Key'}
                   {connectedCount > 0 && (
                     <span className="ml-1 rounded-full bg-success/10 px-1.5 py-0.5 text-success normal-case">
                       {connectedCount} connected
