@@ -72,6 +72,8 @@ jobs:
             path: services/infrastructure/s3
           - service: sqs
             path: services/infrastructure/sqs
+          - service: ses
+            path: services/infrastructure/ses
     steps:
       - uses: actions/checkout@v4
 
@@ -153,6 +155,7 @@ jobs:
           - helpers
           - platforms
           - data-explorer
+          - billing
     steps:
       - uses: actions/checkout@v4
 
