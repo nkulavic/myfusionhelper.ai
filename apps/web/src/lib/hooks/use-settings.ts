@@ -1,5 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { settingsApi, type UpdateAccountInput, type CreateAPIKeyInput } from '@/lib/api/settings'
+import {
+  settingsApi,
+  type UpdateAccountInput,
+  type CreateAPIKeyInput,
+  type InviteTeamMemberInput,
+  type NotificationPreferences,
+} from '@/lib/api/settings'
 
 export function useAccount(accountId: string) {
   return useQuery({
@@ -68,12 +74,60 @@ export function useBillingInfo() {
   })
 }
 
+export function useInvoices() {
+  return useQuery({
+    queryKey: ['invoices'],
+    queryFn: async () => {
+      const res = await settingsApi.listInvoices()
+      return res.data ?? []
+    },
+  })
+}
+
+export function useTeamMembers(accountId: string) {
+  return useQuery({
+    queryKey: ['team-members', accountId],
+    queryFn: async () => {
+      const res = await settingsApi.listTeamMembers(accountId)
+      return res.data?.members ?? []
+    },
+    enabled: !!accountId,
+  })
+}
+
+export function useInviteTeamMember() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      accountId,
+      input,
+    }: {
+      accountId: string
+      input: InviteTeamMemberInput
+    }) => settingsApi.inviteTeamMember(accountId, input),
+    onSuccess: (_, { accountId }) => {
+      queryClient.invalidateQueries({ queryKey: ['team-members', accountId] })
+    },
+  })
+}
+
 export function useNotificationPreferences() {
   return useQuery({
     queryKey: ['notification-preferences'],
     queryFn: async () => {
       const res = await settingsApi.getNotificationPreferences()
       return res.data
+    },
+  })
+}
+
+export function useUpdateNotificationPreferences() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: Partial<NotificationPreferences>) =>
+      settingsApi.updateNotificationPreferences(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-preferences'] })
     },
   })
 }

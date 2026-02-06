@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { Account, APIKey, User } from '@myfusionhelper/types'
+import type { Account, APIKey, User, NotificationPreferences } from '@myfusionhelper/types'
 
 export interface UpdateProfileInput {
   name?: string
@@ -27,18 +27,7 @@ export interface UpdateTeamMemberInput {
   role: 'admin' | 'member' | 'viewer'
 }
 
-export interface NotificationPreferences {
-  executionFailures: boolean
-  connectionIssues: boolean
-  usageAlerts: boolean
-  weeklySummary: boolean
-  newFeatures: boolean
-  teamActivity: boolean
-  realtimeStatus: boolean
-  aiInsights: boolean
-  systemMaintenance: boolean
-  webhookUrl?: string
-}
+export type { NotificationPreferences }
 
 export const settingsApi = {
   // Profile - uses auth status endpoint
@@ -67,64 +56,83 @@ export const settingsApi = {
   revokeAPIKey: (id: string) =>
     apiClient.delete<void>(`/api-keys/${id}`),
 
-  // TODO: Team management endpoints not yet implemented in backend
-  // These will need a new handler: cmd/handlers/accounts/clients/team/
-  listTeamMembers: (_accountId: string) =>
-    Promise.resolve({
-      success: true,
-      data: [] as { userId: string; role: string; user: User }[],
-    }),
+  // Profile update
+  updateProfile: (input: UpdateProfileInput) =>
+    apiClient.put<User>('/auth/profile', input),
 
-  inviteTeamMember: (_accountId: string, _input: InviteTeamMemberInput) =>
-    Promise.resolve({ success: true, data: { invitationId: 'pending' } }),
+  // Team management
+  listTeamMembers: (accountId: string) =>
+    apiClient.get<{ members: { userId: string; role: string; email: string; name: string; status: string; linkedAt: string }[]; totalCount: number }>(
+      `/accounts/${accountId}/team`
+    ),
 
-  // TODO: Notification preferences not yet implemented in backend
+  inviteTeamMember: (accountId: string, input: InviteTeamMemberInput) =>
+    apiClient.post<{ userId: string; email: string; role: string; status: string }>(
+      `/accounts/${accountId}/team`,
+      input
+    ),
+
+  updateTeamMember: (accountId: string, userId: string, input: UpdateTeamMemberInput) =>
+    apiClient.put<{ userId: string; role: string }>(
+      `/accounts/${accountId}/team/${userId}`,
+      input
+    ),
+
+  removeTeamMember: (accountId: string, userId: string) =>
+    apiClient.delete<{ userId: string }>(
+      `/accounts/${accountId}/team/${userId}`
+    ),
+
+  // Notification preferences
   getNotificationPreferences: () =>
-    Promise.resolve({
-      success: true,
-      data: {
-        executionFailures: true,
-        connectionIssues: true,
-        usageAlerts: true,
-        weeklySummary: false,
-        newFeatures: true,
-        teamActivity: false,
-        realtimeStatus: false,
-        aiInsights: true,
-        systemMaintenance: true,
-      } as NotificationPreferences,
-    }),
+    apiClient.get<NotificationPreferences>('/accounts/preferences'),
 
-  updateNotificationPreferences: (_input: Partial<NotificationPreferences>) =>
-    Promise.resolve({ success: true, data: undefined }),
+  updateNotificationPreferences: (input: Partial<NotificationPreferences>) =>
+    apiClient.put<NotificationPreferences>('/accounts/preferences', input),
 
-  // TODO: Billing endpoints not yet implemented in backend
-  // These will need Stripe integration: cmd/handlers/billing/
+  // Billing
   getBillingInfo: () =>
-    Promise.resolve({
-      success: true,
-      data: {
-        plan: 'pro',
-        priceMonthly: 49,
-        renewsAt: new Date(Date.now() + 30 * 86400000).toISOString(),
-        usage: {
-          executions: { used: 12847, limit: 50000 },
-          apiCalls: { used: 45892, limit: 100000 },
-          helpers: { used: 14, limit: 50 },
-          connections: { used: 3, limit: 5 },
-        },
-      },
-    }),
+    apiClient.get<BillingInfo>('/billing'),
 
   createPortalSession: () =>
-    Promise.resolve({ success: true, data: { url: '#' } }),
+    apiClient.post<{ url: string }>('/billing/portal-session'),
 
   listInvoices: () =>
-    Promise.resolve({
-      success: true,
-      data: [
-        { id: 'inv_001', amount: 49, status: 'paid', date: '2026-01-01' },
-        { id: 'inv_002', amount: 49, status: 'paid', date: '2025-12-01' },
-      ],
-    }),
+    apiClient.get<Invoice[]>('/billing/invoices'),
+}
+
+export interface BillingInfo {
+  plan: string
+  status: string
+  priceMonthly: number
+  renewsAt?: number
+  trialEndsAt?: number
+  cancelAt?: number
+  stripeCustomerId?: string
+  usage: {
+    helpers: number
+    connections: number
+    apiKeys: number
+    teamMembers: number
+    monthlyExecutions: number
+    monthlyApiRequests: number
+  }
+  limits: {
+    maxHelpers: number
+    maxConnections: number
+    maxApiKeys: number
+    maxTeamMembers: number
+    maxExecutions: number
+    webhooksEnabled: boolean
+  }
+}
+
+export interface Invoice {
+  id: string
+  amount: number
+  currency: string
+  status: string
+  date: number
+  pdfUrl?: string
+  hostedUrl?: string
 }
