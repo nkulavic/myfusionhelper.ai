@@ -525,12 +525,11 @@ function EmptyState({ onNewHelper }: { onNewHelper: () => void }) {
       </div>
       <h3 className="mb-1 text-lg font-semibold">No helpers configured yet</h3>
       <p className="mb-6 max-w-sm text-sm text-muted-foreground">
-        Helpers are small automation tools that extend your CRM. Browse the
-        catalog to find the perfect helpers for your workflow.
+        Helpers are small automation units that extend your CRM — tagging, formatting, scoring, syncing, and more. Browse 62 pre-built helpers and configure your first one in minutes.
       </p>
       <Button onClick={onNewHelper}>
         <Plus className="h-4 w-4" />
-        Browse Helper Catalog
+        Browse 62 Helpers
       </Button>
     </div>
   )

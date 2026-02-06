@@ -659,12 +659,12 @@ export default function ConnectionsPage() {
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
             <Plus className="mb-4 h-12 w-12 text-muted-foreground/50" />
             <h3 className="mb-1 font-semibold">No connections yet</h3>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Connect your first CRM platform to start automating
+            <p className="mb-4 max-w-sm text-sm text-muted-foreground">
+              Connect a CRM platform to start using helpers. We support Keap, GoHighLevel, ActiveCampaign, Ontraport, and HubSpot. Your credentials are encrypted and stored securely.
             </p>
             <Button onClick={() => setView('add')}>
               <Plus className="h-4 w-4" />
-              Add Connection
+              Add Your First Connection
             </Button>
           </div>
         )}

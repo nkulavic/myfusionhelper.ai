@@ -31,8 +31,9 @@ export function TermsContent() {
       <p>
         MyFusion Helper is a subscription-based software-as-a-service (SaaS)
         platform designed as an add-on for Keap (formerly Infusionsoft). The
-        Service provides a suite of 60+ automation tools (&quot;Helpers&quot;)
-        that extend Keap&apos;s functionality, including workflow automations,
+        Service provides a suite of 62 automation tools (&quot;Helpers&quot;)
+        that extend CRM functionality across Keap, GoHighLevel, ActiveCampaign,
+        Ontraport, and HubSpot, including workflow automations,
         integrations, webhooks, REST hooks, and data management utilities.
       </p>
       <p>

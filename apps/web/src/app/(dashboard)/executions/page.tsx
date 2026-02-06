@@ -244,10 +244,10 @@ export default function ExecutionsPage() {
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
           <Activity className="mb-4 h-12 w-12 text-muted-foreground/50" />
           <h3 className="mb-1 font-semibold">No executions found</h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="max-w-sm text-sm text-muted-foreground">
             {error
-              ? 'Unable to load executions. The executions endpoint may not be available yet.'
-              : 'Execute a helper to see results here.'}
+              ? 'Unable to load executions. Please check your connection and try again.'
+              : 'When your CRM automations trigger a helper, every execution will appear here with status, duration, and contact details.'}
           </p>
         </div>
       )}

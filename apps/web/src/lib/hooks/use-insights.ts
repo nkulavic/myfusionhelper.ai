@@ -186,7 +186,7 @@ function generateAIInsights(
       type: 'suggestion',
       severity: 'info',
       title: 'Create your first helper',
-      description: 'Browse 60+ automation helpers across 7 categories to start automating your CRM workflow.',
+      description: 'Browse 62 automation helpers across 7 categories to start automating your CRM workflow.',
       action: 'Browse helpers',
       href: '/helpers',
     })
