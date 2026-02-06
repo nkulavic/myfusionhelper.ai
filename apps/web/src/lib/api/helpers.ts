@@ -51,7 +51,7 @@ export const helpersApi = {
     apiClient.put<Helper>(`/helpers/${id}`, { enabled: false }),
 
   listTypes: () =>
-    apiClient.get<{ types: HelperTypeDefinition[]; total_count: number; categories: string[] }>('/helpers/types'),
+    apiClient.get<{ types: HelperTypeDefinition[]; totalCount: number; categories: string[] }>('/helpers/types'),
 
   getType: (type: string) =>
     apiClient.get<HelperTypeDefinition>(`/helpers/types/${type}`),
@@ -63,7 +63,7 @@ export const helpersApi = {
     if (params?.limit) searchParams.set('limit', String(params.limit))
     if (params?.nextToken) searchParams.set('next_token', params.nextToken)
     const qs = searchParams.toString()
-    return apiClient.get<{ executions: HelperExecution[]; total_count: number; next_token?: string; has_more: boolean }>(`/executions${qs ? `?${qs}` : ''}`)
+    return apiClient.get<{ executions: HelperExecution[]; totalCount: number; nextToken?: string; hasMore: boolean }>(`/executions${qs ? `?${qs}` : ''}`)
   },
 
   getExecution: (id: string) =>

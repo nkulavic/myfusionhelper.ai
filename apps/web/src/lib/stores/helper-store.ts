@@ -41,17 +41,17 @@ export const useHelperStore = create<HelperState>()((set) => ({
 
   updateHelper: (id, updates) =>
     set((state) => ({
-      helpers: state.helpers.map((h) => (h.id === id ? { ...h, ...updates } : h)),
+      helpers: state.helpers.map((h) => (h.helperId === id ? { ...h, ...updates } : h)),
       selectedHelper:
-        state.selectedHelper?.id === id
+        state.selectedHelper?.helperId === id
           ? { ...state.selectedHelper, ...updates }
           : state.selectedHelper,
     })),
 
   removeHelper: (id) =>
     set((state) => ({
-      helpers: state.helpers.filter((h) => h.id !== id),
-      selectedHelper: state.selectedHelper?.id === id ? null : state.selectedHelper,
+      helpers: state.helpers.filter((h) => h.helperId !== id),
+      selectedHelper: state.selectedHelper?.helperId === id ? null : state.selectedHelper,
     })),
 
   setSelectedHelper: (helper) => set({ selectedHelper: helper }),

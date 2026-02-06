@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { Helper, HelperTypeDefinition } from '@myfusionhelper/types'
 import { helpersApi, type CreateHelperInput, type UpdateHelperInput, type ExecuteHelperInput, type ListExecutionsParams } from '@/lib/api/helpers'
 
 export function useHelpers() {
@@ -6,7 +7,14 @@ export function useHelpers() {
     queryKey: ['helpers'],
     queryFn: async () => {
       const res = await helpersApi.list()
-      return res.data ?? []
+      // Backend returns { helpers: [...], totalCount: N } inside data
+      const data = res.data as unknown
+      if (Array.isArray(data)) return data as Helper[]
+      if (data && typeof data === 'object' && 'helpers' in data) {
+        const nested = (data as { helpers: Helper[] }).helpers
+        if (Array.isArray(nested)) return nested
+      }
+      return (res.data ?? []) as Helper[]
     },
   })
 }
@@ -65,6 +73,38 @@ export function useExecuteHelper() {
   })
 }
 
+export function useHelperTypes() {
+  return useQuery({
+    queryKey: ['helper-types'],
+    queryFn: async () => {
+      const res = await helpersApi.listTypes()
+      const data = res.data as unknown
+      if (data && typeof data === 'object' && 'types' in data) {
+        const nested = data as { types: HelperTypeDefinition[]; totalCount: number; categories: string[] }
+        return {
+          types: Array.isArray(nested.types) ? nested.types : [],
+          categories: Array.isArray(nested.categories) ? nested.categories : [],
+          totalCount: nested.totalCount ?? 0,
+        }
+      }
+      return { types: [] as HelperTypeDefinition[], categories: [] as string[], totalCount: 0 }
+    },
+    staleTime: 5 * 60 * 1000, // cache for 5 min -- types don't change often
+  })
+}
+
+export function useHelperType(type: string) {
+  return useQuery({
+    queryKey: ['helper-types', type],
+    queryFn: async () => {
+      const res = await helpersApi.getType(type)
+      return res.data as HelperTypeDefinition
+    },
+    enabled: !!type,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
 export function useExecutions(params?: ListExecutionsParams) {
   return useQuery({
     queryKey: ['executions', params],
@@ -80,7 +120,7 @@ export function useExecutionsPaginated(params?: ListExecutionsParams) {
     queryKey: ['executions', 'paginated', params],
     queryFn: async () => {
       const res = await helpersApi.listExecutions(params)
-      return res.data ?? { executions: [], total_count: 0, has_more: false }
+      return res.data ?? { executions: [], totalCount: 0, hasMore: false }
     },
   })
 }

@@ -18,6 +18,8 @@ import {
 } from '@/lib/helpers-catalog'
 import { useCreateHelper } from '@/lib/hooks/use-helpers'
 import { useConnections } from '@/lib/hooks/use-connections'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 interface HelperBuilderProps {
   initialType?: string
@@ -77,7 +79,7 @@ export function HelperBuilder({ initialType, onBack, onCreated }: HelperBuilderP
       },
       {
         onSuccess: (res) => {
-          const id = res.data?.id
+          const id = res.data?.helperId
           if (id) {
             onCreated(id)
           } else {
@@ -92,12 +94,9 @@ export function HelperBuilder({ initialType, onBack, onCreated }: HelperBuilderP
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button
-          onClick={handleBack}
-          className="rounded-md p-2 hover:bg-accent"
-        >
+        <Button variant="ghost" size="icon" onClick={handleBack}>
           <ArrowLeft className="h-4 w-4" />
-        </button>
+        </Button>
         <div>
           <h1 className="text-2xl font-bold">
             {step === 'select' ? 'Create New Helper' : 'Configure Helper'}
@@ -152,12 +151,12 @@ export function HelperBuilder({ initialType, onBack, onCreated }: HelperBuilderP
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
+            <Input
               type="text"
               placeholder="Search available helpers..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-10 w-full rounded-md border border-input bg-background pl-10 pr-4 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="pl-10"
               autoFocus
             />
           </div>
@@ -298,12 +297,11 @@ function HelperConfigForm({
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Helper Name</label>
-          <input
+          <Input
             type="text"
             value={helperName}
             onChange={(e) => setHelperName(e.target.value)}
             placeholder="Give your helper a name..."
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
 
@@ -318,8 +316,8 @@ function HelperConfigForm({
               <option value="">Select a connection...</option>
               {connections && connections.length > 0 ? (
                 connections.map((conn) => (
-                  <option key={conn.id} value={conn.id}>
-                    {conn.name || conn.platform} ({conn.status})
+                  <option key={conn.connectionId} value={conn.connectionId}>
+                    {conn.name || conn.platformId} ({conn.status})
                   </option>
                 ))
               ) : (
@@ -348,20 +346,16 @@ function HelperConfigForm({
           <span>You can edit configuration after creation</span>
         </div>
         <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-accent"
-          >
+          <Button variant="outline" onClick={onCancel}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={onSubmit}
             disabled={isSubmitting || !helperName.trim()}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
             {isSubmitting ? 'Creating...' : 'Create Helper'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -646,16 +640,462 @@ function HelperTypeConfig({
         </div>
       )
 
-    default:
+    case 'clear_it':
       return (
-        <div className="rounded-md border border-dashed p-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Configuration fields will be dynamically generated based on the helper schema.
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            This helper supports JSON configuration which can be edited after creation.
-          </p>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Fields to Clear</label>
+            <input
+              type="text"
+              placeholder="Field keys separated by commas (e.g., custom_1, custom_2)"
+              className={inputClass}
+              onChange={(e) => setConfig('fields', e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Comma-separated list of field keys to clear to empty
+            </p>
+          </div>
         </div>
       )
+
+    case 'merge_it':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Source Fields</label>
+            <input
+              type="text"
+              placeholder="Field keys separated by commas (e.g., first_name, last_name)"
+              className={inputClass}
+              onChange={(e) => setConfig('source_fields', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Target Field</label>
+            <input
+              type="text"
+              placeholder="Field to store the merged value"
+              className={inputClass}
+              onChange={(e) => setConfig('target_field', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Separator</label>
+            <input
+              type="text"
+              placeholder="e.g., a space ' ' or comma ','"
+              defaultValue=" "
+              className={inputClass}
+              onChange={(e) => setConfig('separator', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'text_it':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Field</label>
+            <input
+              type="text"
+              placeholder="Field key to manipulate..."
+              className={inputClass}
+              onChange={(e) => setConfig('field', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Operation</label>
+            <select
+              className={selectClass}
+              defaultValue="prepend"
+              onChange={(e) => setConfig('operation', e.target.value)}
+            >
+              <option value="prepend">Prepend Text</option>
+              <option value="append">Append Text</option>
+              <option value="replace">Find & Replace</option>
+              <option value="extract">Extract (regex)</option>
+              <option value="truncate">Truncate</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Value</label>
+            <input
+              type="text"
+              placeholder="Text to prepend/append, or search pattern..."
+              className={inputClass}
+              onChange={(e) => setConfig('value', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'found_it':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Field to Check</label>
+            <input
+              type="text"
+              placeholder="Field key to check if populated..."
+              className={inputClass}
+              onChange={(e) => setConfig('field', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Found Tag ID</label>
+            <input
+              type="text"
+              placeholder="Tag to apply if field is populated"
+              className={inputClass}
+              onChange={(e) => setConfig('found_tag_id', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Not Found Tag ID</label>
+            <input
+              type="text"
+              placeholder="Tag to apply if field is empty (optional)"
+              className={inputClass}
+              onChange={(e) => setConfig('not_found_tag_id', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'trigger_it':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Automation Type</label>
+            <select
+              className={selectClass}
+              defaultValue="campaign"
+              onChange={(e) => setConfig('automation_type', e.target.value)}
+            >
+              <option value="campaign">Campaign Sequence</option>
+              <option value="workflow">Workflow</option>
+              <option value="goal">Campaign Goal</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Automation ID</label>
+            <input
+              type="text"
+              placeholder="ID of the campaign, workflow, or goal"
+              className={inputClass}
+              onChange={(e) => setConfig('automation_id', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'hook_it':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Webhook URL</label>
+            <input
+              type="url"
+              placeholder="https://example.com/webhook"
+              className={inputClass}
+              onChange={(e) => setConfig('url', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">HTTP Method</label>
+            <select
+              className={selectClass}
+              defaultValue="POST"
+              onChange={(e) => setConfig('method', e.target.value)}
+            >
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Include Fields</label>
+            <input
+              type="text"
+              placeholder="Fields to send (comma-separated, or 'all')"
+              defaultValue="all"
+              className={inputClass}
+              onChange={(e) => setConfig('fields', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'slack_it':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Channel</label>
+            <input
+              type="text"
+              placeholder="#general or @username"
+              className={inputClass}
+              onChange={(e) => setConfig('channel', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Message Template</label>
+            <textarea
+              rows={3}
+              placeholder="Message template (supports {{field_name}} merge)..."
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              onChange={(e) => setConfig('message', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'google_sheet_it':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Spreadsheet ID</label>
+            <input
+              type="text"
+              placeholder="Google Sheets spreadsheet ID"
+              className={inputClass}
+              onChange={(e) => setConfig('spreadsheet_id', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Sheet Name</label>
+            <input
+              type="text"
+              placeholder="e.g., Sheet1"
+              defaultValue="Sheet1"
+              className={inputClass}
+              onChange={(e) => setConfig('sheet_name', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Fields to Sync</label>
+            <input
+              type="text"
+              placeholder="Comma-separated field keys (or 'all')"
+              defaultValue="all"
+              className={inputClass}
+              onChange={(e) => setConfig('fields', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'assign_it':
+    case 'own_it':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Assignment Mode</label>
+            <select
+              className={selectClass}
+              defaultValue="specific"
+              onChange={(e) => setConfig('mode', e.target.value)}
+            >
+              <option value="specific">Specific Owner</option>
+              <option value="round_robin">Round Robin</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Owner ID(s)</label>
+            <input
+              type="text"
+              placeholder="Owner user ID (or comma-separated for round-robin)"
+              className={inputClass}
+              onChange={(e) => setConfig('owner_ids', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'split_it':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Group A Tag ID</label>
+            <input
+              type="text"
+              placeholder="Tag to apply for group A"
+              className={inputClass}
+              onChange={(e) => setConfig('group_a_tag', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Group B Tag ID</label>
+            <input
+              type="text"
+              placeholder="Tag to apply for group B"
+              className={inputClass}
+              onChange={(e) => setConfig('group_b_tag', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Split Ratio</label>
+            <select
+              className={selectClass}
+              defaultValue="50"
+              onChange={(e) => setConfig('ratio', Number(e.target.value))}
+            >
+              <option value="50">50/50</option>
+              <option value="60">60/40</option>
+              <option value="70">70/30</option>
+              <option value="80">80/20</option>
+              <option value="90">90/10</option>
+            </select>
+          </div>
+        </div>
+      )
+
+    case 'chain_it':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Helper IDs to Chain</label>
+            <textarea
+              rows={3}
+              placeholder="Enter helper IDs, one per line, in execution order..."
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              onChange={(e) =>
+                setConfig(
+                  'helper_ids',
+                  e.target.value.split('\n').filter(Boolean)
+                )
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Helpers will execute in sequence. If one fails, the chain stops.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="stop_on_error"
+              defaultChecked
+              className="rounded"
+              onChange={(e) => setConfig('stop_on_error', e.target.checked)}
+            />
+            <label htmlFor="stop_on_error" className="text-sm">
+              Stop chain on first error
+            </label>
+          </div>
+        </div>
+      )
+
+    default:
+      return <DynamicSchemaForm helper={helper} configRef={configRef} />
   }
+}
+
+/**
+ * Fallback form that generates inputs dynamically based on the helper type.
+ * For helpers without a custom config form, this provides a structured
+ * set of common fields based on the helper's category.
+ */
+function DynamicSchemaForm({
+  helper,
+  configRef,
+}: {
+  helper: HelperDefinition
+  configRef: React.MutableRefObject<Record<string, unknown>>
+}) {
+  const inputClass =
+    'h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+  const setConfig = (key: string, value: unknown) => {
+    configRef.current = { ...configRef.current, [key]: value }
+  }
+
+  // Generate common config fields based on category
+  const commonFields: Array<{
+    key: string
+    label: string
+    placeholder: string
+    type: 'text' | 'number' | 'textarea'
+  }> = []
+
+  if (helper.category === 'contact' || helper.category === 'data') {
+    commonFields.push(
+      { key: 'field', label: 'Field', placeholder: 'CRM field key (e.g., custom_field_1)', type: 'text' },
+      { key: 'target_field', label: 'Target Field', placeholder: 'Target field key (optional)', type: 'text' }
+    )
+  }
+
+  if (helper.category === 'tagging') {
+    commonFields.push(
+      { key: 'tag_ids', label: 'Tag IDs', placeholder: 'Comma-separated tag IDs', type: 'text' }
+    )
+  }
+
+  if (helper.category === 'automation') {
+    commonFields.push(
+      { key: 'automation_id', label: 'Automation ID', placeholder: 'ID of the automation to trigger', type: 'text' }
+    )
+  }
+
+  if (helper.category === 'integration') {
+    commonFields.push(
+      { key: 'url', label: 'URL / Endpoint', placeholder: 'Service URL or endpoint', type: 'text' }
+    )
+  }
+
+  if (helper.category === 'notification') {
+    commonFields.push(
+      { key: 'recipient', label: 'Recipient', placeholder: 'Email, channel, or destination', type: 'text' },
+      { key: 'message', label: 'Message Template', placeholder: 'Message (supports {{field_name}} merge fields)', type: 'textarea' }
+    )
+  }
+
+  if (helper.category === 'analytics') {
+    commonFields.push(
+      { key: 'target_field', label: 'Target Field', placeholder: 'Field to store the result', type: 'text' }
+    )
+  }
+
+  if (commonFields.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed p-6 text-center">
+        <p className="text-sm text-muted-foreground">
+          This helper can be configured with JSON after creation.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        Common configuration for {helper.category} helpers. Additional settings can be edited as JSON after creation.
+      </p>
+      {commonFields.map((field) => (
+        <div key={field.key} className="space-y-2">
+          <label className="text-sm font-medium">{field.label}</label>
+          {field.type === 'textarea' ? (
+            <textarea
+              rows={3}
+              placeholder={field.placeholder}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              onChange={(e) => setConfig(field.key, e.target.value)}
+            />
+          ) : (
+            <input
+              type={field.type}
+              placeholder={field.placeholder}
+              className={inputClass}
+              onChange={(e) =>
+                setConfig(
+                  field.key,
+                  field.type === 'number' ? Number(e.target.value) : e.target.value
+                )
+              }
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  )
 }

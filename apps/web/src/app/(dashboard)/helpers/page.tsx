@@ -3,11 +3,14 @@
 import { Suspense, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
+import { Blocks, Grid3X3 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { MyHelpersList } from './_components/my-helpers-list'
 import { HelpersCatalog } from './_components/helpers-catalog'
 import { HelperDetail } from './_components/helper-detail'
 import { HelperBuilder } from './_components/helper-builder'
 
-type HelperView = 'catalog' | 'detail' | 'new'
+type HelperView = 'my-helpers' | 'catalog' | 'detail' | 'new'
 
 const slideIn = {
   initial: { opacity: 0, x: 24 },
@@ -30,13 +33,14 @@ function HelpersContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
 
-  const view: HelperView = (searchParams.get('view') as HelperView) || 'catalog'
+  const view: HelperView =
+    (searchParams.get('view') as HelperView) || 'my-helpers'
   const helperId = searchParams.get('id') || ''
 
   const navigate = useCallback(
     (newView: HelperView, id?: string) => {
       const params = new URLSearchParams()
-      if (newView !== 'catalog') params.set('view', newView)
+      if (newView !== 'my-helpers') params.set('view', newView)
       if (id) params.set('id', id)
       const qs = params.toString()
       router.push(`/helpers${qs ? `?${qs}` : ''}`, { scroll: false })
@@ -44,54 +48,94 @@ function HelpersContent() {
     [router]
   )
 
+  const isListView = view === 'my-helpers' || view === 'catalog'
+
   return (
-    <AnimatePresence mode="wait">
-      {view === 'catalog' && (
-        <motion.div
-          key="catalog"
-          {...slideBack}
-          transition={transition}
-        >
-          <HelpersCatalog
-            onSelectHelper={(id) => navigate('new', id)}
-            onNewHelper={() => navigate('new')}
-          />
-        </motion.div>
+    <div>
+      {/* Tabs — only visible in list views */}
+      {isListView && (
+        <div className="mb-6 flex items-center gap-1 rounded-lg bg-muted p-1 w-fit">
+          <button
+            onClick={() => navigate('my-helpers')}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors',
+              view === 'my-helpers'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Blocks className="h-4 w-4" />
+            My Helpers
+          </button>
+          <button
+            onClick={() => navigate('catalog')}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors',
+              view === 'catalog'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Grid3X3 className="h-4 w-4" />
+            Catalog
+          </button>
+        </div>
       )}
 
-      {view === 'detail' && helperId && (
-        <motion.div
-          key={`detail-${helperId}`}
-          {...slideIn}
-          transition={transition}
-        >
-          <HelperDetail
-            helperId={helperId}
-            onBack={() => navigate('catalog')}
-          />
-        </motion.div>
-      )}
+      <AnimatePresence mode="wait">
+        {view === 'my-helpers' && (
+          <motion.div key="my-helpers" {...slideBack} transition={transition}>
+            <MyHelpersList
+              onSelectHelper={(id) => navigate('detail', id)}
+              onNewHelper={() => navigate('catalog')}
+            />
+          </motion.div>
+        )}
 
-      {view === 'new' && (
-        <motion.div
-          key={`new-${helperId}`}
-          {...slideIn}
-          transition={transition}
-        >
-          <HelperBuilder
-            initialType={helperId || undefined}
-            onBack={() => navigate('catalog')}
-            onCreated={(id) => navigate('detail', id)}
-          />
-        </motion.div>
-      )}
-    </AnimatePresence>
+        {view === 'catalog' && (
+          <motion.div key="catalog" {...slideBack} transition={transition}>
+            <HelpersCatalog
+              onSelectHelper={(id) => navigate('new', id)}
+              onNewHelper={() => navigate('new')}
+            />
+          </motion.div>
+        )}
+
+        {view === 'detail' && helperId && (
+          <motion.div
+            key={`detail-${helperId}`}
+            {...slideIn}
+            transition={transition}
+          >
+            <HelperDetail
+              helperId={helperId}
+              onBack={() => navigate('my-helpers')}
+            />
+          </motion.div>
+        )}
+
+        {view === 'new' && (
+          <motion.div
+            key={`new-${helperId}`}
+            {...slideIn}
+            transition={transition}
+          >
+            <HelperBuilder
+              initialType={helperId || undefined}
+              onBack={() => navigate('catalog')}
+              onCreated={(id) => navigate('detail', id)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
 
 function HelpersSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
+      <div className="h-11 w-64 rounded-lg bg-muted" />
       <div className="flex items-center justify-between">
         <div>
           <div className="h-7 w-32 rounded bg-muted" />
@@ -99,15 +143,15 @@ function HelpersSkeleton() {
         </div>
         <div className="h-10 w-32 rounded-md bg-muted" />
       </div>
-      <div className="h-10 w-full rounded-md bg-muted" />
-      <div className="flex gap-2">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-9 w-24 rounded-full bg-muted" />
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-20 rounded-lg bg-muted" />
         ))}
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-          <div key={i} className="h-36 rounded-lg bg-muted" />
+      <div className="h-10 w-full rounded-md bg-muted" />
+      <div className="space-y-3">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-[72px] rounded-lg bg-muted" />
         ))}
       </div>
     </div>
