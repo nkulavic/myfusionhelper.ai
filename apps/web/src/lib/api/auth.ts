@@ -13,6 +13,16 @@ export interface RegisterInput {
   phoneNumber: string
 }
 
+export interface ForgotPasswordInput {
+  email: string
+}
+
+export interface ResetPasswordInput {
+  email: string
+  code: string
+  newPassword: string
+}
+
 export interface AuthStatusResponse {
   user: User
   account: Account
@@ -39,4 +49,10 @@ export const authApi = {
 
   refresh: () =>
     apiClient.post<{ token: string }>('/auth/refresh'),
+
+  forgotPassword: (input: ForgotPasswordInput) =>
+    apiClient.post<void>('/auth/forgot-password', input),
+
+  resetPassword: (input: ResetPasswordInput) =>
+    apiClient.post<void>('/auth/reset-password', input),
 }

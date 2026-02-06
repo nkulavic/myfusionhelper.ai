@@ -1,5 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { authApi, type LoginInput, type RegisterInput } from '@/lib/api/auth'
+import {
+  authApi,
+  type LoginInput,
+  type RegisterInput,
+  type ForgotPasswordInput,
+  type ResetPasswordInput,
+} from '@/lib/api/auth'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useWorkspaceStore } from '@/lib/stores/workspace-store'
 
@@ -40,6 +46,18 @@ export function useRegister() {
         setAccount(res.data.account)
       }
     },
+  })
+}
+
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: (input: ForgotPasswordInput) => authApi.forgotPassword(input),
+  })
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: (input: ResetPasswordInput) => authApi.resetPassword(input),
   })
 }
 
