@@ -6,7 +6,7 @@ export function useConnections() {
     queryKey: ['connections'],
     queryFn: async () => {
       const res = await connectionsApi.list()
-      return res.data ?? []
+      return Array.isArray(res.data) ? res.data : []
     },
   })
 }
@@ -27,7 +27,7 @@ export function usePlatforms() {
     queryKey: ['platforms'],
     queryFn: async () => {
       const res = await connectionsApi.listPlatforms()
-      return res.data ?? []
+      return Array.isArray(res.data) ? res.data : []
     },
   })
 }
