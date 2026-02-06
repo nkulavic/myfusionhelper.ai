@@ -91,8 +91,12 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		iter := subscription.List(params)
 		if iter.Next() {
 			sub := iter.Subscription()
-			if sub.CurrentPeriodEnd > 0 {
-				resp.RenewsAt = &sub.CurrentPeriodEnd
+			// In stripe-go v82, CurrentPeriodEnd moved to SubscriptionItem
+			if sub.Items != nil && len(sub.Items.Data) > 0 {
+				periodEnd := sub.Items.Data[0].CurrentPeriodEnd
+				if periodEnd > 0 {
+					resp.RenewsAt = &periodEnd
+				}
 			}
 			if sub.TrialEnd > 0 {
 				resp.TrialEndsAt = &sub.TrialEnd

@@ -10,6 +10,7 @@ import (
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 
 	// Protected endpoints (require auth)
+	checkoutClient "github.com/myfusionhelper/api/cmd/handlers/billing/clients/checkout"
 	getBillingClient "github.com/myfusionhelper/api/cmd/handlers/billing/clients/get-billing"
 	invoicesClient "github.com/myfusionhelper/api/cmd/handlers/billing/clients/invoices"
 	portalClient "github.com/myfusionhelper/api/cmd/handlers/billing/clients/portal-session"
@@ -43,6 +44,8 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return routeToProtectedHandler(ctx, event, portalClient.HandleWithAuth)
 	case "/billing/invoices":
 		return routeToProtectedHandler(ctx, event, invoicesClient.HandleWithAuth)
+	case "/billing/checkout/sessions":
+		return routeToProtectedHandler(ctx, event, checkoutClient.HandleWithAuth)
 
 	// Public endpoint (Stripe webhook -- verified by signature, not JWT)
 	case "/billing/webhook":
