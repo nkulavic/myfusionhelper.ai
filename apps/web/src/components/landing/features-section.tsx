@@ -63,7 +63,7 @@ export function FeaturesSection() {
         <motion.div
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, margin: '-100px' }}
+          viewport={{ once: true, amount: 0.1 }}
           variants={staggerContainer}
           className="text-center"
         >
@@ -91,7 +91,7 @@ export function FeaturesSection() {
         <motion.div
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, margin: '-50px' }}
+          viewport={{ once: true, amount: 0.05 }}
           variants={staggerContainer}
           className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
         >
