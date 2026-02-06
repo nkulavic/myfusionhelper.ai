@@ -4,6 +4,7 @@ import { Suspense, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Blocks, Grid3X3 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { MyHelpersList } from './_components/my-helpers-list'
 import { HelpersCatalog } from './_components/helpers-catalog'
@@ -54,30 +55,30 @@ function HelpersContent() {
       {/* Tabs -- only visible in list views */}
       {isListView && (
         <div className="mb-6 flex items-center gap-1 rounded-lg bg-muted p-1 w-fit">
-          <button
+          <Button
+            variant="ghost"
             onClick={() => navigate('my-helpers')}
             className={cn(
-              'inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors',
               view === 'my-helpers'
-                ? 'bg-background text-foreground shadow-sm'
+                ? 'bg-background text-foreground shadow-sm hover:bg-background'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
             <Blocks className="h-4 w-4" />
             My Helpers
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
             onClick={() => navigate('catalog')}
             className={cn(
-              'inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors',
               view === 'catalog'
-                ? 'bg-background text-foreground shadow-sm'
+                ? 'bg-background text-foreground shadow-sm hover:bg-background'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
             <Grid3X3 className="h-4 w-4" />
             Catalog
-          </button>
+          </Button>
         </div>
       )}
 

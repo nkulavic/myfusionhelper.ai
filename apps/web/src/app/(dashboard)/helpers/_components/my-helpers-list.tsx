@@ -13,13 +13,27 @@ import {
   AlertTriangle,
   ChevronRight,
   MoreVertical,
+  Play,
+  Loader2,
+  XCircle,
+  ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useHelpers, useHelperTypes, useUpdateHelper, useDeleteHelper } from '@/lib/hooks/use-helpers'
+import Link from 'next/link'
+import { useHelpers, useHelperTypes, useUpdateHelper, useDeleteHelper, useExecuteHelper } from '@/lib/hooks/use-helpers'
 import { helpersCatalog } from '@/lib/helpers-catalog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import type { Helper } from '@myfusionhelper/types'
 
 interface MyHelpersListProps {
@@ -246,115 +260,260 @@ function HelperRow({
   isDeleting: boolean
 }) {
   const [showActions, setShowActions] = useState(false)
+  const [showRunDialog, setShowRunDialog] = useState(false)
   const template = helpersCatalog.find((h) => h.id === helper.helperType)
 
   return (
-    <div
-      className={cn(
-        'group relative flex items-center gap-4 rounded-lg border bg-card p-4 transition-all hover:shadow-sm',
-        !helper.enabled && 'opacity-70'
-      )}
-    >
-      {/* Icon */}
-      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10">
-        {template ? (
-          <template.icon className="h-5 w-5 text-primary" />
-        ) : (
-          <Blocks className="h-5 w-5 text-primary" />
+    <>
+      <div
+        className={cn(
+          'group relative flex items-center gap-4 rounded-lg border bg-card p-4 transition-all hover:shadow-sm',
+          !helper.enabled && 'opacity-70'
         )}
-      </div>
-
-      {/* Content */}
-      <button
-        onClick={onSelect}
-        className="flex flex-1 items-center gap-4 text-left min-w-0"
       >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold truncate group-hover:text-primary">
-              {helper.name}
-            </h3>
-            <span
-              className={cn(
-                'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                helper.enabled
-                  ? 'bg-success/10 text-success'
-                  : 'bg-muted text-muted-foreground'
+        {/* Icon */}
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10">
+          {template ? (
+            <template.icon className="h-5 w-5 text-primary" />
+          ) : (
+            <Blocks className="h-5 w-5 text-primary" />
+          )}
+        </div>
+
+        {/* Content */}
+        <button
+          onClick={onSelect}
+          className="flex flex-1 items-center gap-4 text-left min-w-0"
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold truncate group-hover:text-primary">
+                {helper.name}
+              </h3>
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                  helper.enabled
+                    ? 'bg-success/10 text-success'
+                    : 'bg-muted text-muted-foreground'
+                )}
+              >
+                {helper.enabled ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+            <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="capitalize">{helper.category}</span>
+              <span className="text-border">|</span>
+              <span>{typeName || template?.name || helper.helperType}</span>
+              {helper.executionCount > 0 && (
+                <>
+                  <span className="text-border">|</span>
+                  <span>{helper.executionCount.toLocaleString()} runs</span>
+                </>
               )}
-            >
-              {helper.enabled ? 'Active' : 'Inactive'}
-            </span>
+            </div>
           </div>
-          <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="capitalize">{helper.category}</span>
-            <span className="text-border">|</span>
-            <span>{typeName || template?.name || helper.helperType}</span>
-            {helper.executionCount > 0 && (
+          <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 group-hover:text-primary" />
+        </button>
+
+        {/* Quick Actions */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowRunDialog(true)}
+            className="rounded-md p-2 text-muted-foreground hover:bg-primary/10 hover:text-primary disabled:opacity-50"
+            title="Run helper"
+          >
+            <Play className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onToggle}
+            disabled={isToggling}
+            className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+            title={helper.enabled ? 'Disable' : 'Enable'}
+          >
+            {helper.enabled ? (
+              <ToggleRight className="h-4 w-4 text-success" />
+            ) : (
+              <ToggleLeft className="h-4 w-4" />
+            )}
+          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowActions(!showActions)}
+              className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+            {showActions && (
               <>
-                <span className="text-border">|</span>
-                <span>{helper.executionCount.toLocaleString()} runs</span>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowActions(false)}
+                />
+                <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border bg-popover py-1 shadow-md">
+                  <button
+                    onClick={() => {
+                      setShowRunDialog(true)
+                      setShowActions(false)
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent"
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                    Run
+                  </button>
+                  <button
+                    onClick={() => {
+                      onSelect()
+                      setShowActions(false)
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent"
+                  >
+                    <Settings className="h-3.5 w-3.5" />
+                    Configure
+                  </button>
+                  <button
+                    onClick={() => {
+                      onDelete()
+                      setShowActions(false)
+                    }}
+                    disabled={isDeleting}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {isDeleting ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
               </>
             )}
           </div>
         </div>
-        <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 group-hover:text-primary" />
-      </button>
+      </div>
 
-      {/* Quick Actions */}
-      <div className="flex items-center gap-1">
-        <button
-          onClick={onToggle}
-          disabled={isToggling}
-          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
-          title={helper.enabled ? 'Disable' : 'Enable'}
-        >
-          {helper.enabled ? (
-            <ToggleRight className="h-4 w-4 text-success" />
-          ) : (
-            <ToggleLeft className="h-4 w-4" />
-          )}
-        </button>
-        <div className="relative">
-          <button
-            onClick={() => setShowActions(!showActions)}
-            className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
-            <MoreVertical className="h-4 w-4" />
-          </button>
-          {showActions && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowActions(false)}
-              />
-              <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border bg-popover py-1 shadow-md">
-                <button
-                  onClick={() => {
-                    onSelect()
-                    setShowActions(false)
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent"
+      <RunHelperDialog
+        helperId={helper.helperId}
+        helperName={helper.name}
+        open={showRunDialog}
+        onOpenChange={setShowRunDialog}
+      />
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Run Helper Dialog (shared quick-execute UI)
+// ---------------------------------------------------------------------------
+function RunHelperDialog({
+  helperId,
+  helperName,
+  open,
+  onOpenChange,
+}: {
+  helperId: string
+  helperName: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const executeHelper = useExecuteHelper()
+  const [contactId, setContactId] = useState('')
+  const [executionId, setExecutionId] = useState<string | null>(null)
+
+  const handleRun = () => {
+    if (!contactId.trim()) return
+    setExecutionId(null)
+    executeHelper.mutate(
+      { id: helperId, input: { contactId: contactId.trim() } },
+      {
+        onSuccess: (res) => {
+          setExecutionId(res.data?.executionId ?? null)
+        },
+      }
+    )
+  }
+
+  const handleClose = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setContactId('')
+      setExecutionId(null)
+      executeHelper.reset()
+    }
+    onOpenChange(nextOpen)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Run Helper</DialogTitle>
+          <DialogDescription>
+            Execute &ldquo;{helperName}&rdquo; against a specific contact.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label htmlFor="run-contact-id">Contact ID</Label>
+            <Input
+              id="run-contact-id"
+              value={contactId}
+              onChange={(e) => setContactId(e.target.value)}
+              placeholder="Enter CRM contact ID..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRun()
+              }}
+            />
+          </div>
+
+          {executeHelper.isSuccess && executionId && (
+            <div className="flex items-start gap-2 rounded-md border border-success/30 bg-success/10 p-3">
+              <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+              <div className="flex-1 text-sm">
+                <p className="font-medium text-success">Execution started</p>
+                <Link
+                  href={`/executions/${executionId}`}
+                  className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
                 >
-                  <Settings className="h-3.5 w-3.5" />
-                  Configure
-                </button>
-                <button
-                  onClick={() => {
-                    onDelete()
-                    setShowActions(false)
-                  }}
-                  disabled={isDeleting}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {isDeleting ? 'Deleting...' : 'Delete'}
-                </button>
+                  View execution details
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
               </div>
-            </>
+            </div>
+          )}
+
+          {executeHelper.isError && (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3">
+              <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              <div className="flex-1 text-sm">
+                <p className="font-medium text-destructive">Execution failed</p>
+                <p className="mt-0.5 text-xs text-destructive/80">
+                  {executeHelper.error instanceof Error
+                    ? executeHelper.error.message
+                    : 'Something went wrong. Please try again.'}
+                </p>
+              </div>
+            </div>
           )}
         </div>
-      </div>
-    </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => handleClose(false)}>
+            {executionId ? 'Close' : 'Cancel'}
+          </Button>
+          <Button
+            onClick={handleRun}
+            disabled={!contactId.trim() || executeHelper.isPending}
+          >
+            {executeHelper.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            {executeHelper.isPending
+              ? 'Running...'
+              : executeHelper.isError
+                ? 'Retry'
+                : 'Run Now'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
