@@ -216,6 +216,7 @@ jobs:
       matrix:
         service:
           - helper-worker
+          - notification-worker
           - data-sync
     steps:
       - uses: actions/checkout@v4
