@@ -68,10 +68,11 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		return authMiddleware.CreateErrorResponse(400, "No billing account found. Please subscribe to a plan first."), nil
 	}
 
-	returnURL := appURL + "/settings"
-	if appURL == "" {
-		returnURL = "https://app.myfusionhelper.ai/settings"
+	baseURL := appURL
+	if baseURL == "" {
+		baseURL = "https://app.myfusionhelper.ai"
 	}
+	returnURL := baseURL + "/settings?tab=billing"
 
 	stripe.Key = stripeKey
 	params := &stripe.BillingPortalSessionParams{

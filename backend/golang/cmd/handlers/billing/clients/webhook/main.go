@@ -284,16 +284,11 @@ func updateAccountByStripeCustomer(ctx context.Context, stripeCustomerID, plan, 
 
 	dbClient := dynamodb.NewFromConfig(cfg)
 
-	// Query accounts by stripe_customer_id using a scan with filter
-	// In production, you'd add a GSI on stripe_customer_id. For now, we use the
-	// fact that we know the account_id from the subscription metadata.
-	// This is a simplified approach -- in a full implementation, store account_id
-	// in Stripe subscription metadata during checkout creation.
-
-	// For now, scan with filter (acceptable for low volume)
-	scanResult, err := dbClient.Scan(ctx, &dynamodb.ScanInput{
-		TableName:        aws.String(accountsTable),
-		FilterExpression: aws.String("stripe_customer_id = :cid"),
+	// Query accounts by stripe_customer_id using StripeCustomerIdIndex GSI
+	queryResult, err := dbClient.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(accountsTable),
+		IndexName:              aws.String("StripeCustomerIdIndex"),
+		KeyConditionExpression: aws.String("stripe_customer_id = :cid"),
 		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
 			":cid": &ddbtypes.AttributeValueMemberS{Value: stripeCustomerID},
 		},
@@ -302,13 +297,13 @@ func updateAccountByStripeCustomer(ctx context.Context, stripeCustomerID, plan, 
 	if err != nil {
 		return "", err
 	}
-	if len(scanResult.Items) == 0 {
+	if len(queryResult.Items) == 0 {
 		log.Printf("No account found for Stripe customer %s", stripeCustomerID)
 		return "", nil
 	}
 
 	// Get the account_id and owner_user_id from the result
-	accountIDAttr, ok := scanResult.Items[0]["account_id"]
+	accountIDAttr, ok := queryResult.Items[0]["account_id"]
 	if !ok {
 		log.Printf("Account missing account_id field")
 		return "", nil
@@ -316,7 +311,7 @@ func updateAccountByStripeCustomer(ctx context.Context, stripeCustomerID, plan, 
 	accountID := accountIDAttr.(*ddbtypes.AttributeValueMemberS).Value
 
 	ownerUserID := ""
-	if ownerAttr, ok := scanResult.Items[0]["owner_user_id"]; ok {
+	if ownerAttr, ok := queryResult.Items[0]["owner_user_id"]; ok {
 		ownerUserID = ownerAttr.(*ddbtypes.AttributeValueMemberS).Value
 	}
 
