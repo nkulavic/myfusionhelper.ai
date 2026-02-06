@@ -1,102 +1,155 @@
 'use client'
 
-import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { useLogin } from '@/lib/hooks/use-auth'
+import { APIError } from '@/lib/api/client'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form'
+import { AlertCircle, Loader2 } from 'lucide-react'
+import { useState, useCallback } from 'react'
+
+const loginSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(1, 'Password is required'),
+})
+
+type LoginFormValues = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [errorKey, setErrorKey] = useState(0)
   const loginMutation = useLogin()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
+  const showError = useCallback((message: string) => {
+    setError(message)
+    setErrorKey((k) => k + 1)
+  }, [])
 
-    loginMutation.mutate(
-      { email, password },
-      {
-        onSuccess: () => {
-          router.push('/helpers')
-        },
-        onError: (err) => {
-          const message = err instanceof Error ? err.message : 'An error occurred'
-          setError(message)
-        },
-      }
-    )
+  const form = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    mode: 'onTouched',
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  })
+
+  function onSubmit(values: LoginFormValues) {
+    setError('')
+    loginMutation.mutate(values, {
+      onSuccess: () => {
+        router.push('/helpers')
+      },
+      onError: (err) => {
+        if (err instanceof APIError) {
+          switch (err.statusCode) {
+            case 401:
+              showError('Invalid email or password')
+              break
+            case 429:
+              showError('Too many attempts. Please try again later.')
+              break
+            default:
+              showError(err.message)
+          }
+        } else {
+          showError('An error occurred. Please try again.')
+        }
+      },
+    })
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <Link href="/" className="flex items-center gap-2 font-bold">
+    <Card>
+      <CardHeader className="text-center">
+        <Link href="/" className="mx-auto mb-2 flex items-center gap-2 font-bold">
           <Image src="/logo.png" alt="MyFusion Helper" width={180} height={23} className="dark:brightness-0 dark:invert" />
         </Link>
-        <h1 className="text-2xl font-bold">Welcome back</h1>
-        <p className="text-sm text-muted-foreground">Enter your credentials to sign in</p>
-      </div>
+        <CardTitle className="text-2xl">Welcome back</CardTitle>
+        <CardDescription>Enter your credentials to sign in</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {error && (
+          <Alert
+            key={errorKey}
+            variant="destructive"
+            className="mb-4 animate-shake border-destructive/30 bg-destructive/10"
+          >
+            <AlertCircle className="h-4 w-4 text-destructive" />
+            <AlertDescription className="animate-fade-in font-medium text-destructive">
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {error && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="name@example.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Password</FormLabel>
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm text-muted-foreground hover:text-foreground"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+                  <FormControl>
+                    <Input type="password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
+              {loginMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loginMutation.isPending ? 'Signing in...' : 'Sign in'}
+            </Button>
+          </form>
+        </Form>
+
+        <div className="mt-6 text-center text-sm">
+          Don&apos;t have an account?{' '}
+          <Link href="/register" className="font-medium text-primary hover:underline">
+            Sign up
+          </Link>
         </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <label htmlFor="email" className="text-sm font-medium">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="name@example.com"
-            required
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <label htmlFor="password" className="text-sm font-medium">
-              Password
-            </label>
-            <Link href="/forgot-password" className="text-sm text-muted-foreground hover:text-foreground">
-              Forgot password?
-            </Link>
-          </div>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={loginMutation.isPending}
-          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50"
-        >
-          {loginMutation.isPending ? 'Signing in...' : 'Sign in'}
-        </button>
-      </form>
-
-      <div className="text-center text-sm">
-        Don&apos;t have an account?{' '}
-        <Link href="/register" className="font-medium text-primary hover:underline">
-          Sign up
-        </Link>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }
