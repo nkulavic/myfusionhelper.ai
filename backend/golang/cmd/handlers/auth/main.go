@@ -11,6 +11,7 @@ import (
 
 	// Protected endpoints (require auth)
 	logoutClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/logout"
+	passwordClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/password"
 	profileClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/profile"
 	statusClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/status"
 
@@ -49,6 +50,8 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return routeToProtectedHandler(ctx, event, profileClient.HandleWithAuth)
 	case "/auth/logout":
 		return routeToProtectedHandler(ctx, event, logoutClient.HandleWithAuth)
+	case "/auth/password":
+		return routeToProtectedHandler(ctx, event, passwordClient.HandleWithAuth)
 
 	// Public endpoints
 	case "/auth/health":

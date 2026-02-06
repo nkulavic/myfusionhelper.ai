@@ -161,6 +161,25 @@ functions:
           authorizer:
             id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
+  auth-password:
+    handler: cmd/handlers/auth/main.go
+    description: "Change user password"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-password
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-password
+      ENDPOINT_PATH: /auth/password
+    events:
+      - httpApi:
+          path: /auth/password
+          method: put
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
   auth-refresh:
     handler: cmd/handlers/auth/main.go
     description: "Token refresh"
