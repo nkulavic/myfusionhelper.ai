@@ -752,7 +752,7 @@ function BillingTab() {
     createPortal.mutate(undefined, {
       onSuccess: (res: { data?: { url: string } }) => {
         if (res.data?.url) {
-          window.open(res.data.url, '_blank')
+          window.location.href = res.data.url
         }
       },
     })
@@ -763,7 +763,7 @@ function BillingTab() {
     createCheckout.mutate(planId, {
       onSuccess: (res) => {
         if (res.data?.url) {
-          window.open(res.data.url, '_blank')
+          window.location.href = res.data.url
         }
         setCheckoutPlan(null)
       },
