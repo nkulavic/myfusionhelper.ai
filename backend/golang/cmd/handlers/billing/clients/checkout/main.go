@@ -121,12 +121,12 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		}
 	}
 
-	successURL := appURL + "/settings?billing=success"
-	cancelURL := appURL + "/settings?billing=cancelled"
-	if appURL == "" {
-		successURL = "https://app.myfusionhelper.ai/settings?billing=success"
-		cancelURL = "https://app.myfusionhelper.ai/settings?billing=cancelled"
+	baseURL := appURL
+	if baseURL == "" {
+		baseURL = "https://app.myfusionhelper.ai"
 	}
+	successURL := baseURL + "/settings?tab=billing&session_id={CHECKOUT_SESSION_ID}"
+	cancelURL := baseURL + "/settings?tab=billing&billing=cancelled"
 
 	params := &stripe.CheckoutSessionParams{
 		Customer: stripe.String(customerID),

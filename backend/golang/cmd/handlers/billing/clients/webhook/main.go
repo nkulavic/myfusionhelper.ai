@@ -14,13 +14,17 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
+	"github.com/myfusionhelper/api/internal/notifications"
 	stripe "github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v82/checkout/session"
 	"github.com/stripe/stripe-go/v82/webhook"
 )
 
 var (
-	accountsTable        = os.Getenv("ACCOUNTS_TABLE")
-	stripeWebhookSecret  = os.Getenv("STRIPE_WEBHOOK_SECRET")
+	accountsTable       = os.Getenv("ACCOUNTS_TABLE")
+	usersTable          = os.Getenv("USERS_TABLE")
+	stripeKey           = os.Getenv("STRIPE_SECRET_KEY")
+	stripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
 )
 
 // Handle processes Stripe webhook events (public, verified by signature)
@@ -56,6 +60,8 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return handleSubscriptionUpdate(ctx, stripeEvent)
 	case "customer.subscription.deleted":
 		return handleSubscriptionCancelled(ctx, stripeEvent)
+	case "checkout.session.completed":
+		return handleCheckoutSessionCompleted(ctx, stripeEvent)
 	case "invoice.payment_failed":
 		return handlePaymentFailed(ctx, stripeEvent)
 	default:
@@ -78,12 +84,17 @@ func handleSubscriptionUpdate(ctx context.Context, event stripe.Event) (events.A
 		return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
 	}
 
-	// Determine plan from price metadata or product
+	// Determine plan from subscription metadata, then fall back to price metadata
 	plan := "free"
-	if len(sub.Items.Data) > 0 {
+	if sub.Metadata != nil {
+		if p, ok := sub.Metadata["plan"]; ok && p != "" {
+			plan = p
+		}
+	}
+	if plan == "free" && len(sub.Items.Data) > 0 {
 		item := sub.Items.Data[0]
 		if item.Price != nil && item.Price.Metadata != nil {
-			if p, ok := item.Price.Metadata["plan"]; ok {
+			if p, ok := item.Price.Metadata["plan"]; ok && p != "" {
 				plan = p
 			}
 		}
@@ -98,9 +109,21 @@ func handleSubscriptionUpdate(ctx context.Context, event stripe.Event) (events.A
 		status = "active"
 	}
 
-	if err := updateAccountByStripeCustomer(ctx, customerID, plan, status); err != nil {
+	ownerUserID, err := updateAccountByStripeCustomer(ctx, customerID, plan, status)
+	if err != nil {
 		log.Printf("Failed to update account: %v", err)
 		return authMiddleware.CreateErrorResponse(500, "Failed to process event"), nil
+	}
+
+	// Send billing email notification asynchronously
+	if ownerUserID != "" {
+		cfg, _ := config.LoadDefaultConfig(ctx)
+		dbClient := dynamodb.NewFromConfig(cfg)
+		eventType := "subscription_created"
+		if event.Type == "customer.subscription.updated" {
+			eventType = "subscription_created" // same template for update
+		}
+		go sendBillingEmail(ctx, dbClient, ownerUserID, eventType, plan)
 	}
 
 	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
@@ -118,9 +141,16 @@ func handleSubscriptionCancelled(ctx context.Context, event stripe.Event) (event
 		return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
 	}
 
-	if err := updateAccountByStripeCustomer(ctx, customerID, "free", "active"); err != nil {
+	ownerUserID, err := updateAccountByStripeCustomer(ctx, customerID, "free", "active")
+	if err != nil {
 		log.Printf("Failed to downgrade account: %v", err)
 		return authMiddleware.CreateErrorResponse(500, "Failed to process event"), nil
+	}
+
+	if ownerUserID != "" {
+		cfg, _ := config.LoadDefaultConfig(ctx)
+		dbClient := dynamodb.NewFromConfig(cfg)
+		go sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_cancelled", "free")
 	}
 
 	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
@@ -133,10 +163,123 @@ func handlePaymentFailed(ctx context.Context, event stripe.Event) (events.APIGat
 	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
 }
 
-func updateAccountByStripeCustomer(ctx context.Context, stripeCustomerID, plan, status string) error {
+func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event) (events.APIGatewayV2HTTPResponse, error) {
+	var sess stripe.CheckoutSession
+	if err := json.Unmarshal(event.Data.Raw, &sess); err != nil {
+		log.Printf("Failed to parse checkout session: %v", err)
+		return authMiddleware.CreateErrorResponse(400, "Invalid event data"), nil
+	}
+
+	log.Printf("Checkout session completed: %s, mode: %s", sess.ID, sess.Mode)
+
+	if sess.Mode != stripe.CheckoutSessionModeSubscription {
+		log.Printf("Ignoring non-subscription checkout session")
+		return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
+	}
+
+	// Extract account_id and plan from session metadata or subscription metadata
+	accountID := ""
+	plan := ""
+
+	if sess.Metadata != nil {
+		accountID = sess.Metadata["account_id"]
+		plan = sess.Metadata["plan"]
+	}
+
+	// If not on the session itself, retrieve subscription to check its metadata
+	if (accountID == "" || plan == "") && sess.Subscription != nil && sess.Subscription.ID != "" {
+		stripe.Key = stripeKey
+		expandedSess, err := session.Get(sess.ID, &stripe.CheckoutSessionParams{
+			Params: stripe.Params{
+				Expand: []*string{stripe.String("subscription")},
+			},
+		})
+		if err != nil {
+			log.Printf("Failed to retrieve checkout session with expansion: %v", err)
+		} else if expandedSess.Subscription != nil && expandedSess.Subscription.Metadata != nil {
+			if accountID == "" {
+				accountID = expandedSess.Subscription.Metadata["account_id"]
+			}
+			if plan == "" {
+				plan = expandedSess.Subscription.Metadata["plan"]
+			}
+		}
+	}
+
+	if accountID == "" {
+		log.Printf("No account_id found in checkout session metadata, falling back to customer lookup")
+		// Fall through -- subscription.created event will handle via customer ID lookup
+		return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
+	}
+
+	if plan == "" {
+		plan = "start" // default
+	}
+
+	log.Printf("Activating subscription for account %s, plan: %s", accountID, plan)
+
+	limits := getPlanLimits(plan)
+
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		return err
+		log.Printf("Failed to load AWS config: %v", err)
+		return authMiddleware.CreateErrorResponse(500, "Internal error"), nil
+	}
+
+	dbClient := dynamodb.NewFromConfig(cfg)
+
+	_, err = dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(accountsTable),
+		Key: map[string]ddbtypes.AttributeValue{
+			"account_id": &ddbtypes.AttributeValueMemberS{Value: accountID},
+		},
+		UpdateExpression: aws.String("SET #plan = :plan, #status = :status, settings.max_helpers = :mh, settings.max_connections = :mc, settings.max_executions = :me, updated_at = :now"),
+		ExpressionAttributeNames: map[string]string{
+			"#plan":   "plan",
+			"#status": "status",
+		},
+		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+			":plan":   &ddbtypes.AttributeValueMemberS{Value: plan},
+			":status": &ddbtypes.AttributeValueMemberS{Value: "active"},
+			":mh":     &ddbtypes.AttributeValueMemberN{Value: intToStr(limits.MaxHelpers)},
+			":mc":     &ddbtypes.AttributeValueMemberN{Value: intToStr(limits.MaxConnections)},
+			":me":     &ddbtypes.AttributeValueMemberN{Value: intToStr(limits.MaxExecutions)},
+			":now":    &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
+		},
+	})
+	if err != nil {
+		log.Printf("Failed to activate account %s: %v", accountID, err)
+		return authMiddleware.CreateErrorResponse(500, "Failed to activate subscription"), nil
+	}
+
+	log.Printf("Successfully activated account %s on plan %s", accountID, plan)
+
+	// Send welcome/activation email
+	ownerUserID := ""
+	acctResult, err := dbClient.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(accountsTable),
+		Key: map[string]ddbtypes.AttributeValue{
+			"account_id": &ddbtypes.AttributeValueMemberS{Value: accountID},
+		},
+		ProjectionExpression: aws.String("owner_user_id"),
+	})
+	if err == nil && acctResult.Item != nil {
+		if attr, ok := acctResult.Item["owner_user_id"]; ok {
+			ownerUserID = attr.(*ddbtypes.AttributeValueMemberS).Value
+		}
+	}
+
+	if ownerUserID != "" {
+		go sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_created", plan)
+	}
+
+	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
+}
+
+func updateAccountByStripeCustomer(ctx context.Context, stripeCustomerID, plan, status string) (string, error) {
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return "", err
 	}
 
 	dbClient := dynamodb.NewFromConfig(cfg)
@@ -157,20 +300,25 @@ func updateAccountByStripeCustomer(ctx context.Context, stripeCustomerID, plan, 
 		Limit: aws.Int32(1),
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 	if len(scanResult.Items) == 0 {
 		log.Printf("No account found for Stripe customer %s", stripeCustomerID)
-		return nil
+		return "", nil
 	}
 
-	// Get the account_id from the result
+	// Get the account_id and owner_user_id from the result
 	accountIDAttr, ok := scanResult.Items[0]["account_id"]
 	if !ok {
 		log.Printf("Account missing account_id field")
-		return nil
+		return "", nil
 	}
 	accountID := accountIDAttr.(*ddbtypes.AttributeValueMemberS).Value
+
+	ownerUserID := ""
+	if ownerAttr, ok := scanResult.Items[0]["owner_user_id"]; ok {
+		ownerUserID = ownerAttr.(*ddbtypes.AttributeValueMemberS).Value
+	}
 
 	limits := getPlanLimits(plan)
 
@@ -193,7 +341,7 @@ func updateAccountByStripeCustomer(ctx context.Context, stripeCustomerID, plan, 
 			":now":    &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
 		},
 	})
-	return err
+	return ownerUserID, err
 }
 
 type planLimits struct {
@@ -217,4 +365,66 @@ func getPlanLimits(plan string) planLimits {
 
 func intToStr(n int) string {
 	return fmt.Sprintf("%d", n)
+}
+
+func getPlanLabel(plan string) string {
+	switch plan {
+	case "start":
+		return "Start"
+	case "grow":
+		return "Grow"
+	case "deliver":
+		return "Deliver"
+	default:
+		return "Free"
+	}
+}
+
+// sendBillingEmail looks up the account owner and sends a billing notification email
+func sendBillingEmail(ctx context.Context, dbClient *dynamodb.Client, ownerUserID, eventType, plan string) {
+	if usersTable == "" {
+		log.Printf("USERS_TABLE not set, skipping billing email")
+		return
+	}
+
+	// Look up owner user to get their email
+	userResult, err := dbClient.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(usersTable),
+		Key: map[string]ddbtypes.AttributeValue{
+			"user_id": &ddbtypes.AttributeValueMemberS{Value: ownerUserID},
+		},
+		ProjectionExpression: aws.String("#n, email"),
+		ExpressionAttributeNames: map[string]string{
+			"#n": "name",
+		},
+	})
+	if err != nil {
+		log.Printf("Failed to look up user %s for billing email: %v", ownerUserID, err)
+		return
+	}
+	if userResult.Item == nil {
+		log.Printf("User %s not found, skipping billing email", ownerUserID)
+		return
+	}
+
+	emailAttr, ok := userResult.Item["email"]
+	if !ok {
+		return
+	}
+	userEmail := emailAttr.(*ddbtypes.AttributeValueMemberS).Value
+
+	userName := "there"
+	if nameAttr, ok := userResult.Item["name"]; ok {
+		userName = nameAttr.(*ddbtypes.AttributeValueMemberS).Value
+	}
+
+	notifSvc, err := notifications.New(ctx)
+	if err != nil {
+		log.Printf("Failed to create notification service: %v", err)
+		return
+	}
+
+	if err := notifSvc.SendBillingEvent(ctx, userName, userEmail, eventType, getPlanLabel(plan)); err != nil {
+		log.Printf("Failed to send billing email: %v", err)
+	}
 }
