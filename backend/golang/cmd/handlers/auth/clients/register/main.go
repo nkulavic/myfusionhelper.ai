@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/google/uuid"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
+	"github.com/myfusionhelper/api/internal/notifications"
 )
 
 type RegisterRequest struct {
@@ -264,6 +265,18 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	}
 
 	log.Printf("Registration successful for user: %s", req.Email)
+
+	// Send welcome email asynchronously
+	go func() {
+		notifSvc, err := notifications.New(ctx)
+		if err != nil {
+			log.Printf("Failed to create notification service for welcome email: %v", err)
+			return
+		}
+		if err := notifSvc.SendWelcomeEmail(ctx, req.Name, req.Email); err != nil {
+			log.Printf("Failed to send welcome email: %v", err)
+		}
+	}()
 
 	return authMiddleware.CreateSuccessResponse(200, "Registration successful", map[string]interface{}{
 		"token":         *authResult.AuthenticationResult.AccessToken,

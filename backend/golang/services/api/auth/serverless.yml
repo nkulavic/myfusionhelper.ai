@@ -37,6 +37,7 @@ provider:
     USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
     ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
     USER_ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableName}
+    APP_URL: ${ssm:/mfh/${self:provider.stage}/app-url, 'https://app.myfusionhelper.ai'}
     API_VERSION: v1
     API_REFERENCE: mfh-api
   iam:
@@ -85,6 +86,16 @@ provider:
             - logs:CreateLogStream
             - logs:PutLogEvents
           Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+          Resource:
+            - "arn:aws:ssm:${self:provider.region}:*:parameter/mfh/${self:provider.stage}/app-url"
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - ses:SendRawEmail
+          Resource: "arn:aws:ses:${self:provider.region}:*:identity/myfusionhelper.ai"
         - Effect: Allow
           Action:
             - xray:PutTraceSegments
