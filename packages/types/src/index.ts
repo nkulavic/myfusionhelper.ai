@@ -2,35 +2,73 @@
 // Field names match Go backend JSON (after snake_case → camelCase transform)
 export interface User {
   userId: string
-  cognitoUserId?: string
+  cognitoUserId: string
   email: string
   name: string
   phoneNumber?: string
   company?: string
   status: string
   currentAccountId: string
+  notificationPreferences?: NotificationPreferences
   createdAt: string
-  updatedAt?: string
+  updatedAt: string
+  lastLoginAt?: string
+}
+
+export interface NotificationPreferences {
+  executionFailures: boolean
+  connectionIssues: boolean
+  usageAlerts: boolean
+  weeklySummary: boolean
+  newFeatures: boolean
+  teamActivity: boolean
+  realtimeStatus: boolean
+  aiInsights: boolean
+  systemMaintenance: boolean
+  webhookUrl?: string
 }
 
 export interface Account {
   accountId: string
   ownerUserId: string
-  createdByUserId?: string
+  createdByUserId: string
   name: string
-  company?: string
+  company: string
   plan: 'free' | 'pro' | 'business'
   status: 'active' | 'suspended' | 'cancelled'
   stripeCustomerId?: string
+  settings: AccountSettings
+  usage: AccountUsage
   createdAt: string
-  updatedAt?: string
+  updatedAt: string
+}
+
+export interface AccountSettings {
+  maxHelpers: number
+  maxConnections: number
+  maxApiKeys: number
+  maxTeamMembers: number
+  maxExecutions: number
+  webhooksEnabled: boolean
+}
+
+export interface AccountUsage {
+  helpers: number
+  connections: number
+  apiKeys: number
+  teamMembers: number
+  monthlyExecutions: number
+  monthlyApiRequests: number
 }
 
 export interface UserAccount {
   userId: string
   accountId: string
   role: 'owner' | 'admin' | 'member' | 'viewer'
+  status: string
   permissions: UserPermissions
+  linkedAt: string
+  updatedAt: string
 }
 
 export interface UserPermissions {
@@ -47,19 +85,26 @@ export interface UserPermissions {
 export type CRMPlatform = 'keap' | 'gohighlevel' | 'activecampaign' | 'ontraport' | 'hubspot' | 'generic'
 
 export interface PlatformConnection {
-  id: string
+  connectionId: string
   accountId: string
-  platform: CRMPlatform
+  userId: string
+  platformId: string
+  externalUserId?: string
+  externalUserEmail?: string
+  externalAppId?: string
+  externalAppName?: string
   name: string
   status: 'active' | 'disconnected' | 'error'
-  credentials: {
-    accessToken?: string
-    refreshToken?: string
-    expiresAt?: string
-  }
-  metadata?: Record<string, unknown>
+  authType: string
+  authId?: string
+  credentialsMetadata: Record<string, unknown>
+  lastConnected?: string
   createdAt: string
   updatedAt: string
+  expiresAt?: string
+  lastSyncedAt?: string
+  syncStatus?: string
+  syncRecordCounts?: Record<string, number>
 }
 
 // Helper types
@@ -73,16 +118,17 @@ export type HelperCategory =
   | 'analytics'
 
 export interface Helper {
-  id: string
+  helperId: string
   accountId: string
+  createdBy: string
+  connectionId?: string
   name: string
   description: string
-  type: string
+  helperType: string
   category: HelperCategory
+  status: 'active' | 'deleted'
   config: Record<string, unknown>
   configSchema?: Record<string, unknown>
-  connectionId: string
-  status: 'active' | 'deleted'
   enabled: boolean
   executionCount: number
   lastExecutedAt?: string
@@ -91,21 +137,22 @@ export interface Helper {
 }
 
 export interface HelperExecution {
-  id: string
+  executionId: string
   helperId: string
   accountId: string
   userId?: string
+  apiKeyId?: string
   connectionId?: string
   contactId?: string
   status: 'pending' | 'running' | 'completed' | 'failed'
-  triggerType?: string
-  input: Record<string, unknown>
+  triggerType: string
+  input?: Record<string, unknown>
   output?: Record<string, unknown>
-  error?: string
+  errorMessage?: string
+  durationMs: number
   createdAt: string
   startedAt: string
   completedAt?: string
-  durationMs?: number
 }
 
 export interface HelperTypeDefinition {
@@ -120,10 +167,11 @@ export interface HelperTypeDefinition {
 
 // API Key types
 export interface APIKey {
-  id: string
+  keyId: string
   accountId: string
   createdBy: string
   name: string
+  keyHash: string
   keyPrefix: string
   permissions: string[]
   status: 'active' | 'revoked'
@@ -148,19 +196,39 @@ export interface NormalizedContact {
   updatedAt: string
 }
 
+// Auth context types (returned by /auth/status)
+export interface AuthContext {
+  userId: string
+  accountId: string
+  email: string
+  role: string
+  permissions: UserPermissions
+  availableAccounts: AccountAccess[]
+}
+
+export interface AccountAccess {
+  accountId: string
+  accountName: string
+  role: string
+  permissions: UserPermissions
+  isCurrent: boolean
+}
+
+// Plan types
+export interface PlanLimits {
+  maxHelpers: number
+  maxExecutions: number
+  maxConnections: number
+  maxTeamMembers: number
+  maxApiKeys: number
+}
+
 // API Response types
+// Backend returns { success: true, message: "...", data: T } on success
+// Backend returns { success: false, error: "..." } on failure
 export interface APIResponse<T> {
   success: boolean
+  message?: string
   data?: T
-  error?: {
-    code: string
-    message: string
-  }
-  meta?: {
-    page?: number
-    limit?: number
-    total?: number
-    nextToken?: string
-    hasMore?: boolean
-  }
+  error?: string
 }

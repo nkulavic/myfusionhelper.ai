@@ -8,17 +8,32 @@ import (
 
 // User represents a user in the system
 type User struct {
-	UserID           string     `json:"user_id" dynamodbav:"user_id"`
-	CognitoUserID    string     `json:"cognito_user_id" dynamodbav:"cognito_user_id"`
-	Email            string     `json:"email" dynamodbav:"email"`
-	Name             string     `json:"name" dynamodbav:"name"`
-	PhoneNumber      string     `json:"phone_number,omitempty" dynamodbav:"phone_number,omitempty"`
-	Company          string     `json:"company,omitempty" dynamodbav:"company,omitempty"`
-	Status           string     `json:"status" dynamodbav:"status"`
-	CurrentAccountID string     `json:"current_account_id" dynamodbav:"current_account_id"`
-	CreatedAt        time.Time  `json:"created_at" dynamodbav:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at" dynamodbav:"updated_at"`
-	LastLoginAt      *time.Time `json:"last_login_at,omitempty" dynamodbav:"last_login_at,omitempty"`
+	UserID                  string                   `json:"user_id" dynamodbav:"user_id"`
+	CognitoUserID           string                   `json:"cognito_user_id" dynamodbav:"cognito_user_id"`
+	Email                   string                   `json:"email" dynamodbav:"email"`
+	Name                    string                   `json:"name" dynamodbav:"name"`
+	PhoneNumber             string                   `json:"phone_number,omitempty" dynamodbav:"phone_number,omitempty"`
+	Company                 string                   `json:"company,omitempty" dynamodbav:"company,omitempty"`
+	Status                  string                   `json:"status" dynamodbav:"status"`
+	CurrentAccountID        string                   `json:"current_account_id" dynamodbav:"current_account_id"`
+	NotificationPreferences *NotificationPreferences `json:"notification_preferences,omitempty" dynamodbav:"notification_preferences,omitempty"`
+	CreatedAt               time.Time                `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt               time.Time                `json:"updated_at" dynamodbav:"updated_at"`
+	LastLoginAt             *time.Time               `json:"last_login_at,omitempty" dynamodbav:"last_login_at,omitempty"`
+}
+
+// NotificationPreferences represents user notification settings
+type NotificationPreferences struct {
+	ExecutionFailures bool   `json:"execution_failures" dynamodbav:"execution_failures"`
+	ConnectionIssues  bool   `json:"connection_issues" dynamodbav:"connection_issues"`
+	UsageAlerts       bool   `json:"usage_alerts" dynamodbav:"usage_alerts"`
+	WeeklySummary     bool   `json:"weekly_summary" dynamodbav:"weekly_summary"`
+	NewFeatures       bool   `json:"new_features" dynamodbav:"new_features"`
+	TeamActivity      bool   `json:"team_activity" dynamodbav:"team_activity"`
+	RealtimeStatus    bool   `json:"realtime_status" dynamodbav:"realtime_status"`
+	AiInsights        bool   `json:"ai_insights" dynamodbav:"ai_insights"`
+	SystemMaintenance bool   `json:"system_maintenance" dynamodbav:"system_maintenance"`
+	WebhookURL        string `json:"webhook_url,omitempty" dynamodbav:"webhook_url,omitempty"`
 }
 
 // Account represents a billing entity / workspace
