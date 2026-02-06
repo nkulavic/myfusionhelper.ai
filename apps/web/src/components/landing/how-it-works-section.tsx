@@ -9,21 +9,21 @@ const steps = [
     number: '01',
     title: 'Connect Your CRM',
     description:
-      'Link your Keap, GoHighLevel, ActiveCampaign, or Ontraport account with OAuth or API key. Secure and instant.',
+      'Link your Keap, GoHighLevel, ActiveCampaign, Ontraport, or HubSpot account with OAuth or API key. Encrypted and connected in under 60 seconds.',
     icon: Link2,
   },
   {
     number: '02',
     title: 'Configure Helpers',
     description:
-      'Choose from 60+ pre-built helpers. Set your tags, fields, scoring rules, and notification preferences.',
+      'Browse 62 pre-built helpers across 7 categories. Configure them through a visual UI and get a unique webhook URL for each one.',
     icon: Settings,
   },
   {
     number: '03',
-    title: 'Automate Everything',
+    title: 'Trigger and Monitor',
     description:
-      'Trigger helpers via API webhooks from your CRM automations. Monitor executions in real-time.',
+      'Drop the webhook URL into your CRM automation. When it fires, your helper executes in real-time. Track success rates and get AI-powered optimization suggestions.',
     icon: Zap,
   },
 ]

@@ -7,9 +7,10 @@ import { Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navLinks = [
-  { label: 'Features', href: '#features' },
-  { label: 'How It Works', href: '#how-it-works' },
+  { label: 'Features', href: '#capabilities' },
+  { label: 'Platforms', href: '#platforms' },
   { label: 'Pricing', href: '#pricing' },
+  { label: 'FAQ', href: '#faq' },
 ]
 
 export function LandingHeader() {

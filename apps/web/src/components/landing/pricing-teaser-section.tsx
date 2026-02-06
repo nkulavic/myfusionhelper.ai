@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check } from 'lucide-react'
+import { Check, Minus } from 'lucide-react'
 import { fadeUp, staggerContainer, scaleUp } from './animation-variants'
 import { cn } from '@/lib/utils'
 
@@ -59,6 +59,32 @@ const plans = [
     highlighted: false,
   },
 ]
+
+const comparisonRows = [
+  { feature: 'Active Helpers', start: '10', grow: '50', deliver: 'Unlimited' },
+  { feature: 'Executions/month', start: '5,000', grow: '50,000', deliver: 'Unlimited' },
+  { feature: 'CRM Connections', start: '1', grow: '3', deliver: 'Unlimited' },
+  { feature: 'Webhook Triggers', start: true, grow: true, deliver: true },
+  { feature: 'AI Insights', start: false, grow: true, deliver: true },
+  { feature: 'AI Email Composer', start: false, grow: true, deliver: true },
+  { feature: 'Data Explorer', start: 'Basic', grow: 'Full', deliver: 'Full' },
+  { feature: 'Scheduled Reports', start: false, grow: true, deliver: true },
+  { feature: 'Log Retention', start: '7 days', grow: '30 days', deliver: '90 days' },
+  { feature: 'Support', start: 'Email', grow: 'Priority', deliver: 'Phone + Priority' },
+  { feature: 'Team Members', start: '1', grow: '3', deliver: '10' },
+  { feature: 'API Access', start: false, grow: true, deliver: true },
+]
+
+function ComparisonCell({ value }: { value: string | boolean }) {
+  if (typeof value === 'boolean') {
+    return value ? (
+      <Check className="mx-auto h-4 w-4 text-brand-green" />
+    ) : (
+      <Minus className="mx-auto h-4 w-4 text-muted-foreground/40" />
+    )
+  }
+  return <span className="text-sm">{value}</span>
+}
 
 export function PricingTeaserSection() {
   const [isAnnual, setIsAnnual] = useState(false)
@@ -135,6 +161,7 @@ export function PricingTeaserSection() {
           </motion.div>
         </motion.div>
 
+        {/* Pricing cards */}
         <motion.div
           initial="hidden"
           whileInView="visible"
@@ -206,6 +233,45 @@ export function PricingTeaserSection() {
               </motion.div>
             )
           })}
+        </motion.div>
+
+        {/* Comparison table */}
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.05 }}
+          variants={fadeUp}
+          className="mt-16"
+        >
+          <h3 className="mb-6 text-center text-lg font-semibold">Compare plans</h3>
+          <div className="overflow-x-auto rounded-xl border bg-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="px-6 py-4 text-left font-semibold">Feature</th>
+                  <th className="px-6 py-4 text-center font-semibold">Start</th>
+                  <th className="px-6 py-4 text-center font-semibold text-brand-green">Grow</th>
+                  <th className="px-6 py-4 text-center font-semibold">Deliver</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonRows.map((row) => (
+                  <tr key={row.feature} className="border-b last:border-0">
+                    <td className="px-6 py-3 text-muted-foreground">{row.feature}</td>
+                    <td className="px-6 py-3 text-center">
+                      <ComparisonCell value={row.start} />
+                    </td>
+                    <td className="px-6 py-3 text-center bg-brand-green/5">
+                      <ComparisonCell value={row.grow} />
+                    </td>
+                    <td className="px-6 py-3 text-center">
+                      <ComparisonCell value={row.deliver} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </motion.div>
       </div>
     </section>

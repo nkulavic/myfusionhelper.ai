@@ -8,21 +8,23 @@ import {
   Mail,
   BarChart3,
   Webhook,
+  Search,
+  History,
 } from 'lucide-react'
 import { fadeUp, staggerContainer } from './animation-variants'
 
 const features = [
   {
-    title: '60+ Automation Helpers',
+    title: '62 Pre-Built Helpers',
     description:
-      'Pre-built helpers for tags, fields, scoring, formatting, dates, notifications, and more. Configure in minutes.',
+      'Tag contacts, format data, calculate dates, score leads, sync to Google Sheets, send notifications, and more. Configure in minutes, not hours.',
     icon: Blocks,
     gradient: 'from-brand-green/20 to-brand-green/5',
   },
   {
-    title: 'Multi-Platform Support',
+    title: '5 CRM Platforms',
     description:
-      'One unified platform for Keap, GoHighLevel, ActiveCampaign, and Ontraport. Switch CRMs without rebuilding.',
+      'One account works with Keap, GoHighLevel, ActiveCampaign, Ontraport, and HubSpot. Switch CRMs without rebuilding your automations.',
     icon: Shield,
     gradient: 'from-brand-blue/20 to-brand-blue/5',
   },
@@ -48,11 +50,25 @@ const features = [
     gradient: 'from-brand-green/15 to-brand-green/5',
   },
   {
+    title: 'Data Explorer',
+    description:
+      'Query your CRM data with filters or natural language. Fast analytics across contacts, tags, deals, and custom fields.',
+    icon: Search,
+    gradient: 'from-brand-blue/15 to-brand-green/5',
+  },
+  {
     title: 'Webhook Triggers',
     description:
-      'Trigger helpers from your CRM automations via API. Real-time execution with detailed logging.',
+      'Each helper gets a unique webhook URL. Drop it into your CRM automation and helpers fire in real-time.',
     icon: Webhook,
     gradient: 'from-brand-blue/15 to-brand-blue/5',
+  },
+  {
+    title: 'Execution History',
+    description:
+      'Every helper run is logged with status, duration, contact details, and error information. Filter and drill into any execution.',
+    icon: History,
+    gradient: 'from-brand-green/15 to-brand-blue/5',
   },
 ]
 
@@ -77,14 +93,14 @@ export function FeaturesSection() {
             variants={fadeUp}
             className="mx-auto max-w-2xl text-3xl font-bold md:text-4xl"
           >
-            Everything you need to automate your CRM
+            Everything you need to extend your CRM
           </motion.h2>
           <motion.p
             variants={fadeUp}
             className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground"
           >
-            From simple tag operations to complex AI-driven workflows, MyFusion Helper
-            has you covered.
+            From simple tag operations to AI-driven analytics, MyFusion Helper covers the
+            full range of CRM automation needs.
           </motion.p>
         </motion.div>
 
@@ -93,7 +109,7 @@ export function FeaturesSection() {
           whileInView="visible"
           viewport={{ once: true, amount: 0.05 }}
           variants={staggerContainer}
-          className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+          className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-4"
         >
           {features.map((feature) => (
             <motion.div

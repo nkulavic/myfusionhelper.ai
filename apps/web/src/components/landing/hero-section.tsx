@@ -24,7 +24,7 @@ export function HeroSection() {
           <motion.div variants={fadeUp}>
             <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-medium text-white backdrop-blur-sm">
               <Sparkles className="h-4 w-4 text-brand-green" />
-              AI-Powered CRM Automation
+              AI-Powered CRM Intelligence
             </span>
           </motion.div>
 
@@ -33,10 +33,10 @@ export function HeroSection() {
             variants={fadeUp}
             className="text-4xl font-bold leading-tight tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl"
           >
-            Automate your CRM
+            Your CRM data is a goldmine.
             <br />
             <span className="bg-gradient-to-r from-[hsl(77,85%,55%)] to-[hsl(77,85%,70%)] bg-clip-text text-transparent">
-              with AI superpowers
+              Start mining it.
             </span>
           </motion.h1>
 
@@ -45,8 +45,9 @@ export function HeroSection() {
             variants={fadeUp}
             className="max-w-2xl text-lg text-white/70 sm:text-xl"
           >
-            Connect Keap, GoHighLevel, ActiveCampaign, and Ontraport. Build powerful
-            automations with 60+ helpers. No coding required.
+            Visualize your data. Analyze patterns. Strategize with AI recommendations.
+            Automate with 62 helpers across Keap, GoHighLevel, ActiveCampaign, Ontraport,
+            and HubSpot — no coding required.
           </motion.p>
 
           {/* CTAs */}
@@ -58,10 +59,13 @@ export function HeroSection() {
               Start Free Trial
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <button className="inline-flex h-12 items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-8 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/10">
+            <a
+              href="#how-it-works"
+              className="inline-flex h-12 items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-8 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/10"
+            >
               <Play className="h-4 w-4" />
-              Watch Demo
-            </button>
+              See How It Works
+            </a>
           </motion.div>
 
           {/* Social proof */}
@@ -87,7 +91,7 @@ export function HeroSection() {
                   <div className="h-3 w-3 rounded-full bg-green-400/60" />
                 </div>
                 <div className="flex-1 rounded-md bg-white/5 px-3 py-1 text-xs text-white/30 font-mono">
-                  app.myfusionhelper.ai/helpers
+                  app.myfusionhelper.ai/dashboard
                 </div>
               </div>
               {/* Mock cards grid */}
@@ -100,7 +104,7 @@ export function HeroSection() {
                     >
                       <div className="text-[10px] text-white/40">{label}</div>
                       <div className="mt-1 text-lg font-bold text-white/80">
-                        {['14', '2,847', '99.2%', '4'][i]}
+                        {['14', '2,847', '99.2%', '5'][i]}
                       </div>
                     </div>
                   )

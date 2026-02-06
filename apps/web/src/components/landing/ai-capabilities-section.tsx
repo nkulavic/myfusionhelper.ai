@@ -49,13 +49,14 @@ export function AICapabilitiesSection() {
             variants={fadeUp}
             className="mx-auto max-w-2xl text-3xl font-bold md:text-4xl"
           >
-            Powered by artificial intelligence
+            AI that works for your business
           </motion.h2>
           <motion.p
             variants={fadeUp}
             className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground"
           >
-            AI isn&apos;t a bolt-on feature — it&apos;s woven into every part of MyFusion Helper.
+            AI isn&apos;t a bolt-on feature — it&apos;s woven into every part of MyFusion Helper,
+            from insights to email composition to workflow optimization.
           </motion.p>
         </motion.div>
 

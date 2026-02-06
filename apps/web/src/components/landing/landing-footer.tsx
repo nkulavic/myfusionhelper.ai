@@ -3,21 +3,27 @@ import Link from 'next/link'
 
 const footerLinks = {
   Product: [
-    { label: 'Helpers', href: '/helpers' },
-    { label: 'Connections', href: '/connections' },
+    { label: 'Helpers', href: '#capabilities' },
+    { label: 'Data Explorer', href: '#capabilities' },
+    { label: 'AI Insights', href: '#capabilities' },
     { label: 'Pricing', href: '#pricing' },
-    { label: 'Changelog', href: '#' },
+  ],
+  Platforms: [
+    { label: 'Keap', href: '#platforms' },
+    { label: 'GoHighLevel', href: '#platforms' },
+    { label: 'ActiveCampaign', href: '#platforms' },
+    { label: 'Ontraport', href: '#platforms' },
+    { label: 'HubSpot', href: '#platforms' },
   ],
   Company: [
     { label: 'About', href: '#' },
     { label: 'Blog', href: '#' },
-    { label: 'Careers', href: '#' },
     { label: 'Contact', href: '#' },
   ],
   Legal: [
     { label: 'Privacy Policy', href: '/privacy' },
     { label: 'Terms of Service', href: '/terms' },
-    { label: 'Security', href: '#' },
+    { label: 'EULA', href: '/eula' },
   ],
 }
 
@@ -25,7 +31,7 @@ export function LandingFooter() {
   return (
     <footer className="border-t bg-[hsl(212,100%,22%)]">
       <div className="container py-12 md:py-16">
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-6">
           {/* Brand */}
           <div className="lg:col-span-2">
             <Link href="/" className="inline-block">
@@ -38,8 +44,8 @@ export function LandingFooter() {
               />
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/50">
-              AI-powered CRM automation for Keap, GoHighLevel, ActiveCampaign, and
-              Ontraport. Built by MyFusion Solutions.
+              AI-powered CRM intelligence for Keap, GoHighLevel, ActiveCampaign,
+              Ontraport, and HubSpot. Built by MyFusion Solutions.
             </p>
           </div>
 

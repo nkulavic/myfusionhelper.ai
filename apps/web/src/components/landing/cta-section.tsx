@@ -24,14 +24,16 @@ export function CTASection() {
             variants={fadeUp}
             className="text-3xl font-bold text-white md:text-4xl lg:text-5xl"
           >
-            Ready to automate your CRM?
+            Stop wrestling with your CRM.
+            <br />
+            Start getting results.
           </motion.h2>
           <motion.p
             variants={fadeUp}
             className="mt-4 text-lg text-white/70"
           >
             Join 1,200+ professionals who use MyFusion Helper to save hours every week.
-            Start your free trial today.
+            Connect your CRM, configure your first helper, and see results in minutes.
           </motion.p>
           <motion.div variants={fadeUp} className="mt-8">
             <Link
@@ -43,7 +45,7 @@ export function CTASection() {
             </Link>
           </motion.div>
           <motion.p variants={fadeUp} className="mt-4 text-sm text-white/40">
-            No credit card required. Free plan available forever.
+            14 days free. No credit card required. Cancel anytime.
           </motion.p>
         </motion.div>
       </div>
