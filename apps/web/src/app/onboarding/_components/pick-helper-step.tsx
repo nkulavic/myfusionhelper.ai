@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowLeft, CheckCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react'
 import { helpersCatalog, categoryInfo, type HelperDefinition } from '@/lib/helpers-catalog'
+import { useCreateHelper } from '@/lib/hooks/use-helpers'
+import { useConnections } from '@/lib/hooks/use-connections'
 import { cn } from '@/lib/utils'
 
 interface PickHelperStepProps {
@@ -21,6 +23,11 @@ const categories = categoryInfo.filter((c) => c.id !== 'all')
 export function PickHelperStep({ onNext, onBack, onSkip }: PickHelperStepProps) {
   const [selectedHelpers, setSelectedHelpers] = useState<Set<string>>(new Set())
   const [activeCategory, setActiveCategory] = useState<string>('popular')
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  const createHelper = useCreateHelper()
+  const { data: connections } = useConnections()
 
   const toggleHelper = (id: string) => {
     setSelectedHelpers((prev) => {
@@ -32,6 +39,55 @@ export function PickHelperStep({ onNext, onBack, onSkip }: PickHelperStepProps) 
       }
       return next
     })
+  }
+
+  const handleContinue = async () => {
+    if (selectedHelpers.size === 0) {
+      onNext()
+      return
+    }
+
+    setIsSaving(true)
+    setSaveError('')
+
+    const firstConnection = connections?.[0]
+
+    // Create each selected helper sequentially
+    const selectedDefs = helpersCatalog.filter((h) => selectedHelpers.has(h.id))
+    let createdCount = 0
+    let skippedCount = 0
+
+    for (const helper of selectedDefs) {
+      // Skip CRM-dependent helpers if no connection exists
+      if (helper.requiresCRM && !firstConnection) {
+        skippedCount++
+        continue
+      }
+
+      try {
+        await createHelper.mutateAsync({
+          name: helper.name,
+          helperType: helper.id,
+          category: helper.category,
+          connectionId: firstConnection?.connectionId || '',
+          config: {},
+        })
+        createdCount++
+      } catch {
+        // Continue creating remaining helpers even if one fails
+      }
+    }
+
+    setIsSaving(false)
+
+    if (createdCount === 0 && skippedCount > 0) {
+      setSaveError(
+        'Selected helpers require a CRM connection. Connect a CRM first or skip for now.'
+      )
+      return
+    }
+
+    onNext()
   }
 
   const displayHelpers: HelperDefinition[] =
@@ -85,11 +141,13 @@ export function PickHelperStep({ onNext, onBack, onSkip }: PickHelperStepProps) 
             <button
               key={helper.id}
               onClick={() => toggleHelper(helper.id)}
+              disabled={isSaving}
               className={cn(
                 'flex items-start gap-3 rounded-lg border p-3.5 text-left transition-all',
                 isSelected
                   ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                  : 'bg-card hover:border-primary/50 hover:shadow-sm'
+                  : 'bg-card hover:border-primary/50 hover:shadow-sm',
+                isSaving && 'opacity-50'
               )}
             >
               <div
@@ -120,11 +178,16 @@ export function PickHelperStep({ onNext, onBack, onSkip }: PickHelperStepProps) 
         </p>
       )}
 
+      {saveError && (
+        <p className="text-center text-sm text-destructive">{saveError}</p>
+      )}
+
       {/* Navigation */}
       <div className="flex items-center justify-between pt-2">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          disabled={isSaving}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Back
@@ -132,15 +195,22 @@ export function PickHelperStep({ onNext, onBack, onSkip }: PickHelperStepProps) 
         <div className="flex items-center gap-3">
           <button
             onClick={onSkip}
-            className="text-sm text-muted-foreground hover:text-foreground"
+            disabled={isSaving}
+            className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
             Skip for now
           </button>
           <button
-            onClick={onNext}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            onClick={handleContinue}
+            disabled={isSaving}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
-            {selectedHelpers.size > 0 ? 'Continue' : 'Skip & Continue'}
+            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isSaving
+              ? 'Creating helpers...'
+              : selectedHelpers.size > 0
+                ? 'Continue'
+                : 'Skip & Continue'}
           </button>
         </div>
       </div>
