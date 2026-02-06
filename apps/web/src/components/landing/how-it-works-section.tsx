@@ -16,7 +16,7 @@ const steps = [
     number: '02',
     title: 'Configure Helpers',
     description:
-      'Choose from 58+ pre-built helpers. Set your tags, fields, scoring rules, and notification preferences.',
+      'Choose from 60+ pre-built helpers. Set your tags, fields, scoring rules, and notification preferences.',
     icon: Settings,
   },
   {

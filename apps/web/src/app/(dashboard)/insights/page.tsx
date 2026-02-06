@@ -154,7 +154,7 @@ export default function InsightsPage() {
         id: 'explore',
         type: 'suggestion',
         title: 'Explore helper catalog',
-        description: 'Browse 58 automation helpers across 7 categories to find new ways to automate your workflow.',
+        description: 'Browse 60+ automation helpers across 7 categories to find new ways to automate your workflow.',
         action: 'Browse catalog',
         href: '/helpers',
         icon: Sparkles,

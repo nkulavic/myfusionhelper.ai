@@ -46,7 +46,7 @@ export function HeroSection() {
             className="max-w-2xl text-lg text-white/70 sm:text-xl"
           >
             Connect Keap, GoHighLevel, ActiveCampaign, and Ontraport. Build powerful
-            automations with 58+ helpers. No coding required.
+            automations with 60+ helpers. No coding required.
           </motion.p>
 
           {/* CTAs */}

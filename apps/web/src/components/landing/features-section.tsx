@@ -13,7 +13,7 @@ import { fadeUp, staggerContainer } from './animation-variants'
 
 const features = [
   {
-    title: '58+ Automation Helpers',
+    title: '60+ Automation Helpers',
     description:
       'Pre-built helpers for tags, fields, scoring, formatting, dates, notifications, and more. Configure in minutes.',
     icon: Blocks,
