@@ -31,6 +31,7 @@ provider:
     CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
     PLATFORMS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableName}
     PLATFORM_CONNECTION_AUTHS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableName}
+    NOTIFICATION_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueUrl}
     API_VERSION: v1
   iam:
     role:
@@ -60,6 +61,11 @@ provider:
             - sqs:GetQueueAttributes
           Resource:
             - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperExecutionQueueArn}
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource:
+            - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueArn}
         - Effect: Allow
           Action:
             - logs:CreateLogGroup

@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 
 	"github.com/myfusionhelper/api/internal/connectors"
@@ -33,8 +34,9 @@ import (
 )
 
 var (
-	executionsTable = os.Getenv("EXECUTIONS_TABLE")
-	helpersTable    = os.Getenv("HELPERS_TABLE")
+	executionsTable      = os.Getenv("EXECUTIONS_TABLE")
+	helpersTable         = os.Getenv("HELPERS_TABLE")
+	notificationQueueURL = os.Getenv("NOTIFICATION_QUEUE_URL")
 )
 
 // HelperExecutionJob represents a job from the SQS queue
@@ -64,6 +66,7 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 		return err
 	}
 	db := dynamodb.NewFromConfig(cfg)
+	sqsClient := sqs.NewFromConfig(cfg)
 
 	for _, record := range event.Records {
 		var job HelperExecutionJob
@@ -85,6 +88,7 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 		if execErr != nil {
 			log.Printf("Execution %s failed: %v", job.ExecutionID, execErr)
 			updateExecutionResult(ctx, db, job.ExecutionID, "failed", execErr.Error(), result, &now)
+			sendFailureNotification(ctx, sqsClient, job, execErr.Error())
 		} else if result != nil && result.Success {
 			log.Printf("Execution %s completed successfully", job.ExecutionID)
 			updateExecutionResult(ctx, db, job.ExecutionID, "completed", "", result, &now)
@@ -95,6 +99,7 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 			}
 			log.Printf("Execution %s completed with errors: %s", job.ExecutionID, errMsg)
 			updateExecutionResult(ctx, db, job.ExecutionID, "failed", errMsg, result, &now)
+			sendFailureNotification(ctx, sqsClient, job, errMsg)
 		}
 
 		// Update helper execution count
@@ -198,6 +203,42 @@ func updateExecutionResult(ctx context.Context, db *dynamodb.Client, executionID
 	})
 	if err != nil {
 		log.Printf("Failed to update execution result: %v", err)
+	}
+}
+
+func sendFailureNotification(ctx context.Context, sqsClient *sqs.Client, job HelperExecutionJob, errorMsg string) {
+	if notificationQueueURL == "" {
+		log.Printf("NOTIFICATION_QUEUE_URL not set, skipping failure notification")
+		return
+	}
+
+	notification := map[string]interface{}{
+		"type":       "execution_failure",
+		"user_id":    job.UserID,
+		"account_id": job.AccountID,
+		"data": map[string]interface{}{
+			"helper_name":   job.HelperType,
+			"error_message": errorMsg,
+			"execution_id":  job.ExecutionID,
+			"helper_id":     job.HelperID,
+		},
+	}
+
+	body, err := json.Marshal(notification)
+	if err != nil {
+		log.Printf("Failed to marshal notification: %v", err)
+		return
+	}
+
+	_, err = sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
+		QueueUrl:       aws.String(notificationQueueURL),
+		MessageBody:    aws.String(string(body)),
+		MessageGroupId: aws.String(job.AccountID),
+	})
+	if err != nil {
+		log.Printf("Failed to send notification to SQS: %v", err)
+	} else {
+		log.Printf("Sent failure notification for execution %s", job.ExecutionID)
 	}
 }
 
