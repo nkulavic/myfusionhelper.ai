@@ -20,6 +20,8 @@ import {
   ExternalLink,
   Receipt,
   Shield,
+  Smartphone,
+  Lock,
   Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -27,6 +29,7 @@ import { useAuthStore } from '@/lib/stores/auth-store'
 import { useWorkspaceStore } from '@/lib/stores/workspace-store'
 import {
   useUpdateProfile,
+  useUpdatePassword,
   useAPIKeys,
   useCreateAPIKey,
   useRevokeAPIKey,
@@ -61,6 +64,7 @@ import { Progress } from '@/components/ui/progress'
 const tabs = [
   { id: 'profile', name: 'Profile', icon: User },
   { id: 'account', name: 'Account', icon: Building },
+  { id: 'security', name: 'Security', icon: Shield },
   { id: 'team', name: 'Team', icon: Users },
   { id: 'api-keys', name: 'API Keys', icon: Key },
   { id: 'ai', name: 'AI Assistant', icon: Sparkles },
@@ -119,6 +123,7 @@ export default function SettingsPage() {
         <div className="flex-1 min-w-0">
           {activeTab === 'profile' && <ProfileTab />}
           {activeTab === 'account' && <AccountTab />}
+          {activeTab === 'security' && <SecurityTab />}
           {activeTab === 'api-keys' && <APIKeysTab />}
           {activeTab === 'ai' && <AITab />}
           {activeTab === 'billing' && <BillingTab />}
@@ -222,32 +227,161 @@ function ProfileTab() {
         </CardFooter>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Change Password</CardTitle>
-          <CardDescription>Update your password to keep your account secure</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="current-password">Current Password</Label>
-            <Input id="current-password" type="password" placeholder="Enter current password" />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="new-password">New Password</Label>
-              <Input id="new-password" type="password" placeholder="Enter new password" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirm New Password</Label>
-              <Input id="confirm-password" type="password" placeholder="Confirm new password" />
-            </div>
-          </div>
-        </CardContent>
-        <CardFooter className="justify-end">
-          <Button variant="outline">Update Password</Button>
-        </CardFooter>
-      </Card>
+      <ChangePasswordCard />
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Change Password Card (shared between Profile & Security tabs)
+// ---------------------------------------------------------------------------
+function ChangePasswordCard() {
+  const updatePassword = useUpdatePassword()
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showCurrent, setShowCurrent] = useState(false)
+  const [showNew, setShowNew] = useState(false)
+  const [success, setSuccess] = useState(false)
+
+  const passwordErrors: string[] = []
+  if (newPassword && newPassword.length < 8) passwordErrors.push('At least 8 characters')
+  if (newPassword && !/[A-Z]/.test(newPassword)) passwordErrors.push('One uppercase letter')
+  if (newPassword && !/[a-z]/.test(newPassword)) passwordErrors.push('One lowercase letter')
+  if (newPassword && !/[0-9]/.test(newPassword)) passwordErrors.push('One number')
+  const mismatch = confirmPassword !== '' && confirmPassword !== newPassword
+  const canSubmit =
+    currentPassword.length > 0 &&
+    newPassword.length >= 8 &&
+    passwordErrors.length === 0 &&
+    confirmPassword === newPassword &&
+    !updatePassword.isPending
+
+  const handleSubmit = () => {
+    setSuccess(false)
+    updatePassword.mutate(
+      { currentPassword, newPassword },
+      {
+        onSuccess: () => {
+          setCurrentPassword('')
+          setNewPassword('')
+          setConfirmPassword('')
+          setSuccess(true)
+        },
+      }
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Change Password</CardTitle>
+        <CardDescription>Update your account password</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {success && (
+          <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success/10 p-3 text-sm text-success">
+            <CheckCircle className="h-4 w-4 shrink-0" />
+            Password updated successfully.
+          </div>
+        )}
+        {updatePassword.isError && (
+          <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <XCircle className="h-4 w-4 shrink-0" />
+            {(updatePassword.error as Error)?.message || 'Failed to update password'}
+          </div>
+        )}
+        <div className="space-y-2">
+          <Label htmlFor="pwd-current">Current Password</Label>
+          <div className="relative">
+            <Input
+              id="pwd-current"
+              type={showCurrent ? 'text' : 'password'}
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Enter current password"
+              className="pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowCurrent(!showCurrent)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 hover:bg-accent"
+            >
+              {showCurrent ? (
+                <EyeOff className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <Eye className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="pwd-new">New Password</Label>
+          <div className="relative">
+            <Input
+              id="pwd-new"
+              type={showNew ? 'text' : 'password'}
+              value={newPassword}
+              onChange={(e) => {
+                setNewPassword(e.target.value)
+                setSuccess(false)
+              }}
+              placeholder="Enter new password"
+              className="pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowNew(!showNew)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 hover:bg-accent"
+            >
+              {showNew ? (
+                <EyeOff className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <Eye className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+          </div>
+          {newPassword && passwordErrors.length > 0 && (
+            <ul className="space-y-1 text-xs text-destructive">
+              {passwordErrors.map((err) => (
+                <li key={err} className="flex items-center gap-1">
+                  <XCircle className="h-3 w-3 shrink-0" />
+                  {err}
+                </li>
+              ))}
+            </ul>
+          )}
+          {newPassword && passwordErrors.length === 0 && (
+            <p className="flex items-center gap-1 text-xs text-success">
+              <Check className="h-3 w-3" />
+              Password meets requirements
+            </p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="pwd-confirm">Confirm New Password</Label>
+          <Input
+            id="pwd-confirm"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Confirm new password"
+          />
+          {mismatch && (
+            <p className="flex items-center gap-1 text-xs text-destructive">
+              <XCircle className="h-3 w-3" />
+              Passwords do not match
+            </p>
+          )}
+        </div>
+      </CardContent>
+      <CardFooter>
+        <Button onClick={handleSubmit} disabled={!canSubmit}>
+          {updatePassword.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          Update Password
+        </Button>
+      </CardFooter>
+    </Card>
   )
 }
 
@@ -1183,6 +1317,139 @@ function TeamTab() {
               <p className="flex-1 text-sm text-muted-foreground">{item.desc}</p>
             </div>
           ))}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Security Tab (2FA/MFA)
+// ---------------------------------------------------------------------------
+function SecurityTab() {
+  const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [mfaMethod, setMfaMethod] = useState<'totp' | 'sms'>('totp')
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Shield className="h-5 w-5" />
+            Two-Factor Authentication (2FA)
+          </CardTitle>
+          <CardDescription>
+            Add an extra layer of security to your account by requiring a second form of verification when signing in.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                'flex h-10 w-10 items-center justify-center rounded-full',
+                mfaEnabled ? 'bg-success/10' : 'bg-muted'
+              )}>
+                <Shield className={cn('h-5 w-5', mfaEnabled ? 'text-success' : 'text-muted-foreground')} />
+              </div>
+              <div>
+                <p className="text-sm font-medium">
+                  {mfaEnabled ? '2FA is enabled' : '2FA is not enabled'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {mfaEnabled
+                    ? 'Your account is protected with two-factor authentication'
+                    : 'Enable 2FA to add an extra layer of security'}
+                </p>
+              </div>
+            </div>
+            <Badge variant={mfaEnabled ? 'default' : 'secondary'}>
+              {mfaEnabled ? 'Active' : 'Inactive'}
+            </Badge>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-4">
+            <h4 className="text-sm font-medium">Authentication Methods</h4>
+
+            <div
+              className={cn(
+                'flex items-start gap-4 rounded-lg border p-4 cursor-pointer transition-colors',
+                mfaMethod === 'totp' && 'border-primary bg-primary/5'
+              )}
+              onClick={() => setMfaMethod('totp')}
+            >
+              <div className={cn(
+                'mt-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2',
+                mfaMethod === 'totp' ? 'border-primary bg-primary' : 'border-muted-foreground'
+              )}>
+                {mfaMethod === 'totp' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="h-4 w-4" />
+                  <span className="text-sm font-medium">Authenticator App</span>
+                  <Badge variant="outline" className="text-xs">Recommended</Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Use an authenticator app like Google Authenticator, Authy, or 1Password to generate verification codes.
+                </p>
+              </div>
+            </div>
+
+            <div
+              className={cn(
+                'flex items-start gap-4 rounded-lg border p-4 cursor-pointer transition-colors',
+                mfaMethod === 'sms' && 'border-primary bg-primary/5'
+              )}
+              onClick={() => setMfaMethod('sms')}
+            >
+              <div className={cn(
+                'mt-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2',
+                mfaMethod === 'sms' ? 'border-primary bg-primary' : 'border-muted-foreground'
+              )}>
+                {mfaMethod === 'sms' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <Lock className="h-4 w-4" />
+                  <span className="text-sm font-medium">SMS Verification</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Receive a verification code via text message to your registered phone number.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Button
+            onClick={() => setMfaEnabled(!mfaEnabled)}
+            variant={mfaEnabled ? 'outline' : 'default'}
+            className="w-full"
+          >
+            {mfaEnabled ? 'Disable 2FA' : 'Enable 2FA'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <ChangePasswordCard />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Active Sessions</CardTitle>
+          <CardDescription>View and manage your active login sessions.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4 rounded-lg border p-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-success/10">
+              <CheckCircle className="h-5 w-5 text-success" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium">Current Session</p>
+              <p className="text-xs text-muted-foreground">This device - Active now</p>
+            </div>
+            <Badge variant="outline">Current</Badge>
+          </div>
         </CardContent>
       </Card>
     </div>

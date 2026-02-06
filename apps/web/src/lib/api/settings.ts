@@ -27,6 +27,11 @@ export interface UpdateTeamMemberInput {
   role: 'admin' | 'member' | 'viewer'
 }
 
+export interface UpdatePasswordInput {
+  currentPassword: string
+  newPassword: string
+}
+
 export type { NotificationPreferences }
 
 export const settingsApi = {
@@ -59,6 +64,10 @@ export const settingsApi = {
   // Profile update
   updateProfile: (input: UpdateProfileInput) =>
     apiClient.put<User>('/auth/profile', input),
+
+  // Password
+  updatePassword: (input: UpdatePasswordInput) =>
+    apiClient.put<void>('/auth/password', input),
 
   // Team management
   listTeamMembers: (accountId: string) =>

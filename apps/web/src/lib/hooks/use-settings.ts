@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   settingsApi,
   type UpdateProfileInput,
+  type UpdatePasswordInput,
   type UpdateAccountInput,
   type CreateAPIKeyInput,
   type InviteTeamMemberInput,
@@ -15,6 +16,12 @@ export function useUpdateProfile() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth-status'] })
     },
+  })
+}
+
+export function useUpdatePassword() {
+  return useMutation({
+    mutationFn: (input: UpdatePasswordInput) => settingsApi.updatePassword(input),
   })
 }
 
