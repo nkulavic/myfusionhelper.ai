@@ -231,6 +231,44 @@ functions:
           authorizer:
             id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
+  platforms-connections-fields:
+    handler: cmd/handlers/platforms/main.go
+    description: "Get available fields for a connection"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-connections-fields
+    memorySize: 256
+    timeout: 29
+    environment:
+      FUNCTION_NAME: platforms-connections-fields
+      ENDPOINT_PATH: /platforms/{platform_id}/connections/{connection_id}/fields
+    events:
+      - httpApi:
+          path: /platforms/{platform_id}/connections/{connection_id}/fields
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  platforms-connections-tags:
+    handler: cmd/handlers/platforms/main.go
+    description: "Get available tags for a connection"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-connections-tags
+    memorySize: 256
+    timeout: 29
+    environment:
+      FUNCTION_NAME: platforms-connections-tags
+      ENDPOINT_PATH: /platforms/{platform_id}/connections/{connection_id}/tags
+    events:
+      - httpApi:
+          path: /platforms/{platform_id}/connections/{connection_id}/tags
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
   platforms-connections-test:
     handler: cmd/handlers/platforms/main.go
     description: "Test a platform connection"

@@ -11,13 +11,14 @@ import (
 
 // ExecutionRequest represents a request to execute a helper
 type ExecutionRequest struct {
-	HelperType   string                 `json:"helper_type"`
-	ContactID    string                 `json:"contact_id"`
-	Config       map[string]interface{} `json:"config"`
-	UserID       string                 `json:"user_id"`
-	AccountID    string                 `json:"account_id"`
-	HelperID     string                 `json:"helper_id"`
-	ConnectionID string                 `json:"connection_id"`
+	HelperType   string                                  `json:"helper_type"`
+	ContactID    string                                  `json:"contact_id"`
+	Config       map[string]interface{}                   `json:"config"`
+	UserID       string                                  `json:"user_id"`
+	AccountID    string                                  `json:"account_id"`
+	HelperID     string                                  `json:"helper_id"`
+	ConnectionID string                                  `json:"connection_id"`
+	ServiceAuths map[string]*connectors.ConnectorConfig   `json:"-"` // pre-loaded service connection credentials
 }
 
 // ExecutionResult represents the full result of a helper execution
@@ -85,13 +86,14 @@ func (e *Executor) Execute(ctx context.Context, req ExecutionRequest, connector 
 
 	// Build helper input
 	input := HelperInput{
-		ContactID:   req.ContactID,
-		ContactData: contactData,
-		Config:      req.Config,
-		Connector:   connector,
-		UserID:      req.UserID,
-		AccountID:   req.AccountID,
-		HelperID:    req.HelperID,
+		ContactID:    req.ContactID,
+		ContactData:  contactData,
+		Config:       req.Config,
+		Connector:    connector,
+		ServiceAuths: req.ServiceAuths,
+		UserID:       req.UserID,
+		AccountID:    req.AccountID,
+		HelperID:     req.HelperID,
 	}
 
 	// Execute the helper

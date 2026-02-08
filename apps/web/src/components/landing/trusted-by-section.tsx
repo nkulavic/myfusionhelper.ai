@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { fadeUp } from './animation-variants'
-import { crmPlatforms } from '@/lib/crm-platforms'
+import { activeCRMPlatforms } from '@/lib/crm-platforms'
 import { PlatformLogo } from '@/components/platform-logo'
 
 export function TrustedBySection() {
@@ -20,7 +20,7 @@ export function TrustedBySection() {
             Connects with the CRMs you already use
           </p>
           <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12 md:gap-16">
-            {crmPlatforms.map((platform) => (
+            {activeCRMPlatforms.map((platform) => (
               <div
                 key={platform.id}
                 className="group flex items-center gap-2.5 transition-all duration-300 grayscale hover:grayscale-0"

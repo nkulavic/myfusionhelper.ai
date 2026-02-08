@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { useDataExplorerStore } from '@/lib/stores/data-explorer-store'
-import { getCRMPlatform } from '@/lib/crm-platforms'
+import { usePlatforms } from '@/lib/hooks/use-connections'
 import { PlatformLogo } from '@/components/platform-logo'
 
 interface CatalogEntry {
@@ -73,9 +73,13 @@ export function ConnectionOverview() {
     [catalog, selection.connectionId]
   )
 
+  const { data: allPlatforms } = usePlatforms()
   const platform = useMemo(
-    () => (selection.platformId ? getCRMPlatform(selection.platformId) : undefined),
-    [selection.platformId]
+    () =>
+      selection.platformId
+        ? allPlatforms?.find((p) => p.slug === selection.platformId || p.platformId === selection.platformId)
+        : undefined,
+    [selection.platformId, allPlatforms]
   )
 
   const handleSelectObjectType = useCallback(
@@ -131,7 +135,7 @@ export function ConnectionOverview() {
     )
   }
 
-  const accentColor = platform?.color ?? '#6B7280'
+  const accentColor = platform?.displayConfig?.color ?? '#6B7280'
 
   return (
     <ScrollArea className="h-full">
@@ -143,7 +147,7 @@ export function ConnectionOverview() {
           </h2>
           {platform && (
             <Badge variant="secondary" className="flex items-center gap-1.5">
-              <PlatformLogo platform={platform} size={20} />
+              <PlatformLogo definition={platform} size={20} />
               <span>{platform.name}</span>
             </Badge>
           )}

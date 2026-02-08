@@ -1,0 +1,42 @@
+{
+  "platform_id": "platform:stripe",
+  "slug": "stripe",
+  "name": "Stripe",
+  "category": "payments",
+  "description": "Payment processing, subscription management, and billing infrastructure for internet businesses",
+  "status": "active",
+  "version": "v1",
+  "logo_url": "https://assets.myfusionhelper.ai/platforms/stripe-logo.svg",
+  "documentation_url": "https://docs.stripe.com/api",
+  "api_config": {
+    "base_url": "https://api.stripe.com/v1",
+    "auth_type": "api_key",
+    "test_endpoint": "https://api.stripe.com/v1/balance",
+    "rate_limits": {
+      "requests_per_second": 25,
+      "requests_per_minute": 0,
+      "requests_per_hour": 100000,
+      "burst_limit": 50
+    },
+    "required_headers": {
+      "Authorization": "Bearer {api_key}"
+    },
+    "version": "v1"
+  },
+  "display_config": {
+    "color": "#635BFF",
+    "accent": "#eeecff",
+    "initial": "S"
+  },
+  "credential_fields": [
+    {
+      "key": "api_key",
+      "label": "Secret Key",
+      "placeholder": "sk_live_... or sk_test_...",
+      "hint": "Found in Dashboard \u2192 Developers \u2192 API Keys",
+      "input_type": "password",
+      "required": true
+    }
+  ],
+  "capabilities": ["customers", "charges", "subscriptions", "invoices", "products", "payments"]
+}

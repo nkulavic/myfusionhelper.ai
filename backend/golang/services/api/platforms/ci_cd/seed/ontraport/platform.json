@@ -24,5 +24,28 @@
     },
     "version": "v1"
   },
+  "display_config": {
+    "color": "#6C4DC4",
+    "accent": "#f0ebfa",
+    "initial": "O"
+  },
+  "credential_fields": [
+    {
+      "key": "app_id",
+      "label": "App ID",
+      "placeholder": "Your Ontraport App ID",
+      "hint": "Found in your Ontraport account under Administration \u2192 Integrations \u2192 API",
+      "input_type": "text",
+      "required": true
+    },
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "placeholder": "Enter your Ontraport API key",
+      "hint": "Your API key is encrypted and stored securely",
+      "input_type": "password",
+      "required": true
+    }
+  ],
   "capabilities": ["contacts", "tags", "custom_fields", "automations", "deals"]
 }

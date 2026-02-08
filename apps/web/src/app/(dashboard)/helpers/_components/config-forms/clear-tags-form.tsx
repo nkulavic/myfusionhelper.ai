@@ -1,12 +1,20 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+// Schema: see schemas.ts > clearTagsSchema
+import { TagPicker } from '@/components/tag-picker'
+import { FormSelect, FormTextField } from './form-fields'
 import type { ConfigFormProps } from './types'
 
-export function ClearTagsForm({ config, onChange, disabled }: ConfigFormProps) {
+const modeOptions = [
+  { value: 'all', label: 'Remove all tags' },
+  { value: 'specific', label: 'Remove specific tags' },
+  { value: 'prefix', label: 'Remove tags matching a prefix' },
+  { value: 'category', label: 'Remove tags in a category' },
+]
+
+export function ClearTagsForm({ config, onChange, disabled, platformId, connectionId }: ConfigFormProps) {
   const mode = (config.mode as string) || 'all'
+  const tagIds = (config.tagIds as string[]) || []
   const prefix = (config.prefix as string) || ''
   const category = (config.category as string) || ''
 
@@ -16,58 +24,60 @@ export function ClearTagsForm({ config, onChange, disabled }: ConfigFormProps) {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-2">
-        <Label htmlFor="clear-mode">Clear Mode</Label>
-        <select
-          id="clear-mode"
-          value={mode}
-          onChange={(e) => updateConfig({ mode: e.target.value })}
-          disabled={disabled}
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        >
-          <option value="all">Remove all tags</option>
-          <option value="prefix">Remove tags matching a prefix</option>
-          <option value="category">Remove tags in a category</option>
-        </select>
-        <p className="text-xs text-muted-foreground">
-          {mode === 'all'
+      <FormSelect
+        label="Clear Mode"
+        description={
+          mode === 'all'
             ? 'Remove every tag from the contact.'
+            : mode === 'specific'
+            ? 'Remove only the selected tags from the contact.'
             : mode === 'prefix'
             ? 'Remove tags whose name starts with a specific prefix.'
-            : 'Remove tags belonging to a specific category.'}
-        </p>
-      </div>
+            : 'Remove tags belonging to a specific category.'
+        }
+        value={mode}
+        onValueChange={(v) => updateConfig({ mode: v })}
+        options={modeOptions}
+        disabled={disabled}
+      />
 
-      {mode === 'prefix' && (
+      {mode === 'specific' && (
         <div className="grid gap-2">
-          <Label htmlFor="clear-prefix">Tag Prefix</Label>
-          <Input
-            id="clear-prefix"
-            placeholder="e.g. campaign_"
-            value={prefix}
-            onChange={(e) => updateConfig({ prefix: e.target.value })}
+          <label className="text-sm font-medium">Tags to Remove</label>
+          <TagPicker
+            platformId={platformId ?? ''}
+            connectionId={connectionId ?? ''}
+            value={tagIds}
+            onChange={(value) => updateConfig({ tagIds: value })}
+            placeholder="Select tags to remove..."
             disabled={disabled}
           />
           <p className="text-xs text-muted-foreground">
-            All tags starting with this prefix will be removed.
+            Only these specific tags will be removed from the contact.
           </p>
         </div>
       )}
 
+      {mode === 'prefix' && (
+        <FormTextField
+          label="Tag Prefix"
+          placeholder="e.g. campaign_"
+          value={prefix}
+          onChange={(e) => updateConfig({ prefix: e.target.value })}
+          disabled={disabled}
+          description="All tags starting with this prefix will be removed."
+        />
+      )}
+
       {mode === 'category' && (
-        <div className="grid gap-2">
-          <Label htmlFor="clear-category">Tag Category</Label>
-          <Input
-            id="clear-category"
-            placeholder="e.g. marketing"
-            value={category}
-            onChange={(e) => updateConfig({ category: e.target.value })}
-            disabled={disabled}
-          />
-          <p className="text-xs text-muted-foreground">
-            All tags in this category will be removed.
-          </p>
-        </div>
+        <FormTextField
+          label="Tag Category"
+          placeholder="e.g. marketing"
+          value={category}
+          onChange={(e) => updateConfig({ category: e.target.value })}
+          disabled={disabled}
+          description="All tags in this category will be removed."
+        />
       )}
 
       {mode === 'all' && (

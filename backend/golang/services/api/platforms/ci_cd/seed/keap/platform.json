@@ -28,5 +28,12 @@
     "required_headers": {},
     "version": "v2"
   },
+  "display_config": {
+    "color": "#2AB27B",
+    "accent": "#e6f7ef",
+    "initial": "K",
+    "short_name": "Keap"
+  },
+  "credential_fields": [],
   "capabilities": ["contacts", "tags", "custom_fields", "automations", "goals", "deals", "emails"]
 }

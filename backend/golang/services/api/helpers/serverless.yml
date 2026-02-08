@@ -40,7 +40,8 @@ provider:
     HELPERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableName}
     EXECUTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableName}
     CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
-    HELPER_EXECUTION_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperExecutionQueueUrl}
+    RATE_LIMITS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.RateLimitsTableName}
+    SCHEDULER_FUNCTION_ARN: ${cf:mfh-scheduler-${self:provider.stage}.SchedulerFunctionArn}
     API_VERSION: v1
     API_REFERENCE: mfh-api
   iam:
@@ -68,11 +69,7 @@ provider:
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableArn}/index/*"
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableArn}/index/*"
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}/index/*"
-        - Effect: Allow
-          Action:
-            - sqs:SendMessage
-          Resource:
-            - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperExecutionQueueArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.RateLimitsTableArn}
         - Effect: Allow
           Action:
             - logs:CreateLogGroup
@@ -84,6 +81,23 @@ provider:
             - xray:PutTraceSegments
             - xray:PutTelemetryRecords
           Resource: "*"
+        - Effect: Allow
+          Action:
+            - events:PutRule
+            - events:DeleteRule
+            - events:PutTargets
+            - events:RemoveTargets
+            - events:DescribeRule
+            - events:DisableRule
+            - events:EnableRule
+          Resource:
+            - "arn:aws:events:${self:provider.region}:*:rule/mfh-${self:provider.stage}-helper-schedule-*"
+        - Effect: Allow
+          Action:
+            - lambda:AddPermission
+            - lambda:RemovePermission
+          Resource:
+            - ${cf:mfh-scheduler-${self:provider.stage}.SchedulerFunctionArn}
 
 functions:
   helpers-list:
@@ -279,4 +293,50 @@ functions:
           method: get
           authorizer:
             id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  # API-key-authenticated execute endpoints
+  helper-execute-header:
+    handler: cmd/handlers/helpers/main.go
+    description: "Execute helper via API key (header auth)"
+    memorySize: 512
+    timeout: 29
+    environment:
+      FUNCTION_NAME: helper-execute
+      ENDPOINT_PATH: /helper/{identifier}/execute
+    events:
+      - httpApi:
+          path: /helper/{identifier}/execute
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.ApiKeyAuthorizerId}
+
+  helper-execute-path-post:
+    handler: cmd/handlers/helpers/main.go
+    description: "Execute helper via API key (path auth, POST)"
+    memorySize: 512
+    timeout: 29
+    environment:
+      FUNCTION_NAME: helper-execute
+      ENDPOINT_PATH: /helper/{api_key}/{identifier}
+    events:
+      - httpApi:
+          path: /helper/{api_key}/{identifier}
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.ApiKeyAuthorizerId}
+
+  helper-execute-path-get:
+    handler: cmd/handlers/helpers/main.go
+    description: "Execute helper via API key (path auth, GET)"
+    memorySize: 512
+    timeout: 29
+    environment:
+      FUNCTION_NAME: helper-execute
+      ENDPOINT_PATH: /helper/{api_key}/{identifier}
+    events:
+      - httpApi:
+          path: /helper/{api_key}/{identifier}
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.ApiKeyAuthorizerId}
 

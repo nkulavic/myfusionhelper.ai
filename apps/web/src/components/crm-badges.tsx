@@ -1,4 +1,6 @@
-import { crmPlatforms, getCRMPlatform } from '@/lib/crm-platforms'
+'use client'
+
+import { usePlatforms } from '@/lib/hooks/use-connections'
 
 interface CRMBadgesProps {
   crmIds: string[]
@@ -6,18 +8,23 @@ interface CRMBadgesProps {
 }
 
 export function CRMBadges({ crmIds, max = 3 }: CRMBadgesProps) {
+  const { data: platforms } = usePlatforms()
+
+  const findPlatform = (id: string) =>
+    platforms?.find((p) => p.slug === id || p.platformId === id)
+
   if (crmIds.length === 0) {
     return (
       <div className="flex items-center gap-1.5">
         <div className="flex -space-x-1">
-          {crmPlatforms.map((p) => (
+          {platforms?.map((p) => (
             <div
-              key={p.id}
+              key={p.platformId}
               className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-card text-[9px] font-bold text-white"
-              style={{ backgroundColor: p.color }}
+              style={{ backgroundColor: p.displayConfig?.color || 'hsl(var(--primary))' }}
               title={p.name}
             >
-              {p.initial}
+              {p.displayConfig?.initial || p.name.charAt(0)}
             </div>
           ))}
         </div>
@@ -33,16 +40,16 @@ export function CRMBadges({ crmIds, max = 3 }: CRMBadgesProps) {
     <div className="flex items-center gap-1.5">
       <div className="flex -space-x-1">
         {visible.map((id) => {
-          const platform = getCRMPlatform(id)
+          const platform = findPlatform(id)
           if (!platform) return null
           return (
             <div
               key={id}
               className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-card text-[9px] font-bold text-white"
-              style={{ backgroundColor: platform.color }}
+              style={{ backgroundColor: platform.displayConfig?.color || 'hsl(var(--primary))' }}
               title={platform.name}
             >
-              {platform.initial}
+              {platform.displayConfig?.initial || platform.name.charAt(0)}
             </div>
           )
         })}
@@ -52,7 +59,7 @@ export function CRMBadges({ crmIds, max = 3 }: CRMBadgesProps) {
       )}
       {visible.length === 1 && (
         <span className="text-[10px] text-muted-foreground">
-          {getCRMPlatform(visible[0])?.name} only
+          {findPlatform(visible[0])?.name} only
         </span>
       )}
     </div>

@@ -54,12 +54,13 @@ type Account struct {
 
 // AccountSettings represents configurable account settings
 type AccountSettings struct {
-	MaxHelpers      int  `json:"max_helpers" dynamodbav:"max_helpers"`
-	MaxConnections  int  `json:"max_connections" dynamodbav:"max_connections"`
-	MaxAPIKeys      int  `json:"max_api_keys" dynamodbav:"max_api_keys"`
-	MaxTeamMembers  int  `json:"max_team_members" dynamodbav:"max_team_members"`
-	MaxExecutions   int  `json:"max_executions" dynamodbav:"max_executions"`
-	WebhooksEnabled bool `json:"webhooks_enabled" dynamodbav:"webhooks_enabled"`
+	MaxHelpers          int    `json:"max_helpers" dynamodbav:"max_helpers"`
+	MaxConnections      int    `json:"max_connections" dynamodbav:"max_connections"`
+	MaxAPIKeys          int    `json:"max_api_keys" dynamodbav:"max_api_keys"`
+	MaxTeamMembers      int    `json:"max_team_members" dynamodbav:"max_team_members"`
+	MaxExecutions       int    `json:"max_executions" dynamodbav:"max_executions"`
+	WebhooksEnabled     bool   `json:"webhooks_enabled" dynamodbav:"webhooks_enabled"`
+	StripeMeteredItemID string `json:"stripe_metered_item_id,omitempty" dynamodbav:"stripe_metered_item_id,omitempty"`
 }
 
 // AccountUsage represents current usage metrics for an account
@@ -131,6 +132,8 @@ type Platform struct {
 	OAuth            *OAuthConfiguration `json:"oauth,omitempty" dynamodbav:"oauth,omitempty"`
 	APIConfig        APIConfiguration    `json:"api_config" dynamodbav:"api_config"`
 	TestEndpoints    *TestEndpoints      `json:"test_endpoints,omitempty" dynamodbav:"test_endpoints,omitempty"`
+	DisplayConfig    *DisplayConfig      `json:"display_config,omitempty" dynamodbav:"display_config,omitempty"`
+	CredentialFields []CredentialField   `json:"credential_fields,omitempty" dynamodbav:"credential_fields,omitempty"`
 	Capabilities     []string            `json:"capabilities" dynamodbav:"capabilities"`
 	CreatedAt        time.Time           `json:"created_at" dynamodbav:"created_at"`
 	UpdatedAt        time.Time           `json:"updated_at" dynamodbav:"updated_at"`
@@ -143,6 +146,24 @@ type OAuthConfiguration struct {
 	UserInfoURL  string   `json:"user_info_url" dynamodbav:"user_info_url"`
 	Scopes       []string `json:"scopes" dynamodbav:"scopes"`
 	ResponseType string   `json:"response_type" dynamodbav:"response_type"`
+}
+
+// DisplayConfig holds UI metadata for rendering a platform in the frontend
+type DisplayConfig struct {
+	Color     string `json:"color" dynamodbav:"color"`
+	Accent    string `json:"accent" dynamodbav:"accent"`
+	Initial   string `json:"initial" dynamodbav:"initial"`
+	ShortName string `json:"short_name,omitempty" dynamodbav:"short_name,omitempty"`
+}
+
+// CredentialField describes a single input field for platform credential entry
+type CredentialField struct {
+	Key         string `json:"key" dynamodbav:"key"`
+	Label       string `json:"label" dynamodbav:"label"`
+	Placeholder string `json:"placeholder" dynamodbav:"placeholder"`
+	Hint        string `json:"hint,omitempty" dynamodbav:"hint,omitempty"`
+	InputType   string `json:"input_type" dynamodbav:"input_type"`
+	Required    bool   `json:"required" dynamodbav:"required"`
 }
 
 // APIConfiguration represents API configuration for a platform
@@ -263,6 +284,7 @@ type Helper struct {
 	AccountID    string                 `json:"account_id" dynamodbav:"account_id"`
 	CreatedBy    string                 `json:"created_by" dynamodbav:"created_by"`
 	ConnectionID string                 `json:"connection_id,omitempty" dynamodbav:"connection_id,omitempty"`
+	ShortKey     string                 `json:"short_key" dynamodbav:"short_key"`
 	Name         string                 `json:"name" dynamodbav:"name"`
 	Description  string                 `json:"description" dynamodbav:"description"`
 	HelperType   string                 `json:"helper_type" dynamodbav:"helper_type"`
@@ -270,11 +292,16 @@ type Helper struct {
 	Status       string                 `json:"status" dynamodbav:"status"`
 	Config       map[string]interface{} `json:"config" dynamodbav:"config"`
 	ConfigSchema map[string]interface{} `json:"config_schema,omitempty" dynamodbav:"config_schema,omitempty"`
-	Enabled      bool                   `json:"enabled" dynamodbav:"enabled"`
-	ExecutionCount int64                `json:"execution_count" dynamodbav:"execution_count"`
-	LastExecutedAt *time.Time           `json:"last_executed_at,omitempty" dynamodbav:"last_executed_at,omitempty"`
-	CreatedAt    time.Time              `json:"created_at" dynamodbav:"created_at"`
-	UpdatedAt    time.Time              `json:"updated_at" dynamodbav:"updated_at"`
+	Enabled          bool                   `json:"enabled" dynamodbav:"enabled"`
+	ExecutionCount   int64                  `json:"execution_count" dynamodbav:"execution_count"`
+	LastExecutedAt   *time.Time             `json:"last_executed_at,omitempty" dynamodbav:"last_executed_at,omitempty"`
+	ScheduleEnabled  bool                   `json:"schedule_enabled" dynamodbav:"schedule_enabled"`
+	CronExpression   string                 `json:"cron_expression,omitempty" dynamodbav:"cron_expression,omitempty"`
+	ScheduleRuleARN  string                 `json:"schedule_rule_arn,omitempty" dynamodbav:"schedule_rule_arn,omitempty"`
+	LastScheduledAt  *time.Time             `json:"last_scheduled_at,omitempty" dynamodbav:"last_scheduled_at,omitempty"`
+	NextScheduledAt  *time.Time             `json:"next_scheduled_at,omitempty" dynamodbav:"next_scheduled_at,omitempty"`
+	CreatedAt        time.Time              `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at" dynamodbav:"updated_at"`
 }
 
 // HelperTemplate represents a predefined helper template from the library
@@ -314,8 +341,10 @@ type Execution struct {
 	DurationMs   int64                  `json:"duration_ms" dynamodbav:"duration_ms"`
 	CreatedAt    string                 `json:"created_at" dynamodbav:"created_at"`
 	StartedAt    time.Time              `json:"started_at" dynamodbav:"started_at"`
-	CompletedAt  *time.Time             `json:"completed_at,omitempty" dynamodbav:"completed_at,omitempty"`
-	TTL          *int64                 `json:"ttl,omitempty" dynamodbav:"ttl,omitempty"`
+	CompletedAt          *time.Time             `json:"completed_at,omitempty" dynamodbav:"completed_at,omitempty"`
+	TTL                  *int64                 `json:"ttl,omitempty" dynamodbav:"ttl,omitempty"`
+	StripeReported       bool                   `json:"stripe_reported,omitempty" dynamodbav:"stripe_reported,omitempty"`
+	StripeUsageRecordID  string                 `json:"stripe_usage_record_id,omitempty" dynamodbav:"stripe_usage_record_id,omitempty"`
 }
 
 // ========== API KEY TYPES ==========

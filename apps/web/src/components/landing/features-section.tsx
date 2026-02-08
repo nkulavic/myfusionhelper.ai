@@ -22,9 +22,9 @@ const features = [
     gradient: 'from-brand-green/20 to-brand-green/5',
   },
   {
-    title: '5 CRM Platforms',
+    title: '6 Platforms',
     description:
-      'One account works with Keap, GoHighLevel, ActiveCampaign, Ontraport, and HubSpot. Switch CRMs without rebuilding your automations.',
+      'One account works with Keap, GoHighLevel, ActiveCampaign, Ontraport, HubSpot, and Stripe. Switch platforms without rebuilding your automations.',
     icon: Shield,
     gradient: 'from-brand-blue/20 to-brand-blue/5',
   },

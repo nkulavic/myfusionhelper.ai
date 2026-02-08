@@ -9,7 +9,7 @@ const steps = [
     number: '01',
     title: 'Connect Your CRM',
     description:
-      'Link your Keap, GoHighLevel, ActiveCampaign, Ontraport, or HubSpot account with OAuth or API key. Encrypted and connected in under 60 seconds.',
+      'Link your Keap, GoHighLevel, ActiveCampaign, Ontraport, HubSpot, or Stripe account with your API key. Encrypted and connected in under 60 seconds.',
     icon: Link2,
   },
   {

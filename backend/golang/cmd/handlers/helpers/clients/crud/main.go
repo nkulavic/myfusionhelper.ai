@@ -15,17 +15,20 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/eventbridge"
+	ebtypes "github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
+	lambdasvc "github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/google/uuid"
 	helperEngine "github.com/myfusionhelper/api/internal/helpers"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
+	"github.com/myfusionhelper/api/internal/nanoid"
 	apitypes "github.com/myfusionhelper/api/internal/types"
 )
 
 var (
-	helpersTable             = os.Getenv("HELPERS_TABLE")
-	executionsTable          = os.Getenv("EXECUTIONS_TABLE")
-	helperExecutionQueueURL  = os.Getenv("HELPER_EXECUTION_QUEUE_URL")
+	helpersTable        = os.Getenv("HELPERS_TABLE")
+	executionsTable     = os.Getenv("EXECUTIONS_TABLE")
+	schedulerFunctionARN = os.Getenv("SCHEDULER_FUNCTION_ARN")
 )
 
 type CreateHelperRequest struct {
@@ -38,11 +41,13 @@ type CreateHelperRequest struct {
 }
 
 type UpdateHelperRequest struct {
-	Name         string                 `json:"name"`
-	Description  string                 `json:"description"`
-	Config       map[string]interface{} `json:"config"`
-	Enabled      *bool                  `json:"enabled"`
-	ConnectionID string                 `json:"connection_id"`
+	Name            string                 `json:"name"`
+	Description     string                 `json:"description"`
+	Config          map[string]interface{} `json:"config"`
+	Enabled         *bool                  `json:"enabled"`
+	ConnectionID    string                 `json:"connection_id"`
+	ScheduleEnabled *bool                  `json:"schedule_enabled"`
+	CronExpression  string                 `json:"cron_expression"`
 }
 
 type ExecuteHelperRequest struct {
@@ -108,6 +113,7 @@ func listHelpers(ctx context.Context, event events.APIGatewayV2HTTPRequest, auth
 		}
 		helpers = append(helpers, map[string]interface{}{
 			"helper_id":        helper.HelperID,
+			"short_key":        helper.ShortKey,
 			"name":             helper.Name,
 			"description":      helper.Description,
 			"helper_type":      helper.HelperType,
@@ -160,6 +166,7 @@ func getHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCt
 
 	return authMiddleware.CreateSuccessResponse(200, "Helper retrieved successfully", map[string]interface{}{
 		"helper_id":        helper.HelperID,
+		"short_key":        helper.ShortKey,
 		"name":             helper.Name,
 		"description":      helper.Description,
 		"helper_type":      helper.HelperType,
@@ -218,13 +225,20 @@ func createHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, aut
 	}
 
 	now := time.Now().UTC()
-	helperID := "helper:" + uuid.New().String()
+	helperID := "helper:" + uuid.Must(uuid.NewV7()).String()
+
+	shortKey, err := nanoid.New()
+	if err != nil {
+		log.Printf("Failed to generate short key: %v", err)
+		return authMiddleware.CreateErrorResponse(500, "Failed to create helper"), nil
+	}
 
 	helper := apitypes.Helper{
 		HelperID:     helperID,
 		AccountID:    authCtx.AccountID,
 		CreatedBy:    authCtx.UserID,
 		ConnectionID: req.ConnectionID,
+		ShortKey:     shortKey,
 		Name:         req.Name,
 		Description:  req.Description,
 		HelperType:   req.HelperType,
@@ -259,9 +273,10 @@ func createHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, aut
 
 	return authMiddleware.CreateSuccessResponse(201, "Helper created successfully", map[string]interface{}{
 		"helper_id":   helperID,
+		"short_key":   shortKey,
 		"name":        req.Name,
 		"helper_type": req.HelperType,
-		"category":    req.Category,
+		"category":    category,
 		"created_at":  now,
 	}), nil
 }
@@ -329,9 +344,12 @@ func updateHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, aut
 				}
 			}
 		}
-		configJSON, _ := json.Marshal(req.Config)
+		configAV, err := attributevalue.MarshalMap(req.Config)
+		if err != nil {
+			return authMiddleware.CreateErrorResponse(500, "Failed to process config"), nil
+		}
 		updateParts = append(updateParts, "config = :config")
-		exprValues[":config"] = &ddbtypes.AttributeValueMemberS{Value: string(configJSON)}
+		exprValues[":config"] = &ddbtypes.AttributeValueMemberM{Value: configAV}
 	}
 	if req.Enabled != nil {
 		updateParts = append(updateParts, "enabled = :enabled")
@@ -340,6 +358,38 @@ func updateHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, aut
 	if req.ConnectionID != "" {
 		updateParts = append(updateParts, "connection_id = :connection_id")
 		exprValues[":connection_id"] = &ddbtypes.AttributeValueMemberS{Value: req.ConnectionID}
+	}
+
+	// Handle schedule changes
+	if req.ScheduleEnabled != nil || req.CronExpression != "" {
+		scheduleEnabled := existingHelper.ScheduleEnabled
+		cronExpr := existingHelper.CronExpression
+		if req.ScheduleEnabled != nil {
+			scheduleEnabled = *req.ScheduleEnabled
+		}
+		if req.CronExpression != "" {
+			cronExpr = req.CronExpression
+		}
+
+		if scheduleEnabled && cronExpr != "" {
+			// Create or update EventBridge rule
+			ruleARN, err := upsertScheduleRule(ctx, cfg, helperID, existingHelper.AccountID, cronExpr)
+			if err != nil {
+				log.Printf("Failed to manage schedule rule: %v", err)
+				return authMiddleware.CreateErrorResponse(500, "Failed to update schedule"), nil
+			}
+			updateParts = append(updateParts, "schedule_enabled = :sched_enabled, cron_expression = :cron, schedule_rule_arn = :rule_arn")
+			exprValues[":sched_enabled"] = &ddbtypes.AttributeValueMemberBOOL{Value: true}
+			exprValues[":cron"] = &ddbtypes.AttributeValueMemberS{Value: cronExpr}
+			exprValues[":rule_arn"] = &ddbtypes.AttributeValueMemberS{Value: ruleARN}
+		} else if !scheduleEnabled {
+			// Disable schedule rule
+			if existingHelper.ScheduleRuleARN != "" {
+				disableScheduleRule(ctx, cfg, helperID)
+			}
+			updateParts = append(updateParts, "schedule_enabled = :sched_enabled")
+			exprValues[":sched_enabled"] = &ddbtypes.AttributeValueMemberBOOL{Value: false}
+		}
 	}
 
 	updateInput := &dynamodb.UpdateItemInput{
@@ -397,13 +447,18 @@ func deleteHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, aut
 		return authMiddleware.CreateErrorResponse(404, "Helper not found"), nil
 	}
 
+	// Clean up EventBridge schedule rule if one exists
+	if existingHelper.ScheduleRuleARN != "" {
+		deleteScheduleRule(ctx, cfg, helperID)
+	}
+
 	// Soft delete by setting status to deleted
 	_, err = db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(helpersTable),
 		Key: map[string]ddbtypes.AttributeValue{
 			"helper_id": &ddbtypes.AttributeValueMemberS{Value: helperID},
 		},
-		UpdateExpression: aws.String("SET #s = :status, updated_at = :updated_at, enabled = :enabled"),
+		UpdateExpression: aws.String("SET #s = :status, updated_at = :updated_at, enabled = :enabled, schedule_enabled = :sched"),
 		ExpressionAttributeNames: map[string]string{
 			"#s": "status",
 		},
@@ -411,6 +466,7 @@ func deleteHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, aut
 			":status":     &ddbtypes.AttributeValueMemberS{Value: "deleted"},
 			":updated_at": &ddbtypes.AttributeValueMemberS{Value: time.Now().UTC().Format(time.RFC3339)},
 			":enabled":    &ddbtypes.AttributeValueMemberBOOL{Value: false},
+			":sched":      &ddbtypes.AttributeValueMemberBOOL{Value: false},
 		},
 	})
 	if err != nil {
@@ -471,9 +527,11 @@ func executeHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, au
 		return authMiddleware.CreateErrorResponse(400, "Helper is disabled"), nil
 	}
 
-	// Create execution record
+	// Create execution record with status="queued" directly.
+	// DynamoDB Streams will auto-dispatch to SQS FIFO for async processing.
 	now := time.Now().UTC()
-	executionID := "exec:" + uuid.New().String()
+	executionID := "exec:" + uuid.Must(uuid.NewV7()).String()
+	ttl := now.Add(7 * 24 * time.Hour).Unix()
 
 	execution := apitypes.Execution{
 		ExecutionID:  executionID,
@@ -482,11 +540,12 @@ func executeHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, au
 		UserID:       authCtx.UserID,
 		ConnectionID: helper.ConnectionID,
 		ContactID:    req.ContactID,
-		Status:       "pending",
+		Status:       "queued",
 		TriggerType:  "manual",
 		Input:        req.Input,
 		CreatedAt:    now.Format(time.RFC3339),
 		StartedAt:    now,
+		TTL:          &ttl,
 	}
 
 	execItem, err := attributevalue.MarshalMap(execution)
@@ -503,68 +562,126 @@ func executeHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, au
 		return authMiddleware.CreateErrorResponse(500, "Failed to create execution"), nil
 	}
 
-	// Send to SQS for async execution
-	sqsMessage := map[string]interface{}{
-		"execution_id":  executionID,
-		"helper_id":     helperID,
-		"helper_type":   helper.HelperType,
-		"account_id":    authCtx.AccountID,
-		"user_id":       authCtx.UserID,
-		"connection_id": helper.ConnectionID,
-		"contact_id":    req.ContactID,
-		"config":        helper.Config,
-		"input":         req.Input,
-		"retry_count":   0,
-	}
-
-	sqsBody, err := json.Marshal(sqsMessage)
-	if err != nil {
-		log.Printf("Failed to marshal SQS message: %v", err)
-		return authMiddleware.CreateErrorResponse(500, "Failed to queue execution"), nil
-	}
-
-	sqsClient := sqs.NewFromConfig(cfg)
-	_, err = sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
-		QueueUrl:               aws.String(helperExecutionQueueURL),
-		MessageBody:            aws.String(string(sqsBody)),
-		MessageGroupId:         aws.String(authCtx.AccountID), // FIFO: group by account
-		MessageDeduplicationId: aws.String(executionID),
-	})
-	if err != nil {
-		log.Printf("Failed to send SQS message: %v", err)
-		// Update execution status to failed
-		_, _ = db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-			TableName: aws.String(executionsTable),
-			Key: map[string]ddbtypes.AttributeValue{
-				"execution_id": &ddbtypes.AttributeValueMemberS{Value: executionID},
-			},
-			UpdateExpression: aws.String("SET #s = :status, error_message = :error"),
-			ExpressionAttributeNames: map[string]string{"#s": "status"},
-			ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
-				":status": &ddbtypes.AttributeValueMemberS{Value: "failed"},
-				":error":  &ddbtypes.AttributeValueMemberS{Value: "Failed to queue for execution"},
-			},
-		})
-		return authMiddleware.CreateErrorResponse(500, "Failed to queue execution"), nil
-	}
-
-	// Update execution status to queued
-	_, _ = db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-		TableName: aws.String(executionsTable),
-		Key: map[string]ddbtypes.AttributeValue{
-			"execution_id": &ddbtypes.AttributeValueMemberS{Value: executionID},
-		},
-		UpdateExpression: aws.String("SET #s = :status"),
-		ExpressionAttributeNames: map[string]string{"#s": "status"},
-		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
-			":status": &ddbtypes.AttributeValueMemberS{Value: "queued"},
-		},
-	})
-
 	return authMiddleware.CreateSuccessResponse(202, "Helper execution queued", map[string]interface{}{
 		"execution_id": executionID,
 		"helper_id":    helperID,
 		"status":       "queued",
 		"started_at":   now,
 	}), nil
+}
+
+// scheduleRuleName returns the EventBridge rule name for a helper
+func scheduleRuleName(helperID string) string {
+	// Replace colons with dashes for valid rule names
+	safe := strings.ReplaceAll(helperID, ":", "-")
+	stage := os.Getenv("STAGE")
+	return fmt.Sprintf("mfh-%s-helper-schedule-%s", stage, safe)
+}
+
+// upsertScheduleRule creates or updates an EventBridge rule for a helper's schedule
+func upsertScheduleRule(ctx context.Context, cfg aws.Config, helperID, accountID, cronExpr string) (string, error) {
+	if schedulerFunctionARN == "" {
+		return "", fmt.Errorf("SCHEDULER_FUNCTION_ARN not configured")
+	}
+
+	ebClient := eventbridge.NewFromConfig(cfg)
+	ruleName := scheduleRuleName(helperID)
+
+	// Create/update the EventBridge rule
+	ruleResult, err := ebClient.PutRule(ctx, &eventbridge.PutRuleInput{
+		Name:               aws.String(ruleName),
+		ScheduleExpression: aws.String(cronExpr),
+		State:              ebtypes.RuleStateEnabled,
+		Description:        aws.String(fmt.Sprintf("Schedule for helper %s", helperID)),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create EventBridge rule: %w", err)
+	}
+
+	// Build the target input payload
+	targetInput, _ := json.Marshal(map[string]string{
+		"helper_id":  helperID,
+		"account_id": accountID,
+	})
+
+	// Set the Lambda function as the target
+	_, err = ebClient.PutTargets(ctx, &eventbridge.PutTargetsInput{
+		Rule: aws.String(ruleName),
+		Targets: []ebtypes.Target{
+			{
+				Id:    aws.String("scheduler"),
+				Arn:   aws.String(schedulerFunctionARN),
+				Input: aws.String(string(targetInput)),
+			},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to set EventBridge target: %w", err)
+	}
+
+	// Add permission for EventBridge to invoke the scheduler Lambda
+	lambdaClient := lambdasvc.NewFromConfig(cfg)
+	statementID := fmt.Sprintf("eb-%s", ruleName)
+	_, _ = lambdaClient.RemovePermission(ctx, &lambdasvc.RemovePermissionInput{
+		FunctionName: aws.String(schedulerFunctionARN),
+		StatementId:  aws.String(statementID),
+	})
+	_, err = lambdaClient.AddPermission(ctx, &lambdasvc.AddPermissionInput{
+		FunctionName: aws.String(schedulerFunctionARN),
+		StatementId:  aws.String(statementID),
+		Action:       aws.String("lambda:InvokeFunction"),
+		Principal:    aws.String("events.amazonaws.com"),
+		SourceArn:    ruleResult.RuleArn,
+	})
+	if err != nil {
+		log.Printf("Warning: failed to add Lambda permission for EventBridge rule %s: %v", ruleName, err)
+	}
+
+	log.Printf("Created/updated EventBridge rule %s for helper %s", ruleName, helperID)
+	return aws.ToString(ruleResult.RuleArn), nil
+}
+
+// disableScheduleRule disables an EventBridge rule for a helper
+func disableScheduleRule(ctx context.Context, cfg aws.Config, helperID string) {
+	ebClient := eventbridge.NewFromConfig(cfg)
+	ruleName := scheduleRuleName(helperID)
+
+	_, err := ebClient.DisableRule(ctx, &eventbridge.DisableRuleInput{
+		Name: aws.String(ruleName),
+	})
+	if err != nil {
+		log.Printf("Failed to disable EventBridge rule %s: %v", ruleName, err)
+	} else {
+		log.Printf("Disabled EventBridge rule %s", ruleName)
+	}
+}
+
+// deleteScheduleRule removes an EventBridge rule and its targets for a helper
+func deleteScheduleRule(ctx context.Context, cfg aws.Config, helperID string) {
+	ebClient := eventbridge.NewFromConfig(cfg)
+	ruleName := scheduleRuleName(helperID)
+
+	// Remove targets first (required before deleting rule)
+	_, _ = ebClient.RemoveTargets(ctx, &eventbridge.RemoveTargetsInput{
+		Rule: aws.String(ruleName),
+		Ids:  []string{"scheduler"},
+	})
+
+	// Remove Lambda invoke permission
+	lambdaClient := lambdasvc.NewFromConfig(cfg)
+	statementID := fmt.Sprintf("eb-%s", ruleName)
+	_, _ = lambdaClient.RemovePermission(ctx, &lambdasvc.RemovePermissionInput{
+		FunctionName: aws.String(schedulerFunctionARN),
+		StatementId:  aws.String(statementID),
+	})
+
+	// Delete the rule
+	_, err := ebClient.DeleteRule(ctx, &eventbridge.DeleteRuleInput{
+		Name: aws.String(ruleName),
+	})
+	if err != nil {
+		log.Printf("Failed to delete EventBridge rule %s: %v", ruleName, err)
+	} else {
+		log.Printf("Deleted EventBridge rule %s", ruleName)
+	}
 }

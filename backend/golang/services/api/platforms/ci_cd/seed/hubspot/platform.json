@@ -8,32 +8,35 @@
   "version": "v3",
   "logo_url": "https://assets.myfusionhelper.ai/platforms/hubspot-logo.svg",
   "documentation_url": "https://developers.hubspot.com/docs/api/overview",
-  "oauth": {
-    "auth_url": "https://app.hubspot.com/oauth/authorize",
-    "token_url": "https://api.hubapi.com/oauth/v1/token",
-    "user_info_url": "https://api.hubapi.com/oauth/v1/access-tokens",
-    "scopes": [
-      "crm.objects.contacts.read",
-      "crm.objects.contacts.write",
-      "crm.objects.deals.read",
-      "crm.objects.deals.write",
-      "crm.schemas.custom.read",
-      "crm.objects.owners.read"
-    ],
-    "response_type": "code"
-  },
   "api_config": {
     "base_url": "https://api.hubapi.com",
-    "auth_type": "oauth2",
+    "auth_type": "api_key",
     "test_endpoint": "https://api.hubapi.com/crm/v3/objects/contacts?limit=1",
     "rate_limits": {
       "requests_per_second": 10,
       "requests_per_minute": 0,
-      "requests_per_hour": 0,
+      "requests_per_hour": 36000,
       "burst_limit": 15
     },
-    "required_headers": {},
+    "required_headers": {
+      "Authorization": "Bearer {api_key}"
+    },
     "version": "v3"
   },
+  "display_config": {
+    "color": "#FF7A59",
+    "accent": "#fff0ec",
+    "initial": "H"
+  },
+  "credential_fields": [
+    {
+      "key": "api_key",
+      "label": "Private App Access Token",
+      "placeholder": "Enter your HubSpot Private App token",
+      "hint": "Create a Private App in Settings \u2192 Integrations \u2192 Private Apps",
+      "input_type": "password",
+      "required": true
+    }
+  ],
   "capabilities": ["contacts", "tags", "custom_fields", "deals", "automations"]
 }

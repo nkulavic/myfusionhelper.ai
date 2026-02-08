@@ -46,8 +46,8 @@ export function HeroSection() {
             className="max-w-2xl text-lg text-white/70 sm:text-xl"
           >
             Visualize your data. Analyze patterns. Strategize with AI recommendations.
-            Automate with 62 helpers across Keap, GoHighLevel, ActiveCampaign, Ontraport,
-            and HubSpot — no coding required.
+            Automate with 62 helpers across Keap, GoHighLevel, ActiveCampaign,
+            Ontraport, HubSpot, and Stripe — no coding required.
           </motion.p>
 
           {/* CTAs */}

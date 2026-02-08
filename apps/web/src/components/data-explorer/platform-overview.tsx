@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { useDataExplorerStore } from '@/lib/stores/data-explorer-store'
-import { getCRMPlatform } from '@/lib/crm-platforms'
+import { usePlatforms } from '@/lib/hooks/use-connections'
 import { PlatformLogo } from '@/components/platform-logo'
 
 interface CatalogEntry {
@@ -63,9 +63,13 @@ export function PlatformOverview() {
     [catalog, selection.platformId]
   )
 
+  const { data: allPlatforms } = usePlatforms()
   const platform = useMemo(
-    () => (selection.platformId ? getCRMPlatform(selection.platformId) : undefined),
-    [selection.platformId]
+    () =>
+      selection.platformId
+        ? allPlatforms?.find((p) => p.slug === selection.platformId || p.platformId === selection.platformId)
+        : undefined,
+    [selection.platformId, allPlatforms]
   )
 
   const stats = useMemo(() => {
@@ -136,14 +140,14 @@ export function PlatformOverview() {
     )
   }
 
-  const accentColor = platform?.color ?? '#6B7280'
+  const accentColor = platform?.displayConfig?.color ?? '#6B7280'
 
   return (
     <ScrollArea className="h-full">
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          {platform && <PlatformLogo platform={platform} size={64} />}
+          {platform && <PlatformLogo definition={platform} size={64} />}
           <h2 className="text-2xl font-bold tracking-tight">
             {selection.platformName ?? 'Platform'}
           </h2>

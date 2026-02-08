@@ -11,18 +11,22 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/notifications"
 	stripe "github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/checkout/session"
+	stripeSub "github.com/stripe/stripe-go/v82/subscription"
 	"github.com/stripe/stripe-go/v82/webhook"
 )
 
 var (
 	accountsTable       = os.Getenv("ACCOUNTS_TABLE")
 	usersTable          = os.Getenv("USERS_TABLE")
+	cognitoUserPoolID   = os.Getenv("COGNITO_USER_POOL_ID")
 	stripeKey           = os.Getenv("STRIPE_SECRET_KEY")
 	stripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
 )
@@ -115,6 +119,11 @@ func handleSubscriptionUpdate(ctx context.Context, event stripe.Event) (events.A
 		return authMiddleware.CreateErrorResponse(500, "Failed to process event"), nil
 	}
 
+	// Sync Cognito plan group for the owner user
+	if ownerUserID != "" {
+		go syncCognitoPlanGroup(ctx, ownerUserID, plan)
+	}
+
 	// Send billing email notification asynchronously
 	if ownerUserID != "" {
 		cfg, _ := config.LoadDefaultConfig(ctx)
@@ -148,6 +157,7 @@ func handleSubscriptionCancelled(ctx context.Context, event stripe.Event) (event
 	}
 
 	if ownerUserID != "" {
+		go syncCognitoPlanGroup(ctx, ownerUserID, "free")
 		cfg, _ := config.LoadDefaultConfig(ctx)
 		dbClient := dynamodb.NewFromConfig(cfg)
 		go sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_cancelled", "free")
@@ -254,6 +264,11 @@ func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event) (ev
 
 	log.Printf("Successfully activated account %s on plan %s", accountID, plan)
 
+	// Extract and store stripe_metered_item_id from subscription items
+	if sess.Subscription != nil && sess.Subscription.ID != "" {
+		storeMeteredItemID(ctx, dbClient, accountID, sess.Subscription.ID)
+	}
+
 	// Send welcome/activation email
 	ownerUserID := ""
 	acctResult, err := dbClient.GetItem(ctx, &dynamodb.GetItemInput{
@@ -270,6 +285,7 @@ func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event) (ev
 	}
 
 	if ownerUserID != "" {
+		go syncCognitoPlanGroup(ctx, ownerUserID, plan)
 		go sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_created", plan)
 	}
 
@@ -421,5 +437,116 @@ func sendBillingEmail(ctx context.Context, dbClient *dynamodb.Client, ownerUserI
 
 	if err := notifSvc.SendBillingEvent(ctx, userName, userEmail, eventType, getPlanLabel(plan)); err != nil {
 		log.Printf("Failed to send billing email: %v", err)
+	}
+}
+
+// syncCognitoPlanGroup updates a user's Cognito plan group.
+// Removes from all plan-* groups, then adds to the new plan group.
+func syncCognitoPlanGroup(ctx context.Context, ownerUserID, newPlan string) {
+	if cognitoUserPoolID == "" {
+		log.Printf("COGNITO_USER_POOL_ID not set, skipping Cognito plan group sync")
+		return
+	}
+
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		log.Printf("Failed to load AWS config for Cognito sync: %v", err)
+		return
+	}
+	cognitoClient := cognitoidentityprovider.NewFromConfig(cfg)
+	dbClient := dynamodb.NewFromConfig(cfg)
+
+	// Look up cognito_user_id from DynamoDB user record
+	userResult, err := dbClient.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(usersTable),
+		Key: map[string]ddbtypes.AttributeValue{
+			"user_id": &ddbtypes.AttributeValueMemberS{Value: ownerUserID},
+		},
+	})
+	if err != nil || userResult.Item == nil {
+		log.Printf("Failed to get user %s for Cognito sync: %v", ownerUserID, err)
+		return
+	}
+
+	var user struct {
+		CognitoUserID string `dynamodbav:"cognito_user_id"`
+	}
+	if err := attributevalue.UnmarshalMap(userResult.Item, &user); err != nil || user.CognitoUserID == "" {
+		log.Printf("Failed to get cognito_user_id for user %s: %v", ownerUserID, err)
+		return
+	}
+
+	cognitoUsername := user.CognitoUserID
+
+	// Remove from all plan groups
+	planGroups := []string{"plan-free", "plan-start", "plan-grow", "plan-deliver"}
+	for _, group := range planGroups {
+		_, _ = cognitoClient.AdminRemoveUserFromGroup(ctx, &cognitoidentityprovider.AdminRemoveUserFromGroupInput{
+			UserPoolId: aws.String(cognitoUserPoolID),
+			Username:   aws.String(cognitoUsername),
+			GroupName:  aws.String(group),
+		})
+	}
+
+	// Add to new plan group
+	newGroup := "plan-" + newPlan
+	_, err = cognitoClient.AdminAddUserToGroup(ctx, &cognitoidentityprovider.AdminAddUserToGroupInput{
+		UserPoolId: aws.String(cognitoUserPoolID),
+		Username:   aws.String(cognitoUsername),
+		GroupName:  aws.String(newGroup),
+	})
+	if err != nil {
+		log.Printf("Failed to add user %s to Cognito group %s: %v", cognitoUsername, newGroup, err)
+	} else {
+		log.Printf("Synced user %s to Cognito group %s", cognitoUsername, newGroup)
+	}
+}
+
+// storeMeteredItemID retrieves the subscription, finds the metered price item,
+// and stores its ID on the account for usage reporting.
+func storeMeteredItemID(ctx context.Context, dbClient *dynamodb.Client, accountID, subscriptionID string) {
+	stripe.Key = stripeKey
+	if stripe.Key == "" {
+		return
+	}
+
+	params := &stripe.SubscriptionParams{}
+	params.AddExpand("items")
+
+	sub, err := stripeSub.Get(subscriptionID, params)
+	if err != nil {
+		log.Printf("Failed to get subscription %s: %v", subscriptionID, err)
+		return
+	}
+
+	// Find the metered subscription item
+	var meteredItemID string
+	for _, item := range sub.Items.Data {
+		if item.Price != nil && item.Price.Recurring != nil && item.Price.Recurring.UsageType == "metered" {
+			meteredItemID = item.ID
+			break
+		}
+	}
+
+	if meteredItemID == "" {
+		log.Printf("No metered item found in subscription %s for account %s", subscriptionID, accountID)
+		return
+	}
+
+	// Store on account settings
+	_, err = dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(accountsTable),
+		Key: map[string]ddbtypes.AttributeValue{
+			"account_id": &ddbtypes.AttributeValueMemberS{Value: accountID},
+		},
+		UpdateExpression: aws.String("SET settings.stripe_metered_item_id = :id"),
+		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+			":id": &ddbtypes.AttributeValueMemberS{Value: meteredItemID},
+		},
+	})
+	if err != nil {
+		log.Printf("Failed to store metered item ID for account %s: %v", accountID, err)
+	} else {
+		log.Printf("Stored metered item %s for account %s", meteredItemID, accountID)
 	}
 }

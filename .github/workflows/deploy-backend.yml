@@ -74,6 +74,8 @@ jobs:
             path: services/infrastructure/sqs
           - service: ses
             path: services/infrastructure/ses
+          - service: monitoring
+            path: services/infrastructure/monitoring
     steps:
       - uses: actions/checkout@v4
 
@@ -103,11 +105,60 @@ jobs:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
+  # 2b. Deploy Pre-Gateway Services (needed by gateway + API services)
+  # ──────────────────────────────────────────────
+  deploy-pre-gateway:
+    name: "Deploy Pre-Gateway: ${{ matrix.service }}"
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api-key-authorizer
+            path: services/api/api-key-authorizer
+          - service: scheduler
+            path: services/workers/scheduler
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend/golang/go.sum
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
+          aws-region: us-west-2
+
+      - name: Install Serverless Framework
+        run: npm install -g serverless
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+      - name: Install Go plugin
+        working-directory: backend/golang
+        run: npm install
+
+      - name: "Deploy ${{ matrix.service }}"
+        working-directory: backend/golang/${{ matrix.path }}
+        run: npx sls deploy --stage ${{ env.DEPLOY_STAGE }} --region us-west-2
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+  # ──────────────────────────────────────────────
   # 3. Deploy API Gateway
   # ──────────────────────────────────────────────
   deploy-gateway:
     name: Deploy API Gateway
-    needs: deploy-infra
+    needs:
+      - deploy-infra
+      - deploy-pre-gateway
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -218,6 +269,7 @@ jobs:
           - helper-worker
           - notification-worker
           - data-sync
+          - executions-stream
     steps:
       - uses: actions/checkout@v4
 

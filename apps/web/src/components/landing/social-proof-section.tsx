@@ -19,7 +19,7 @@ const testimonials = [
   },
   {
     quote:
-      'The Data Explorer is incredible. We can finally see all our contacts across GoHighLevel and ActiveCampaign in one place.',
+      'The Data Explorer is incredible. We can finally see all our contacts across GoHighLevel, ActiveCampaign, and Stripe in one place.',
     author: 'CRM Administrator',
     company: 'Agency',
   },

@@ -23,5 +23,29 @@
     },
     "version": "v3"
   },
+  "display_config": {
+    "color": "#356AE6",
+    "accent": "#ebeffe",
+    "initial": "A",
+    "short_name": "AC"
+  },
+  "credential_fields": [
+    {
+      "key": "api_url",
+      "label": "Account URL",
+      "placeholder": "https://yourname.api-us1.com",
+      "hint": "Found in Settings \u2192 Developer \u2192 API Access",
+      "input_type": "url",
+      "required": true
+    },
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "placeholder": "Enter your ActiveCampaign API key",
+      "hint": "Found in Settings \u2192 Developer \u2192 API Access",
+      "input_type": "password",
+      "required": true
+    }
+  ],
   "capabilities": ["contacts", "tags", "custom_fields", "automations", "deals", "emails"]
 }

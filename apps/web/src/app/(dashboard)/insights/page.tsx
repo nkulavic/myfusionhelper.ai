@@ -19,10 +19,9 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useHelpers, useExecutions } from '@/lib/hooks/use-helpers'
-import { useConnections } from '@/lib/hooks/use-connections'
+import { useConnections, usePlatforms } from '@/lib/hooks/use-connections'
 import { useInsights, type AIInsight } from '@/lib/hooks/use-insights'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getCRMPlatform } from '@/lib/crm-platforms'
 import { PlatformLogo } from '@/components/platform-logo'
 
 function getInsightIcon(insight: AIInsight) {
@@ -172,6 +171,7 @@ export default function InsightsPage() {
   const { data: helpers, isLoading: helpersLoading } = useHelpers()
   const { data: executions, isLoading: executionsLoading } = useExecutions({ limit: 100 })
   const { data: connections, isLoading: connectionsLoading } = useConnections()
+  const { data: platforms } = usePlatforms()
 
   const isLoading = helpersLoading || executionsLoading || connectionsLoading
 
@@ -550,7 +550,7 @@ export default function InsightsPage() {
             {connections && connections.length > 0 ? (
               <div className="space-y-3">
                 {connections.map((conn) => {
-                  const platform = getCRMPlatform(conn.platformId)
+                  const platform = platforms?.find((p) => p.platformId === conn.platformId || p.slug === conn.platformId)
                   return (
                     <div
                       key={conn.connectionId}
@@ -562,7 +562,7 @@ export default function InsightsPage() {
                         conn.status === 'error' ? 'bg-destructive animate-pulse' : 'bg-warning'
                       )} />
                       {platform && (
-                        <PlatformLogo platform={platform} size={24} />
+                        <PlatformLogo definition={platform} size={24} />
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{conn.name}</p>

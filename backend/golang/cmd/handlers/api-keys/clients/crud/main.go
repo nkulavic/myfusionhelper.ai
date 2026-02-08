@@ -131,7 +131,7 @@ func createAPIKey(ctx context.Context, event events.APIGatewayV2HTTPRequest, aut
 	keyPrefix := rawKey[:16] // Show first 16 chars for identification
 
 	now := time.Now().UTC()
-	keyID := "apikey:" + uuid.New().String()
+	keyID := "apikey:" + uuid.Must(uuid.NewV7()).String()
 
 	apiKey := apitypes.APIKey{
 		KeyID:       keyID,

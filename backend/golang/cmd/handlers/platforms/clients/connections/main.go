@@ -230,13 +230,13 @@ func createConnection(ctx context.Context, event events.APIGatewayV2HTTPRequest,
 	}
 
 	// For API key connections, create auth record with credentials
-	connectionID := "connection:" + uuid.New().String()
+	connectionID := "connection:" + uuid.Must(uuid.NewV7()).String()
 	now := time.Now().UTC()
 	var authID *string
 
 	if req.AuthType == "api_key" && req.Credentials != nil {
 		authRecord := apitypes.PlatformConnectionAuth{
-			AuthID:       "auth:" + uuid.New().String(),
+			AuthID:       "auth:" + uuid.Must(uuid.NewV7()).String(),
 			ConnectionID: connectionID,
 			AccountID:    authCtx.AccountID,
 			UserID:       authCtx.UserID,
@@ -672,7 +672,7 @@ func oauthStart(ctx context.Context, event events.APIGatewayV2HTTPRequest, authC
 	}
 
 	// Generate state token
-	state := "state:" + uuid.New().String()
+	state := "state:" + uuid.Must(uuid.NewV7()).String()
 	now := time.Now()
 
 	var metadata map[string]interface{}
@@ -915,8 +915,8 @@ func oauthCallback(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 
 	} else {
 		// Create new connection and auth record
-		connectionID = "connection:" + uuid.New().String()
-		authID := "auth:" + uuid.New().String()
+		connectionID = "connection:" + uuid.Must(uuid.NewV7()).String()
+		authID := "auth:" + uuid.Must(uuid.NewV7()).String()
 
 		var expiresAt int64
 		if tokens.ExpiresAt != nil {

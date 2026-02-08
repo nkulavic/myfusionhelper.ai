@@ -1,10 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { Shield, Key, ExternalLink, CheckCircle, Loader2, ArrowLeft } from 'lucide-react'
-import { crmPlatforms, type CRMPlatform } from '@/lib/crm-platforms'
+import { Key, CheckCircle, Loader2, ArrowLeft, Shield, ExternalLink } from 'lucide-react'
 import { PlatformLogo } from '@/components/platform-logo'
-import { useStartOAuth, useCreateConnection, useConnections } from '@/lib/hooks/use-connections'
+import {
+  useCreateConnection,
+  useConnections,
+  useStartOAuth,
+  usePlatforms,
+} from '@/lib/hooks/use-connections'
+import type { PlatformDefinition } from '@/lib/api/connections'
 
 interface ConnectCRMStepProps {
   onNext: () => void
@@ -13,53 +18,51 @@ interface ConnectCRMStepProps {
 }
 
 export function ConnectCRMStep({ onNext, onBack, onSkip }: ConnectCRMStepProps) {
-  const [selectedPlatform, setSelectedPlatform] = useState<CRMPlatform | null>(null)
+  const [selectedPlatform, setSelectedPlatform] = useState<PlatformDefinition | null>(null)
   const [connectionName, setConnectionName] = useState('')
-  const [apiKeyInput, setApiKeyInput] = useState('')
-  const [apiUrlInput, setApiUrlInput] = useState('')
-  const [appIdInput, setAppIdInput] = useState('')
+  const [credentialValues, setCredentialValues] = useState<Record<string, string>>({})
 
   const { data: connections } = useConnections()
-  const startOAuth = useStartOAuth()
+  const { data: platforms, isLoading: platformsLoading } = usePlatforms()
   const createConnection = useCreateConnection()
+  const startOAuth = useStartOAuth()
 
   const hasConnection = connections && connections.length > 0
 
   const handleConnect = async () => {
     if (!selectedPlatform) return
 
-    if (selectedPlatform.authType === 'oauth2') {
-      startOAuth.mutate(selectedPlatform.id, {
+    if (selectedPlatform.apiConfig.authType === 'oauth2') {
+      startOAuth.mutate(selectedPlatform.platformId, {
         onSuccess: (res) => {
           if (res.data?.url) {
             window.location.href = res.data.url
           }
         },
       })
-    } else {
-      createConnection.mutate(
-        {
-          platformId: selectedPlatform.id,
-          input: {
-            name: connectionName || `${selectedPlatform.name} Connection`,
-            credentials: {
-              apiKey: apiKeyInput || undefined,
-              apiUrl: apiUrlInput || undefined,
-              appId: appIdInput || undefined,
-            },
+      return
+    }
+
+    createConnection.mutate(
+      {
+        platformId: selectedPlatform.platformId,
+        input: {
+          name: connectionName || `${selectedPlatform.name} Connection`,
+          credentials: {
+            apiKey: credentialValues.api_key || undefined,
+            apiUrl: credentialValues.api_url || undefined,
+            appId: credentialValues.app_id || undefined,
           },
         },
-        {
-          onSuccess: () => {
-            setSelectedPlatform(null)
-            setConnectionName('')
-            setApiKeyInput('')
-            setApiUrlInput('')
-            setAppIdInput('')
-          },
-        }
-      )
-    }
+      },
+      {
+        onSuccess: () => {
+          setSelectedPlatform(null)
+          setConnectionName('')
+          setCredentialValues({})
+        },
+      }
+    )
   }
 
   return (
@@ -77,14 +80,14 @@ export function ConnectCRMStep({ onNext, onBack, onSkip }: ConnectCRMStepProps) 
       {hasConnection && (
         <div className="space-y-2">
           {connections.map((conn) => {
-            const platform = crmPlatforms.find((p) => p.id === conn.platformId)
+            const platform = platforms?.find((p) => p.platformId === conn.platformId || p.slug === conn.platformId)
             return (
               <div
                 key={conn.connectionId}
                 className="flex items-center gap-3 rounded-lg border border-success/30 bg-success/5 p-3"
               >
                 <CheckCircle className="h-5 w-5 text-success" />
-                {platform && <PlatformLogo platform={platform} size={28} />}
+                {platform && <PlatformLogo definition={platform} size={28} />}
                 <div className="flex-1">
                   <p className="text-sm font-medium">{conn.name}</p>
                   <p className="text-xs text-muted-foreground">{platform?.name || conn.platformId}</p>
@@ -100,132 +103,127 @@ export function ConnectCRMStep({ onNext, onBack, onSkip }: ConnectCRMStepProps) 
 
       {/* Platform selection or form */}
       {!selectedPlatform ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {crmPlatforms.map((platform) => {
-            const isConnected = connections?.some((c) => c.platformId === platform.id)
-            return (
-              <button
-                key={platform.id}
-                onClick={() => setSelectedPlatform(platform)}
-                className="flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-all hover:border-primary hover:shadow-sm"
-              >
-                <PlatformLogo platform={platform} size={40} />
+        platformsLoading ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg border bg-card p-4">
+                <div className="h-10 w-10 animate-pulse rounded-lg bg-muted" />
                 <div className="flex-1">
-                  <h3 className="font-medium">{platform.name}</h3>
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    {platform.authType === 'oauth2' ? (
-                      <>
-                        <Shield className="h-3 w-3" /> OAuth 2.0
-                      </>
-                    ) : (
-                      <>
-                        <Key className="h-3 w-3" /> API Key
-                      </>
-                    )}
-                  </div>
+                  <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                  <div className="mt-1 h-3 w-16 animate-pulse rounded bg-muted" />
                 </div>
-                {isConnected && <CheckCircle className="h-4 w-4 text-success" />}
-              </button>
-            )
-          })}
-        </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {platforms?.map((platform) => {
+              const isConnected = connections?.some(
+                (c) => c.platformId === platform.platformId || c.platformId === platform.slug
+              )
+              return (
+                <button
+                  key={platform.platformId}
+                  onClick={() => setSelectedPlatform(platform)}
+                  className="flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-all hover:border-primary hover:shadow-sm"
+                >
+                  <PlatformLogo definition={platform} size={40} />
+                  <div className="flex-1">
+                    <h3 className="font-medium">{platform.name}</h3>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      {platform.apiConfig.authType === 'oauth2' ? (
+                        <><Shield className="h-3 w-3" /> OAuth 2.0</>
+                      ) : (
+                        <><Key className="h-3 w-3" /> API Key</>
+                      )}
+                    </div>
+                  </div>
+                  {isConnected && <CheckCircle className="h-4 w-4 text-success" />}
+                </button>
+              )
+            })}
+          </div>
+        )
       ) : (
         <div className="space-y-4 rounded-lg border bg-card p-5">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setSelectedPlatform(null)}
+              onClick={() => { setSelectedPlatform(null); setCredentialValues({}) }}
               className="rounded-md p-1.5 hover:bg-accent"
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <PlatformLogo platform={selectedPlatform} size={36} />
+            <PlatformLogo definition={selectedPlatform} size={36} />
             <div>
               <h3 className="font-medium">{selectedPlatform.name}</h3>
               <p className="text-xs text-muted-foreground">
-                {selectedPlatform.authType === 'oauth2'
-                  ? 'Connects via secure OAuth 2.0'
-                  : 'Connects via API Key'}
+                {selectedPlatform.apiConfig.authType === 'oauth2' ? 'Connects via OAuth 2.0' : 'Connects via API Key'}
               </p>
             </div>
           </div>
 
-          {selectedPlatform.authType === 'api_key' && (
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">Connection Name</label>
-                <input
-                  type="text"
-                  value={connectionName}
-                  onChange={(e) => setConnectionName(e.target.value)}
-                  placeholder={`e.g. ${selectedPlatform.name} (Production)`}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              </div>
-              {selectedPlatform.id === 'activecampaign' && (
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">Account URL</label>
-                  <input
-                    type="url"
-                    value={apiUrlInput}
-                    onChange={(e) => setApiUrlInput(e.target.value)}
-                    placeholder="https://yourname.api-us1.com"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </div>
-              )}
-              {selectedPlatform.id === 'ontraport' && (
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium">App ID</label>
-                  <input
-                    type="text"
-                    value={appIdInput}
-                    onChange={(e) => setAppIdInput(e.target.value)}
-                    placeholder="Your Ontraport App ID"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </div>
-              )}
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">API Key</label>
-                <input
-                  type="password"
-                  value={apiKeyInput}
-                  onChange={(e) => setApiKeyInput(e.target.value)}
-                  placeholder="Enter your API key"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Your API key is encrypted and stored securely
-                </p>
-              </div>
-            </div>
-          )}
-
-          <button
-            onClick={handleConnect}
-            disabled={createConnection.isPending || startOAuth.isPending}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
-            {(createConnection.isPending || startOAuth.isPending) && (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            )}
-            {selectedPlatform.authType === 'oauth2' ? (
-              <>
+          {selectedPlatform.apiConfig.authType === 'oauth2' ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                You&apos;ll be redirected to {selectedPlatform.name} to authorize access.
+                We only request the minimum permissions needed.
+              </p>
+              <button
+                onClick={handleConnect}
+                disabled={startOAuth.isPending}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {startOAuth.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
                 <ExternalLink className="h-4 w-4" />
                 Connect with {selectedPlatform.name}
-              </>
-            ) : (
-              <>
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Connection Name</label>
+                  <input
+                    type="text"
+                    value={connectionName}
+                    onChange={(e) => setConnectionName(e.target.value)}
+                    placeholder={`e.g. ${selectedPlatform.name} (Production)`}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+                {selectedPlatform.credentialFields?.map((field) => (
+                  <div key={field.key}>
+                    <label className="mb-1.5 block text-sm font-medium">{field.label}</label>
+                    <input
+                      type={field.inputType === 'password' ? 'password' : 'text'}
+                      value={credentialValues[field.key] || ''}
+                      onChange={(e) =>
+                        setCredentialValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                      }
+                      placeholder={field.placeholder}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                    {field.hint && (
+                      <p className="mt-1 text-xs text-muted-foreground">{field.hint}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={handleConnect}
+                disabled={createConnection.isPending}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                {createConnection.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
                 <Key className="h-4 w-4" />
                 Save Connection
-              </>
-            )}
-          </button>
-
-          {selectedPlatform.authType === 'oauth2' && (
-            <p className="text-center text-xs text-muted-foreground">
-              You&apos;ll be redirected to {selectedPlatform.name} to authorize access.
-            </p>
+              </button>
+            </>
           )}
         </div>
       )}

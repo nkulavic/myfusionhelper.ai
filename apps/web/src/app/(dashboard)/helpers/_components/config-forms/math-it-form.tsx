@@ -1,7 +1,8 @@
 'use client'
 
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+// Schema: see schemas.ts > mathItSchema
+import { FieldPicker } from '@/components/field-picker'
+import { FormSelect, FormTextField } from './form-fields'
 import type { ConfigFormProps } from './types'
 
 const operations = [
@@ -10,34 +11,36 @@ const operations = [
   { value: 'multiply', label: 'Multiply (*)', description: 'Multiply the field by a value' },
   { value: 'divide', label: 'Divide (/)', description: 'Divide the field by a value' },
   { value: 'round', label: 'Round', description: 'Round to specified decimal places' },
+  { value: 'ceil', label: 'Ceiling', description: 'Round up to the nearest integer' },
+  { value: 'floor', label: 'Floor', description: 'Round down to the nearest integer' },
   { value: 'abs', label: 'Absolute', description: 'Convert to absolute value' },
-  { value: 'min', label: 'Minimum', description: 'Set to value if current is higher' },
-  { value: 'max', label: 'Maximum', description: 'Set to value if current is lower' },
+  { value: 'percent', label: 'Percent', description: 'Calculate percentage of the value' },
 ]
 
-export function MathItForm({ config, onChange, disabled }: ConfigFormProps) {
-  const sourceField = (config.sourceField as string) || ''
+export function MathItForm({ config, onChange, disabled, platformId, connectionId }: ConfigFormProps) {
+  const field = (config.field as string) || ''
   const targetField = (config.targetField as string) || ''
   const operation = (config.operation as string) || 'add'
-  const value = (config.value as number) ?? 0
+  const operand = (config.operand as number) ?? 0
   const decimalPlaces = (config.decimalPlaces as number) ?? 2
 
   const updateConfig = (updates: Record<string, unknown>) => {
     onChange({ ...config, ...updates })
   }
 
-  const needsValue = !['abs'].includes(operation)
+  const needsOperand = !['abs', 'ceil', 'floor'].includes(operation)
   const showDecimals = operation === 'round'
 
   return (
     <div className="space-y-4">
       <div className="grid gap-2">
-        <Label htmlFor="math-source">Source Field</Label>
-        <Input
-          id="math-source"
-          placeholder="e.g. _LeadScore, TotalPurchases"
-          value={sourceField}
-          onChange={(e) => updateConfig({ sourceField: e.target.value })}
+        <label className="text-sm font-medium">Field</label>
+        <FieldPicker
+          platformId={platformId ?? ''}
+          connectionId={connectionId ?? ''}
+          value={field}
+          onChange={(value) => updateConfig({ field: value })}
+          placeholder="Select numeric field..."
           disabled={disabled}
         />
         <p className="text-xs text-muted-foreground">
@@ -45,52 +48,37 @@ export function MathItForm({ config, onChange, disabled }: ConfigFormProps) {
         </p>
       </div>
 
-      <div className="grid gap-2">
-        <Label htmlFor="math-operation">Operation</Label>
-        <select
-          id="math-operation"
-          value={operation}
-          onChange={(e) => updateConfig({ operation: e.target.value })}
-          disabled={disabled}
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        >
-          {operations.map((op) => (
-            <option key={op.value} value={op.value}>
-              {op.label}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-muted-foreground">
-          {operations.find((o) => o.value === operation)?.description}
-        </p>
-      </div>
+      <FormSelect
+        label="Operation"
+        description={operations.find((o) => o.value === operation)?.description}
+        value={operation}
+        onValueChange={(v) => updateConfig({ operation: v })}
+        options={operations}
+        disabled={disabled}
+      />
 
-      {needsValue && (
-        <div className="grid gap-2">
-          <Label htmlFor="math-value">
-            {showDecimals ? 'Decimal Places' : 'Value'}
-          </Label>
-          <Input
-            id="math-value"
-            type="number"
-            placeholder="0"
-            value={showDecimals ? decimalPlaces : value}
-            onChange={(e) => {
-              const num = parseFloat(e.target.value) || 0
-              updateConfig(showDecimals ? { decimalPlaces: num } : { value: num })
-            }}
-            disabled={disabled}
-          />
-        </div>
+      {needsOperand && (
+        <FormTextField
+          label={showDecimals ? 'Decimal Places' : 'Operand'}
+          type="number"
+          placeholder="0"
+          value={showDecimals ? decimalPlaces : operand}
+          onChange={(e) => {
+            const num = parseFloat(e.target.value) || 0
+            updateConfig(showDecimals ? { decimalPlaces: num } : { operand: num })
+          }}
+          disabled={disabled}
+        />
       )}
 
       <div className="grid gap-2">
-        <Label htmlFor="math-target">Target Field (optional)</Label>
-        <Input
-          id="math-target"
-          placeholder="Leave empty to update source field"
+        <label className="text-sm font-medium">Target Field (optional)</label>
+        <FieldPicker
+          platformId={platformId ?? ''}
+          connectionId={connectionId ?? ''}
           value={targetField}
-          onChange={(e) => updateConfig({ targetField: e.target.value })}
+          onChange={(value) => updateConfig({ targetField: value })}
+          placeholder="Leave empty to update source field"
           disabled={disabled}
         />
         <p className="text-xs text-muted-foreground">

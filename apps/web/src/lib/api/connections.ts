@@ -20,6 +20,37 @@ export interface UpdateConnectionInput {
   }
 }
 
+export interface CredentialField {
+  key: string
+  label: string
+  placeholder: string
+  hint?: string
+  inputType: string
+  required: boolean
+}
+
+export interface ConnectionField {
+  id?: string
+  key: string
+  label: string
+  fieldType: string
+  groupName?: string
+  options?: string[]
+  defaultValue?: string
+}
+
+export interface ConnectionFieldsResponse {
+  standardFields: ConnectionField[]
+  customFields: ConnectionField[]
+}
+
+export interface ConnectionTag {
+  id: string
+  name: string
+  description?: string
+  category?: string
+}
+
 export interface PlatformDefinition {
   platformId: string
   name: string
@@ -50,6 +81,13 @@ export interface PlatformDefinition {
     requiredHeaders: Record<string, string>
     version: string
   }
+  displayConfig?: {
+    color: string
+    accent: string
+    initial: string
+    shortName?: string
+  }
+  credentialFields?: CredentialField[]
   capabilities: string[]
   createdAt: string
   updatedAt: string
@@ -111,4 +149,16 @@ export const connectionsApi = {
   // Get a single platform definition
   getPlatform: (platformId: string) =>
     apiClient.get<PlatformDefinition>(`/platforms/${platformId}`),
+
+  // List available fields for a connection
+  listConnectionFields: (platformId: string, connectionId: string) =>
+    apiClient.get<ConnectionFieldsResponse>(
+      `/platforms/${platformId}/connections/${connectionId}/fields`
+    ),
+
+  // List available tags for a connection
+  listConnectionTags: (platformId: string, connectionId: string) =>
+    apiClient.get<ConnectionTag[]>(
+      `/platforms/${platformId}/connections/${connectionId}/tags`
+    ),
 }

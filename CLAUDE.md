@@ -126,11 +126,12 @@ npx sls deploy --stage dev     # deploys single service
 
 | Platform | Auth Type | Status |
 |----------|-----------|--------|
-| Keap (Infusionsoft) | OAuth2 | Active |
-| GoHighLevel | OAuth2 | Active |
+| Keap (Infusionsoft) | OAuth 2.0 | Active |
+| GoHighLevel | API Key | Active |
 | ActiveCampaign | API Key | Active |
 | Ontraport | API Key | Active |
-| HubSpot | OAuth2 | Active |
+| HubSpot | API Key (Private App) | Active |
+| Stripe | API Key (Secret Key) | Active |
 
 ## Helper Categories
 

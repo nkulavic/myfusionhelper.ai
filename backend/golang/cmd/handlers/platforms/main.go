@@ -10,6 +10,8 @@ import (
 
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 
+	connectionFieldsClient "github.com/myfusionhelper/api/cmd/handlers/platforms/clients/connection-fields"
+	connectionTagsClient "github.com/myfusionhelper/api/cmd/handlers/platforms/clients/connection-tags"
 	connectionsClient "github.com/myfusionhelper/api/cmd/handlers/platforms/clients/connections"
 	healthClient "github.com/myfusionhelper/api/cmd/handlers/platforms/clients/health"
 	platformsClient "github.com/myfusionhelper/api/cmd/handlers/platforms/clients/platforms"
@@ -48,6 +50,16 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		!strings.Contains(path, "/connections") && !strings.Contains(path, "/oauth") &&
 		!strings.Contains(path, "/health") && method == "GET":
 		return routeToProtectedHandler(ctx, event, platformsClient.HandleWithAuth)
+
+	// Connection fields & tags
+	case strings.HasPrefix(path, "/platforms/") && strings.HasSuffix(path, "/fields") &&
+		event.PathParameters["platform_id"] != "" && event.PathParameters["connection_id"] != "" &&
+		method == "GET":
+		return routeToProtectedHandler(ctx, event, connectionFieldsClient.HandleWithAuth)
+	case strings.HasPrefix(path, "/platforms/") && strings.HasSuffix(path, "/tags") &&
+		event.PathParameters["platform_id"] != "" && event.PathParameters["connection_id"] != "" &&
+		method == "GET":
+		return routeToProtectedHandler(ctx, event, connectionTagsClient.HandleWithAuth)
 
 	// Platform connections (scoped to platform)
 	case strings.HasPrefix(path, "/platforms/") && strings.HasSuffix(path, "/connections") &&

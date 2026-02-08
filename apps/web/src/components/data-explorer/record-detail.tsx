@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { ArrowLeft, AlertCircle, ChevronRight } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { useDataExplorerStore } from '@/lib/stores/data-explorer-store'
-import { getCRMPlatform } from '@/lib/crm-platforms'
 import { JsonViewer } from '@/components/data-explorer/json-viewer'
 
 export function RecordDetail() {
@@ -18,11 +17,6 @@ export function RecordDetail() {
   const [record, setRecord] = useState<unknown>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  const platform = useMemo(
-    () => (selection.platformId ? getCRMPlatform(selection.platformId) : undefined),
-    [selection.platformId]
-  )
 
   useEffect(() => {
     let cancelled = false

@@ -14,6 +14,8 @@ export interface UpdateHelperInput {
   config?: Record<string, unknown>
   connectionId?: string
   enabled?: boolean
+  scheduleEnabled?: boolean
+  cronExpression?: string
 }
 
 export interface ExecuteHelperInput {

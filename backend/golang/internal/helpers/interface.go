@@ -29,13 +29,14 @@ type Helper interface {
 
 // HelperInput provides all context needed to execute a helper
 type HelperInput struct {
-	ContactID   string                 `json:"contact_id"`
-	ContactData *connectors.NormalizedContact `json:"contact_data,omitempty"`
-	Config      map[string]interface{} `json:"config"`
-	Connector   connectors.CRMConnector `json:"-"`
-	UserID      string                 `json:"user_id"`
-	AccountID   string                 `json:"account_id"`
-	HelperID    string                 `json:"helper_id"`
+	ContactID    string                                  `json:"contact_id"`
+	ContactData  *connectors.NormalizedContact            `json:"contact_data,omitempty"`
+	Config       map[string]interface{}                   `json:"config"`
+	Connector    connectors.CRMConnector                  `json:"-"`
+	ServiceAuths map[string]*connectors.ConnectorConfig   `json:"-"` // keyed by platform slug (e.g. "zoom", "trello")
+	UserID       string                                  `json:"user_id"`
+	AccountID    string                                  `json:"account_id"`
+	HelperID     string                                  `json:"helper_id"`
 }
 
 // HelperOutput represents the result of a helper execution

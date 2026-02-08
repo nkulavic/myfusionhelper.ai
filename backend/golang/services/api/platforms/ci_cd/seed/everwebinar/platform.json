@@ -1,0 +1,41 @@
+{
+  "platform_id": "platform:everwebinar",
+  "slug": "everwebinar",
+  "name": "EverWebinar",
+  "category": "webinar",
+  "description": "Automated and evergreen webinar platform for on-demand presentations",
+  "status": "active",
+  "version": "v1",
+  "logo_url": "https://assets.myfusionhelper.ai/platforms/everwebinar-logo.svg",
+  "documentation_url": "https://documentation.everwebinar.com/",
+  "api_config": {
+    "base_url": "https://api.webinarjam.com/everwebinar",
+    "auth_type": "api_key",
+    "test_endpoint": "https://api.webinarjam.com/everwebinar/webinars",
+    "rate_limits": {
+      "requests_per_second": 5,
+      "requests_per_minute": 0,
+      "requests_per_hour": 0,
+      "burst_limit": 10
+    },
+    "required_headers": {},
+    "version": "v1"
+  },
+  "display_config": {
+    "color": "#00C853",
+    "accent": "#e8f5e9",
+    "initial": "E",
+    "short_name": "EW"
+  },
+  "credential_fields": [
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "placeholder": "Your EverWebinar API key",
+      "hint": "Found in your EverWebinar account under API settings",
+      "input_type": "password",
+      "required": true
+    }
+  ],
+  "capabilities": ["webinars", "registrants"]
+}

@@ -12,7 +12,7 @@ const highlights = [
   {
     icon: Link2,
     title: 'Connect Your CRM',
-    description: 'Link Keap, GoHighLevel, ActiveCampaign, Ontraport, or HubSpot in under 60 seconds',
+    description: 'Link Keap, GoHighLevel, ActiveCampaign, Ontraport, HubSpot, or Stripe in under 60 seconds',
   },
   {
     icon: Blocks,

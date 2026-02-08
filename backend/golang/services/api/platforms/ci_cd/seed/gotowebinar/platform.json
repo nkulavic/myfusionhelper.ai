@@ -1,0 +1,39 @@
+{
+  "platform_id": "platform:gotowebinar",
+  "slug": "gotowebinar",
+  "name": "GoTo Webinar",
+  "category": "webinar",
+  "description": "Webinar hosting and online event management platform for businesses",
+  "status": "active",
+  "version": "v2",
+  "logo_url": "https://assets.myfusionhelper.ai/platforms/gotowebinar-logo.svg",
+  "documentation_url": "https://developer.goto.com/GoToWebinarV2/",
+  "oauth": {
+    "auth_url": "https://authentication.logmeininc.com/oauth/authorize",
+    "token_url": "https://authentication.logmeininc.com/oauth/token",
+    "user_info_url": "",
+    "scopes": ["collab.webinars"],
+    "response_type": "code"
+  },
+  "api_config": {
+    "base_url": "https://api.getgo.com/G2W/rest/v2",
+    "auth_type": "oauth2",
+    "test_endpoint": "https://api.getgo.com/G2W/rest/v2/account/webinars",
+    "rate_limits": {
+      "requests_per_second": 10,
+      "requests_per_minute": 0,
+      "requests_per_hour": 0,
+      "burst_limit": 20
+    },
+    "required_headers": {},
+    "version": "v2"
+  },
+  "display_config": {
+    "color": "#F26522",
+    "accent": "#fef0e8",
+    "initial": "G",
+    "short_name": "GoTo"
+  },
+  "credential_fields": [],
+  "capabilities": ["webinars", "registrants"]
+}

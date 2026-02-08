@@ -1,15 +1,14 @@
 'use client'
 
+// Schema: see schemas.ts > chainItSchema
 import { useState } from 'react'
 import { Plus, X, GripVertical, ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import type { ConfigFormProps } from './types'
 
 export function ChainItForm({ config, onChange, disabled }: ConfigFormProps) {
-  const helperIds = (config.helperIds as string[]) || []
-  const stopOnError = (config.stopOnError as boolean) ?? true
+  const helpers = (config.helpers as string[]) || []
   const [newHelperId, setNewHelperId] = useState('')
 
   const updateConfig = (updates: Record<string, unknown>) => {
@@ -18,33 +17,33 @@ export function ChainItForm({ config, onChange, disabled }: ConfigFormProps) {
 
   const addHelper = () => {
     const trimmed = newHelperId.trim()
-    if (!trimmed || helperIds.includes(trimmed)) return
-    updateConfig({ helperIds: [...helperIds, trimmed] })
+    if (!trimmed || helpers.includes(trimmed)) return
+    updateConfig({ helpers: [...helpers, trimmed] })
     setNewHelperId('')
   }
 
   const removeHelper = (id: string) => {
-    updateConfig({ helperIds: helperIds.filter((h) => h !== id) })
+    updateConfig({ helpers: helpers.filter((h) => h !== id) })
   }
 
   const moveUp = (index: number) => {
     if (index === 0) return
-    const updated = [...helperIds]
+    const updated = [...helpers]
     ;[updated[index - 1], updated[index]] = [updated[index], updated[index - 1]]
-    updateConfig({ helperIds: updated })
+    updateConfig({ helpers: updated })
   }
 
   const moveDown = (index: number) => {
-    if (index >= helperIds.length - 1) return
-    const updated = [...helperIds]
+    if (index >= helpers.length - 1) return
+    const updated = [...helpers]
     ;[updated[index], updated[index + 1]] = [updated[index + 1], updated[index]]
-    updateConfig({ helperIds: updated })
+    updateConfig({ helpers: updated })
   }
 
   return (
     <div className="space-y-4">
       <div className="grid gap-2">
-        <Label>Helper Chain</Label>
+        <label className="text-sm font-medium">Helper Chain</label>
         <p className="text-xs text-muted-foreground">
           Add helper IDs in the order you want them executed. Each helper runs
           sequentially with the same contact.
@@ -75,9 +74,9 @@ export function ChainItForm({ config, onChange, disabled }: ConfigFormProps) {
           </Button>
         </div>
 
-        {helperIds.length > 0 ? (
+        {helpers.length > 0 ? (
           <div className="space-y-1 mt-1">
-            {helperIds.map((id, i) => (
+            {helpers.map((id, i) => (
               <div key={`${id}-${i}`}>
                 <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-xs">
                   <GripVertical className="h-3 w-3 text-muted-foreground/50 flex-shrink-0" />
@@ -99,7 +98,7 @@ export function ChainItForm({ config, onChange, disabled }: ConfigFormProps) {
                       <button
                         type="button"
                         onClick={() => moveDown(i)}
-                        disabled={i === helperIds.length - 1}
+                        disabled={i === helpers.length - 1}
                         className="rounded p-0.5 hover:bg-accent disabled:opacity-30"
                         aria-label="Move down"
                       >
@@ -116,7 +115,7 @@ export function ChainItForm({ config, onChange, disabled }: ConfigFormProps) {
                     </div>
                   )}
                 </div>
-                {i < helperIds.length - 1 && (
+                {i < helpers.length - 1 && (
                   <div className="flex justify-center py-0.5">
                     <ArrowDown className="h-3 w-3 text-muted-foreground/30" />
                   </div>
@@ -130,24 +129,6 @@ export function ChainItForm({ config, onChange, disabled }: ConfigFormProps) {
           </p>
         )}
       </div>
-
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="stop-on-error"
-          checked={stopOnError}
-          onChange={(e) => updateConfig({ stopOnError: e.target.checked })}
-          disabled={disabled}
-          className="h-4 w-4 rounded border-input"
-        />
-        <Label htmlFor="stop-on-error" className="text-sm font-normal">
-          Stop chain on first error
-        </Label>
-      </div>
-      <p className="text-xs text-muted-foreground -mt-2">
-        When enabled, the chain stops if any helper fails. Otherwise, it continues
-        to the next helper.
-      </p>
     </div>
   )
 }

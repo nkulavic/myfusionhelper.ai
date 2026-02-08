@@ -1,0 +1,440 @@
+service: mfh-infrastructure-monitoring
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+
+resources:
+  Resources:
+    # ============================================================
+    # SNS Topic for Alerts
+    # ============================================================
+    AlertsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: mfh-${self:provider.stage}-alerts
+        DisplayName: MFH Alerts (${self:provider.stage})
+
+    # ============================================================
+    # CloudWatch Dashboard
+    # ============================================================
+    OperationsDashboard:
+      Type: AWS::CloudWatch::Dashboard
+      Properties:
+        DashboardName: mfh-${self:provider.stage}-operations
+        DashboardBody:
+          Fn::Sub:
+            - |
+              {
+                "widgets": [
+                  {
+                    "type": "text",
+                    "x": 0, "y": 0, "width": 24, "height": 1,
+                    "properties": {
+                      "markdown": "# MFH Operations Dashboard (${Stage})"
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 0, "y": 1, "width": 8, "height": 6,
+                    "properties": {
+                      "title": "Helper Worker Invocations",
+                      "view": "timeSeries",
+                      "stacked": false,
+                      "region": "${AWS::Region}",
+                      "metrics": [
+                        ["AWS/Lambda", "Invocations", "FunctionName", "mfh-helper-worker-${Stage}-helper-worker", { "stat": "Sum", "label": "Invocations" }],
+                        ["AWS/Lambda", "Errors", "FunctionName", "mfh-helper-worker-${Stage}-helper-worker", { "stat": "Sum", "label": "Errors", "color": "#d62728" }]
+                      ],
+                      "period": 300
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 8, "y": 1, "width": 8, "height": 6,
+                    "properties": {
+                      "title": "Helper Worker Duration",
+                      "view": "timeSeries",
+                      "stacked": false,
+                      "region": "${AWS::Region}",
+                      "metrics": [
+                        ["AWS/Lambda", "Duration", "FunctionName", "mfh-helper-worker-${Stage}-helper-worker", { "stat": "Average", "label": "Avg Duration" }],
+                        ["AWS/Lambda", "Duration", "FunctionName", "mfh-helper-worker-${Stage}-helper-worker", { "stat": "p99", "label": "p99 Duration" }]
+                      ],
+                      "period": 300
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 16, "y": 1, "width": 8, "height": 6,
+                    "properties": {
+                      "title": "Worker Error Rate",
+                      "view": "singleValue",
+                      "region": "${AWS::Region}",
+                      "metrics": [
+                        ["AWS/Lambda", "Errors", "FunctionName", "mfh-helper-worker-${Stage}-helper-worker", { "stat": "Sum", "period": 3600, "label": "Errors (1h)" }],
+                        ["AWS/Lambda", "Invocations", "FunctionName", "mfh-helper-worker-${Stage}-helper-worker", { "stat": "Sum", "period": 3600, "label": "Total (1h)" }]
+                      ]
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 0, "y": 7, "width": 12, "height": 6,
+                    "properties": {
+                      "title": "SQS Execution Queue",
+                      "view": "timeSeries",
+                      "stacked": false,
+                      "region": "${AWS::Region}",
+                      "metrics": [
+                        ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "mfh-helper-execution-${Stage}.fifo", { "stat": "Maximum", "label": "Messages Visible" }],
+                        ["AWS/SQS", "ApproximateNumberOfMessagesNotVisible", "QueueName", "mfh-helper-execution-${Stage}.fifo", { "stat": "Maximum", "label": "In Flight" }],
+                        ["AWS/SQS", "NumberOfMessagesSent", "QueueName", "mfh-helper-execution-${Stage}.fifo", { "stat": "Sum", "label": "Sent" }],
+                        ["AWS/SQS", "NumberOfMessagesReceived", "QueueName", "mfh-helper-execution-${Stage}.fifo", { "stat": "Sum", "label": "Received" }]
+                      ],
+                      "period": 300
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 12, "y": 7, "width": 12, "height": 6,
+                    "properties": {
+                      "title": "Dead Letter Queues",
+                      "view": "timeSeries",
+                      "stacked": true,
+                      "region": "${AWS::Region}",
+                      "metrics": [
+                        ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "mfh-helper-execution-dlq-${Stage}.fifo", { "stat": "Maximum", "label": "Execution DLQ", "color": "#d62728" }],
+                        ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "mfh-notifications-dlq-${Stage}.fifo", { "stat": "Maximum", "label": "Notification DLQ", "color": "#ff7f0e" }],
+                        ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "mfh-webhooks-dlq-${Stage}", { "stat": "Maximum", "label": "Webhook DLQ", "color": "#9467bd" }],
+                        ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "mfh-data-sync-dlq-${Stage}", { "stat": "Maximum", "label": "Data Sync DLQ", "color": "#8c564b" }]
+                      ],
+                      "period": 60
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 0, "y": 13, "width": 12, "height": 6,
+                    "properties": {
+                      "title": "API Gateway Requests",
+                      "view": "timeSeries",
+                      "stacked": false,
+                      "region": "${AWS::Region}",
+                      "metrics": [
+                        ["AWS/ApiGateway", "Count", "ApiId", "${HttpApiId}", { "stat": "Sum", "label": "Total Requests" }],
+                        ["AWS/ApiGateway", "4xx", "ApiId", "${HttpApiId}", { "stat": "Sum", "label": "4xx Errors", "color": "#ff7f0e" }],
+                        ["AWS/ApiGateway", "5xx", "ApiId", "${HttpApiId}", { "stat": "Sum", "label": "5xx Errors", "color": "#d62728" }]
+                      ],
+                      "period": 300
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 12, "y": 13, "width": 12, "height": 6,
+                    "properties": {
+                      "title": "API Gateway Latency",
+                      "view": "timeSeries",
+                      "stacked": false,
+                      "region": "${AWS::Region}",
+                      "metrics": [
+                        ["AWS/ApiGateway", "Latency", "ApiId", "${HttpApiId}", { "stat": "Average", "label": "Avg Latency" }],
+                        ["AWS/ApiGateway", "Latency", "ApiId", "${HttpApiId}", { "stat": "p99", "label": "p99 Latency" }]
+                      ],
+                      "period": 300
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 0, "y": 19, "width": 8, "height": 6,
+                    "properties": {
+                      "title": "Stream Handler",
+                      "view": "timeSeries",
+                      "stacked": false,
+                      "region": "${AWS::Region}",
+                      "metrics": [
+                        ["AWS/Lambda", "Invocations", "FunctionName", "mfh-executions-stream-${Stage}-executions-stream", { "stat": "Sum", "label": "Invocations" }],
+                        ["AWS/Lambda", "Errors", "FunctionName", "mfh-executions-stream-${Stage}-executions-stream", { "stat": "Sum", "label": "Errors", "color": "#d62728" }]
+                      ],
+                      "period": 300
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 8, "y": 19, "width": 8, "height": 6,
+                    "properties": {
+                      "title": "API Key Authorizer",
+                      "view": "timeSeries",
+                      "stacked": false,
+                      "region": "${AWS::Region}",
+                      "metrics": [
+                        ["AWS/Lambda", "Invocations", "FunctionName", "mfh-api-key-authorizer-${Stage}-authorizer", { "stat": "Sum", "label": "Invocations" }],
+                        ["AWS/Lambda", "Errors", "FunctionName", "mfh-api-key-authorizer-${Stage}-authorizer", { "stat": "Sum", "label": "Errors", "color": "#d62728" }]
+                      ],
+                      "period": 300
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 16, "y": 19, "width": 8, "height": 6,
+                    "properties": {
+                      "title": "Scheduler Lambda",
+                      "view": "timeSeries",
+                      "stacked": false,
+                      "region": "${AWS::Region}",
+                      "metrics": [
+                        ["AWS/Lambda", "Invocations", "FunctionName", "mfh-scheduler-${Stage}-scheduler", { "stat": "Sum", "label": "Invocations" }],
+                        ["AWS/Lambda", "Errors", "FunctionName", "mfh-scheduler-${Stage}-scheduler", { "stat": "Sum", "label": "Errors", "color": "#d62728" }]
+                      ],
+                      "period": 300
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 0, "y": 25, "width": 12, "height": 6,
+                    "properties": {
+                      "title": "DynamoDB Executions Table",
+                      "view": "timeSeries",
+                      "stacked": false,
+                      "region": "${AWS::Region}",
+                      "metrics": [
+                        ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "${ExecutionsTableName}", { "stat": "Sum", "label": "Writes" }],
+                        ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "${ExecutionsTableName}", { "stat": "Sum", "label": "Reads" }]
+                      ],
+                      "period": 300
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 12, "y": 25, "width": 12, "height": 6,
+                    "properties": {
+                      "title": "DynamoDB Throttles",
+                      "view": "timeSeries",
+                      "stacked": true,
+                      "region": "${AWS::Region}",
+                      "metrics": [
+                        ["AWS/DynamoDB", "WriteThrottleEvents", "TableName", "${ExecutionsTableName}", { "stat": "Sum", "label": "Executions Write Throttle" }],
+                        ["AWS/DynamoDB", "ReadThrottleEvents", "TableName", "${ExecutionsTableName}", { "stat": "Sum", "label": "Executions Read Throttle" }],
+                        ["AWS/DynamoDB", "WriteThrottleEvents", "TableName", "${HelpersTableName}", { "stat": "Sum", "label": "Helpers Write Throttle" }]
+                      ],
+                      "period": 300
+                    }
+                  }
+                ]
+              }
+            - Stage: ${self:provider.stage}
+              HttpApiId: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+              ExecutionsTableName: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableName}
+              HelpersTableName: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableName}
+
+    # ============================================================
+    # CloudWatch Alarms
+    # ============================================================
+
+    # DLQ Depth Alarm - Execution queue
+    ExecutionDLQDepthAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: mfh-${self:provider.stage}-execution-dlq-depth
+        AlarmDescription: Execution DLQ has messages - failed executions need attention
+        Namespace: AWS/SQS
+        MetricName: ApproximateNumberOfMessagesVisible
+        Dimensions:
+          - Name: QueueName
+            Value: mfh-helper-execution-dlq-${self:provider.stage}.fifo
+        Statistic: Maximum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 10
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref AlertsTopic
+        OKActions:
+          - !Ref AlertsTopic
+
+    # DLQ Depth Alarm - Notification queue
+    NotificationDLQDepthAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: mfh-${self:provider.stage}-notification-dlq-depth
+        AlarmDescription: Notification DLQ has messages - failed notifications
+        Namespace: AWS/SQS
+        MetricName: ApproximateNumberOfMessagesVisible
+        Dimensions:
+          - Name: QueueName
+            Value: mfh-notifications-dlq-${self:provider.stage}.fifo
+        Statistic: Maximum
+        Period: 60
+        EvaluationPeriods: 1
+        Threshold: 10
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref AlertsTopic
+
+    # Helper Worker Error Rate Alarm
+    WorkerErrorRateAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: mfh-${self:provider.stage}-worker-error-rate
+        AlarmDescription: Helper worker error rate exceeds 20% over 5 minutes
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        EvaluationPeriods: 1
+        Threshold: 20
+        TreatMissingData: notBreaching
+        Metrics:
+          - Id: errors
+            MetricStat:
+              Metric:
+                Namespace: AWS/Lambda
+                MetricName: Errors
+                Dimensions:
+                  - Name: FunctionName
+                    Value: mfh-helper-worker-${self:provider.stage}-helper-worker
+              Period: 300
+              Stat: Sum
+            ReturnData: false
+          - Id: invocations
+            MetricStat:
+              Metric:
+                Namespace: AWS/Lambda
+                MetricName: Invocations
+                Dimensions:
+                  - Name: FunctionName
+                    Value: mfh-helper-worker-${self:provider.stage}-helper-worker
+              Period: 300
+              Stat: Sum
+            ReturnData: false
+          - Id: error_rate
+            Expression: "IF(invocations > 0, (errors / invocations) * 100, 0)"
+            Label: Error Rate %
+            ReturnData: true
+        AlarmActions:
+          - !Ref AlertsTopic
+        OKActions:
+          - !Ref AlertsTopic
+
+    # Stream Handler Error Alarm
+    StreamHandlerErrorAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: mfh-${self:provider.stage}-stream-handler-errors
+        AlarmDescription: DynamoDB Stream handler is failing - executions may not be dispatched
+        Namespace: AWS/Lambda
+        MetricName: Errors
+        Dimensions:
+          - Name: FunctionName
+            Value: mfh-executions-stream-${self:provider.stage}-executions-stream
+        Statistic: Sum
+        Period: 300
+        EvaluationPeriods: 1
+        Threshold: 5
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref AlertsTopic
+        OKActions:
+          - !Ref AlertsTopic
+
+    # API Gateway 5xx Error Alarm
+    ApiGateway5xxAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: mfh-${self:provider.stage}-api-5xx-errors
+        AlarmDescription: API Gateway is returning 5xx errors
+        Namespace: AWS/ApiGateway
+        MetricName: 5xx
+        Dimensions:
+          - Name: ApiId
+            Value: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+        Statistic: Sum
+        Period: 300
+        EvaluationPeriods: 2
+        Threshold: 50
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref AlertsTopic
+        OKActions:
+          - !Ref AlertsTopic
+
+    # API Key Authorizer Error Alarm
+    AuthorizerErrorAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: mfh-${self:provider.stage}-authorizer-errors
+        AlarmDescription: API key authorizer Lambda is failing
+        Namespace: AWS/Lambda
+        MetricName: Errors
+        Dimensions:
+          - Name: FunctionName
+            Value: mfh-api-key-authorizer-${self:provider.stage}-authorizer
+        Statistic: Sum
+        Period: 300
+        EvaluationPeriods: 1
+        Threshold: 10
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref AlertsTopic
+
+    # DynamoDB Throttle Alarm - Executions table
+    ExecutionsThrottleAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: mfh-${self:provider.stage}-executions-throttle
+        AlarmDescription: DynamoDB executions table is being throttled
+        Namespace: AWS/DynamoDB
+        MetricName: WriteThrottleEvents
+        Dimensions:
+          - Name: TableName
+            Value: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableName}
+        Statistic: Sum
+        Period: 300
+        EvaluationPeriods: 2
+        Threshold: 10
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref AlertsTopic
+
+    # Execution Queue Age Alarm - messages sitting too long
+    ExecutionQueueAgeAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: mfh-${self:provider.stage}-execution-queue-age
+        AlarmDescription: Execution queue messages are aging - possible processing backlog
+        Namespace: AWS/SQS
+        MetricName: ApproximateAgeOfOldestMessage
+        Dimensions:
+          - Name: QueueName
+            Value: mfh-helper-execution-${self:provider.stage}.fifo
+        Statistic: Maximum
+        Period: 60
+        EvaluationPeriods: 5
+        Threshold: 300
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        TreatMissingData: notBreaching
+        AlarmActions:
+          - !Ref AlertsTopic
+        OKActions:
+          - !Ref AlertsTopic
+
+  Outputs:
+    AlertsTopicArn:
+      Value: !Ref AlertsTopic
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AlertsTopicArn
+
+    AlertsTopicName:
+      Value: !GetAtt AlertsTopic.TopicName
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AlertsTopicName
+
+    DashboardName:
+      Value: !Ref OperationsDashboard
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DashboardName

@@ -1,0 +1,39 @@
+{
+  "platform_id": "platform:google_sheets",
+  "slug": "google_sheets",
+  "name": "Google Sheets",
+  "category": "productivity",
+  "description": "Cloud-based spreadsheet application for data management and collaboration",
+  "status": "active",
+  "version": "v4",
+  "logo_url": "https://assets.myfusionhelper.ai/platforms/google_sheets-logo.svg",
+  "documentation_url": "https://developers.google.com/sheets/api/reference/rest",
+  "oauth": {
+    "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+    "token_url": "https://oauth2.googleapis.com/token",
+    "user_info_url": "https://www.googleapis.com/oauth2/v1/userinfo",
+    "scopes": ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/userinfo.email"],
+    "response_type": "code"
+  },
+  "api_config": {
+    "base_url": "https://sheets.googleapis.com/v4",
+    "auth_type": "oauth2",
+    "test_endpoint": "https://sheets.googleapis.com/v4/spreadsheets",
+    "rate_limits": {
+      "requests_per_second": 10,
+      "requests_per_minute": 60,
+      "requests_per_hour": 0,
+      "burst_limit": 20
+    },
+    "required_headers": {},
+    "version": "v4"
+  },
+  "display_config": {
+    "color": "#0F9D58",
+    "accent": "#e6f4ea",
+    "initial": "G",
+    "short_name": "Sheets"
+  },
+  "credential_fields": [],
+  "capabilities": ["spreadsheets", "worksheets"]
+}

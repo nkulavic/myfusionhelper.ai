@@ -1,10 +1,11 @@
 'use client'
 
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+// Schema: see schemas.ts > copyItSchema
+import { FieldPicker } from '@/components/field-picker'
+import { FormSwitch } from './form-fields'
 import type { ConfigFormProps } from './types'
 
-export function CopyItForm({ config, onChange, disabled }: ConfigFormProps) {
+export function CopyItForm({ config, onChange, disabled, platformId, connectionId }: ConfigFormProps) {
   const sourceField = (config.sourceField as string) || ''
   const targetField = (config.targetField as string) || ''
   const overwrite = (config.overwrite as boolean) ?? true
@@ -16,12 +17,13 @@ export function CopyItForm({ config, onChange, disabled }: ConfigFormProps) {
   return (
     <div className="space-y-4">
       <div className="grid gap-2">
-        <Label htmlFor="source-field">Source Field</Label>
-        <Input
-          id="source-field"
-          placeholder="e.g. Email, Phone1, _CustomField123"
+        <label className="text-sm font-medium">Source Field</label>
+        <FieldPicker
+          platformId={platformId ?? ''}
+          connectionId={connectionId ?? ''}
           value={sourceField}
-          onChange={(e) => updateConfig({ sourceField: e.target.value })}
+          onChange={(value) => updateConfig({ sourceField: value })}
+          placeholder="Select source field..."
           disabled={disabled}
         />
         <p className="text-xs text-muted-foreground">
@@ -30,12 +32,13 @@ export function CopyItForm({ config, onChange, disabled }: ConfigFormProps) {
       </div>
 
       <div className="grid gap-2">
-        <Label htmlFor="target-field">Target Field</Label>
-        <Input
-          id="target-field"
-          placeholder="e.g. Phone2, _CustomField456"
+        <label className="text-sm font-medium">Target Field</label>
+        <FieldPicker
+          platformId={platformId ?? ''}
+          connectionId={connectionId ?? ''}
           value={targetField}
-          onChange={(e) => updateConfig({ targetField: e.target.value })}
+          onChange={(value) => updateConfig({ targetField: value })}
+          placeholder="Select target field..."
           disabled={disabled}
         />
         <p className="text-xs text-muted-foreground">
@@ -43,22 +46,13 @@ export function CopyItForm({ config, onChange, disabled }: ConfigFormProps) {
         </p>
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="overwrite"
-          checked={overwrite}
-          onChange={(e) => updateConfig({ overwrite: e.target.checked })}
-          disabled={disabled}
-          className="h-4 w-4 rounded border-input"
-        />
-        <Label htmlFor="overwrite" className="text-sm font-normal">
-          Overwrite existing value in target field
-        </Label>
-      </div>
-      <p className="text-xs text-muted-foreground -mt-2">
-        When unchecked, the value will only be copied if the target field is empty.
-      </p>
+      <FormSwitch
+        label="Overwrite existing value in target field"
+        description="When disabled, the value will only be copied if the target field is empty."
+        checked={overwrite}
+        onCheckedChange={(v) => updateConfig({ overwrite: v })}
+        disabled={disabled}
+      />
     </div>
   )
 }

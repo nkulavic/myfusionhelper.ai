@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { fadeUp, staggerContainer } from './animation-variants'
-import { crmPlatforms } from '@/lib/crm-platforms'
+import { activeCRMPlatforms } from '@/lib/crm-platforms'
 import { PlatformLogo } from '@/components/platform-logo'
 import { Check } from 'lucide-react'
 
@@ -26,6 +26,10 @@ const platformDetails: Record<string, { tagline: string }> = {
   hubspot: {
     tagline:
       'Complement HubSpot\'s native tools with deal stage management, property mapping, list sync, and data formatting.',
+  },
+  stripe: {
+    tagline:
+      'Automate payment workflows, sync customer data with your CRM, manage subscriptions, and trigger actions on invoice events.',
   },
 }
 
@@ -68,7 +72,7 @@ export function PlatformShowcaseSection() {
           variants={staggerContainer}
           className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
         >
-          {crmPlatforms.map((platform) => {
+          {activeCRMPlatforms.map((platform) => {
             const details = platformDetails[platform.id]
             return (
               <motion.div
@@ -81,7 +85,7 @@ export function PlatformShowcaseSection() {
                   <div>
                     <h3 className="text-lg font-semibold">{platform.name}</h3>
                     <span className="text-xs text-muted-foreground">
-                      {platform.authType === 'oauth2' ? 'OAuth2' : 'API Key'} connection
+                      {platform.authType === 'oauth2' ? 'OAuth 2.0 connection' : 'API Key connection'}
                     </span>
                   </div>
                 </div>

@@ -91,6 +91,30 @@ export function useTestConnection() {
   })
 }
 
+export function useConnectionFields(platformId: string, connectionId: string) {
+  return useQuery({
+    queryKey: ['connection-fields', platformId, connectionId],
+    queryFn: async () => {
+      const res = await connectionsApi.listConnectionFields(platformId, connectionId)
+      return res.data
+    },
+    enabled: !!platformId && !!connectionId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useConnectionTags(platformId: string, connectionId: string) {
+  return useQuery({
+    queryKey: ['connection-tags', platformId, connectionId],
+    queryFn: async () => {
+      const res = await connectionsApi.listConnectionTags(platformId, connectionId)
+      return Array.isArray(res.data) ? res.data : []
+    },
+    enabled: !!platformId && !!connectionId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
 export function useStartOAuth() {
   return useMutation({
     mutationFn: (platformId: string) => connectionsApi.startOAuth(platformId),

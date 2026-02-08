@@ -10,6 +10,8 @@ export interface CRMPlatform {
   capabilities: string[]
 }
 
+const HIDDEN_PLATFORMS: string[] = []
+
 export const crmPlatforms: CRMPlatform[] = [
   {
     id: 'keap',
@@ -29,7 +31,7 @@ export const crmPlatforms: CRMPlatform[] = [
     accent: '#e8f0fe',
     initial: 'G',
     logo: '/images/platforms/gohighlevel.png',
-    authType: 'oauth2',
+    authType: 'api_key',
     apiBaseUrl: 'https://services.leadconnectorhq.com',
     capabilities: ['Contacts', 'Tags', 'Custom Fields', 'Workflows', 'Pipelines', 'SMS'],
   },
@@ -62,11 +64,24 @@ export const crmPlatforms: CRMPlatform[] = [
     accent: '#fff0ec',
     initial: 'H',
     logo: '/images/platforms/hubspot.png',
-    authType: 'oauth2',
+    authType: 'api_key',
     apiBaseUrl: 'https://api.hubapi.com',
     capabilities: ['Contacts', 'Deals', 'Lists', 'Workflows', 'Custom Properties', 'Pipelines'],
   },
+  {
+    id: 'stripe',
+    name: 'Stripe',
+    color: '#635BFF',
+    accent: '#eeecff',
+    initial: 'S',
+    logo: '/images/platforms/stripe.png',
+    authType: 'api_key',
+    apiBaseUrl: 'https://api.stripe.com',
+    capabilities: ['Customers', 'Charges', 'Subscriptions', 'Invoices', 'Products', 'Payments'],
+  },
 ]
+
+export const activeCRMPlatforms = crmPlatforms.filter((p) => !HIDDEN_PLATFORMS.includes(p.id))
 
 export function getCRMPlatform(id: string): CRMPlatform | undefined {
   return crmPlatforms.find((p) => p.id === id)

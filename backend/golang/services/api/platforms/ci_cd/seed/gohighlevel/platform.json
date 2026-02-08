@@ -30,5 +30,21 @@
     },
     "version": "v2"
   },
+  "display_config": {
+    "color": "#4285F4",
+    "accent": "#e8f0fe",
+    "initial": "G",
+    "short_name": "GHL"
+  },
+  "credential_fields": [
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "placeholder": "Enter your GoHighLevel API key",
+      "hint": "Found in Settings \u2192 Business Profile \u2192 API Keys",
+      "input_type": "password",
+      "required": true
+    }
+  ],
   "capabilities": ["contacts", "tags", "custom_fields", "automations", "webhooks"]
 }

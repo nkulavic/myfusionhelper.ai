@@ -1,0 +1,41 @@
+{
+  "platform_id": "platform:webinarjam",
+  "slug": "webinarjam",
+  "name": "WebinarJam",
+  "category": "webinar",
+  "description": "Live webinar hosting platform for marketing and sales presentations",
+  "status": "active",
+  "version": "v1",
+  "logo_url": "https://assets.myfusionhelper.ai/platforms/webinarjam-logo.svg",
+  "documentation_url": "https://documentation.webinarjam.com/",
+  "api_config": {
+    "base_url": "https://api.webinarjam.com/webinarjam",
+    "auth_type": "api_key",
+    "test_endpoint": "https://api.webinarjam.com/webinarjam/webinars",
+    "rate_limits": {
+      "requests_per_second": 5,
+      "requests_per_minute": 0,
+      "requests_per_hour": 0,
+      "burst_limit": 10
+    },
+    "required_headers": {},
+    "version": "v1"
+  },
+  "display_config": {
+    "color": "#FF6B35",
+    "accent": "#fff0eb",
+    "initial": "W",
+    "short_name": "WJ"
+  },
+  "credential_fields": [
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "placeholder": "Your WebinarJam API key",
+      "hint": "Found in your WebinarJam account under API settings",
+      "input_type": "password",
+      "required": true
+    }
+  ],
+  "capabilities": ["webinars", "registrants"]
+}

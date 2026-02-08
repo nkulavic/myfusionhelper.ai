@@ -144,6 +144,39 @@ resources:
         Description: Read-only viewers
         Precedence: 40
 
+    # Plan-based groups (synced via Stripe webhooks)
+    PlanFreeGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: plan-free
+        UserPoolId: !Ref CognitoUserPool
+        Description: Free plan users
+        Precedence: 100
+
+    PlanStartGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: plan-start
+        UserPoolId: !Ref CognitoUserPool
+        Description: Start plan users
+        Precedence: 101
+
+    PlanGrowGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: plan-grow
+        UserPoolId: !Ref CognitoUserPool
+        Description: Grow plan users
+        Precedence: 102
+
+    PlanDeliverGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: plan-deliver
+        UserPoolId: !Ref CognitoUserPool
+        Description: Deliver plan users
+        Precedence: 103
+
   Outputs:
     CognitoUserPoolId:
       Value: !Ref CognitoUserPool

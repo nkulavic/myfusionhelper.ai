@@ -122,6 +122,7 @@ export interface Helper {
   accountId: string
   createdBy: string
   connectionId?: string
+  shortKey?: string
   name: string
   description: string
   helperType: string
@@ -132,6 +133,11 @@ export interface Helper {
   enabled: boolean
   executionCount: number
   lastExecutedAt?: string
+  scheduleEnabled: boolean
+  cronExpression?: string
+  scheduleRuleArn?: string
+  lastScheduledAt?: string
+  nextScheduledAt?: string
   createdAt: string
   updatedAt: string
 }

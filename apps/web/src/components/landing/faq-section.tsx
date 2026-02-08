@@ -10,7 +10,7 @@ const faqs = [
   {
     question: 'How does MyFusion Helper connect to my CRM?',
     answer:
-      'We use official OAuth2 or API key connections depending on your platform. For Keap, GoHighLevel, and HubSpot, you authorize through a secure OAuth flow. For ActiveCampaign and Ontraport, you provide your API key. We never store your CRM login credentials.',
+      'You connect using OAuth or an API key. For Keap, you authorize via OAuth — just click Connect and sign into your Keap account. For HubSpot, you create a Private App token. For GoHighLevel, ActiveCampaign, Ontraport, and Stripe, you provide your API key. All credentials are encrypted and stored securely.',
   },
   {
     question: 'Is my data secure?',
@@ -45,7 +45,7 @@ const faqs = [
   {
     question: 'What CRM platforms do you support?',
     answer:
-      'We currently support Keap (Infusionsoft), GoHighLevel, ActiveCampaign, Ontraport, and HubSpot. Each platform connects through OAuth or API key authentication. The same 62 helpers work across all supported CRMs through a unified connector layer.',
+      'We currently support Keap (Infusionsoft), GoHighLevel, ActiveCampaign, Ontraport, HubSpot, and Stripe. Each platform connects through API key authentication. The same 62 helpers work across all supported platforms through a unified connector layer. More platforms coming soon.',
   },
   {
     question: 'How is MyFusion Helper different from Zapier or Make?',

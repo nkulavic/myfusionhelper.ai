@@ -1,14 +1,16 @@
 'use client'
 
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+// Go keys: check_field, found_tag_id (string), not_found_tag_id (string), found_goal, not_found_goal
+import { FieldPicker } from '@/components/field-picker'
+import { FormTextField } from './form-fields'
 import type { ConfigFormProps } from './types'
 
-export function FoundItForm({ config, onChange, disabled }: ConfigFormProps) {
-  const field = (config.field as string) || ''
+export function FoundItForm({ config, onChange, disabled, platformId, connectionId }: ConfigFormProps) {
+  const checkField = (config.checkField as string) || ''
   const foundTagId = (config.foundTagId as string) || ''
   const notFoundTagId = (config.notFoundTagId as string) || ''
-  const condition = (config.condition as string) || 'not_empty'
+  const foundGoal = (config.foundGoal as string) || ''
+  const notFoundGoal = (config.notFoundGoal as string) || ''
 
   const updateConfig = (updates: Record<string, unknown>) => {
     onChange({ ...config, ...updates })
@@ -17,12 +19,13 @@ export function FoundItForm({ config, onChange, disabled }: ConfigFormProps) {
   return (
     <div className="space-y-4">
       <div className="grid gap-2">
-        <Label htmlFor="found-field">Field to Check</Label>
-        <Input
-          id="found-field"
-          placeholder="e.g. Email, Phone1, _CustomField123"
-          value={field}
-          onChange={(e) => updateConfig({ field: e.target.value })}
+        <label className="text-sm font-medium">Field to Check</label>
+        <FieldPicker
+          platformId={platformId ?? ''}
+          connectionId={connectionId ?? ''}
+          value={checkField}
+          onChange={(value) => updateConfig({ checkField: value })}
+          placeholder="Select field to check..."
           disabled={disabled}
         />
         <p className="text-xs text-muted-foreground">
@@ -30,49 +33,41 @@ export function FoundItForm({ config, onChange, disabled }: ConfigFormProps) {
         </p>
       </div>
 
-      <div className="grid gap-2">
-        <Label htmlFor="found-condition">Condition</Label>
-        <select
-          id="found-condition"
-          value={condition}
-          onChange={(e) => updateConfig({ condition: e.target.value })}
-          disabled={disabled}
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        >
-          <option value="not_empty">Field is not empty</option>
-          <option value="is_empty">Field is empty</option>
-          <option value="contains">Field contains value</option>
-          <option value="equals">Field equals value</option>
-        </select>
-      </div>
+      <FormTextField
+        label="Found Tag ID"
+        placeholder="Tag ID to apply when value is found"
+        value={foundTagId}
+        onChange={(e) => updateConfig({ foundTagId: e.target.value })}
+        disabled={disabled}
+        description="The tag ID to apply when the field has a value. Leave blank to skip."
+      />
 
-      <div className="grid gap-2">
-        <Label htmlFor="found-tag">Tag to Apply (when matched)</Label>
-        <Input
-          id="found-tag"
-          placeholder="Tag ID to apply if condition is true"
-          value={foundTagId}
-          onChange={(e) => updateConfig({ foundTagId: e.target.value })}
-          disabled={disabled}
-        />
-        <p className="text-xs text-muted-foreground">
-          This tag will be applied when the condition is met.
-        </p>
-      </div>
+      <FormTextField
+        label="Not Found Tag ID"
+        placeholder="Tag ID to apply when value is not found"
+        value={notFoundTagId}
+        onChange={(e) => updateConfig({ notFoundTagId: e.target.value })}
+        disabled={disabled}
+        description="The tag ID to apply when the field is empty. Leave blank to skip."
+      />
 
-      <div className="grid gap-2">
-        <Label htmlFor="not-found-tag">Tag to Apply (when not matched, optional)</Label>
-        <Input
-          id="not-found-tag"
-          placeholder="Tag ID to apply if condition is false"
-          value={notFoundTagId}
-          onChange={(e) => updateConfig({ notFoundTagId: e.target.value })}
-          disabled={disabled}
-        />
-        <p className="text-xs text-muted-foreground">
-          Optional. This tag will be applied when the condition is not met.
-        </p>
-      </div>
+      <FormTextField
+        label="Found Goal"
+        placeholder="API goal name"
+        value={foundGoal}
+        onChange={(e) => updateConfig({ foundGoal: e.target.value })}
+        disabled={disabled}
+        description="API goal to trigger when the field has a value. Leave blank to skip."
+      />
+
+      <FormTextField
+        label="Not Found Goal"
+        placeholder="API goal name"
+        value={notFoundGoal}
+        onChange={(e) => updateConfig({ notFoundGoal: e.target.value })}
+        disabled={disabled}
+        description="API goal to trigger when the field is empty. Leave blank to skip."
+      />
     </div>
   )
 }

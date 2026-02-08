@@ -14,6 +14,7 @@ const footerLinks = {
     { label: 'ActiveCampaign', href: '#platforms' },
     { label: 'Ontraport', href: '#platforms' },
     { label: 'HubSpot', href: '#platforms' },
+    { label: 'Stripe', href: '#platforms' },
   ],
   Company: [
     { label: 'About', href: '#' },
@@ -45,7 +46,7 @@ export function LandingFooter() {
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-white/50">
               AI-powered CRM intelligence for Keap, GoHighLevel, ActiveCampaign,
-              Ontraport, and HubSpot. Built by MyFusion Solutions.
+              Ontraport, HubSpot, and Stripe. Built by MyFusion Solutions.
             </p>
           </div>
 

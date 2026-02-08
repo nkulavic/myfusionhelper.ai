@@ -13,7 +13,7 @@ import {
   type HelperDefinition,
 } from '@/lib/helpers-catalog'
 import { useHelperTypes } from '@/lib/hooks/use-helpers'
-import { getCRMPlatform } from '@/lib/crm-platforms'
+import { usePlatforms } from '@/lib/hooks/use-connections'
 import { CRMBadges } from '@/components/crm-badges'
 
 /** Merged view: backend type data + static catalog metadata (icon, popular, status) */
@@ -85,6 +85,7 @@ interface HelpersCatalogProps {
 
 export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: HelpersCatalogProps) {
   const { data: backendData, isLoading: typesLoading } = useHelperTypes()
+  const { data: platforms } = usePlatforms()
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [showAvailableOnly, setShowAvailableOnly] = useState(false)
@@ -177,12 +178,10 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: Helpe
           onChange={(e) => setSelectedCRM(e.target.value)}
           className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <option value="all">All CRMs</option>
-          <option value="keap">Keap</option>
-          <option value="gohighlevel">GoHighLevel</option>
-          <option value="activecampaign">ActiveCampaign</option>
-          <option value="ontraport">Ontraport</option>
-          <option value="hubspot">HubSpot</option>
+          <option value="all">All Platforms</option>
+          {platforms?.map((p) => (
+            <option key={p.slug} value={p.slug}>{p.name}</option>
+          ))}
         </select>
         <Button
           variant={showAvailableOnly ? 'default' : 'outline'}
@@ -277,9 +276,10 @@ function CatalogCard({
   const isAvailable = item.status === 'available'
 
   // Determine accent color from first supported CRM, or use primary
-  const accentCRM =
+  const { data: allPlatforms } = usePlatforms()
+  const accentPlatform =
     item.supportedCRMs.length > 0
-      ? getCRMPlatform(item.supportedCRMs[0])
+      ? allPlatforms?.find((p) => p.slug === item.supportedCRMs[0] || p.platformId === item.supportedCRMs[0])
       : null
 
   // Fallback icon from static catalog
@@ -299,8 +299,8 @@ function CatalogCard({
       <div
         className="absolute inset-x-0 bottom-0 h-[3px]"
         style={{
-          background: accentCRM
-            ? `linear-gradient(to right, ${accentCRM.color}, hsl(var(--primary)))`
+          background: accentPlatform
+            ? `linear-gradient(to right, ${accentPlatform.displayConfig?.color}, hsl(var(--primary)))`
             : 'linear-gradient(to right, hsl(var(--success)), hsl(var(--primary)))',
           opacity: isAvailable ? 1 : 0.4,
         }}
@@ -330,8 +330,8 @@ function CatalogCard({
       <div
         className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg"
         style={{
-          backgroundColor: accentCRM
-            ? `${accentCRM.color}18`
+          backgroundColor: accentPlatform
+            ? `${accentPlatform.displayConfig?.color}18`
             : 'hsl(var(--primary) / 0.1)',
         }}
       >
@@ -339,14 +339,14 @@ function CatalogCard({
           <IconComponent
             className="h-5 w-5"
             style={{
-              color: accentCRM ? accentCRM.color : 'hsl(var(--primary))',
+              color: accentPlatform ? accentPlatform.displayConfig?.color : 'hsl(var(--primary))',
             }}
           />
         ) : (
           <Sparkles
             className="h-5 w-5"
             style={{
-              color: accentCRM ? accentCRM.color : 'hsl(var(--primary))',
+              color: accentPlatform ? accentPlatform.displayConfig?.color : 'hsl(var(--primary))',
             }}
           />
         )}

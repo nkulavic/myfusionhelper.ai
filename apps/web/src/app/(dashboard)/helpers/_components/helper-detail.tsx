@@ -41,6 +41,8 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { CRMBadges } from '@/components/crm-badges'
+import { useConnections } from '@/lib/hooks/use-connections'
+import { ScheduleConfig } from './schedule-config'
 
 interface HelperDetailProps {
   helperId: string
@@ -94,6 +96,12 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
   const [testContactId, setTestContactId] = useState('')
   const [showTestRun, setShowTestRun] = useState(false)
   const [copiedEndpoint, setCopiedEndpoint] = useState(false)
+
+  const { data: connections } = useConnections()
+  const helperConnection = useMemo(
+    () => helper?.connectionId ? connections?.find((c) => c.connectionId === helper.connectionId) : undefined,
+    [helper?.connectionId, connections]
+  )
 
   // Use backend type data if available, fall back to static catalog
   const helperTemplate = useMemo(
@@ -479,6 +487,8 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
                 <ConfigForm
                   config={helper.config || {}}
                   onChange={handleFormConfigChange}
+                  platformId={helperConnection?.platformId}
+                  connectionId={helper.connectionId}
                 />
               ) : (
                 <pre className="rounded-md bg-muted p-4 text-sm font-mono overflow-x-auto">
@@ -600,6 +610,9 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
               {copiedEndpoint ? 'Copied!' : 'Copy endpoint'}
             </Button>
           </div>
+
+          {/* Schedule */}
+          <ScheduleConfig helper={helper} />
 
           {/* Config Schema */}
           {helper.configSchema && Object.keys(helper.configSchema).length > 0 && (

@@ -30,23 +30,23 @@ func (h *CustomerLifetimeValue) GetConfigSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
-			"LCVTotalOrders": map[string]interface{}{
+			"lcv_total_orders": map[string]interface{}{
 				"type":        "string",
 				"description": "Contact field to store total order count",
 			},
-			"LCVTotalSpend": map[string]interface{}{
+			"lcv_total_spend": map[string]interface{}{
 				"type":        "string",
 				"description": "Contact field to store total spend amount",
 			},
-			"LCVAverageOrder": map[string]interface{}{
+			"lcv_average_order": map[string]interface{}{
 				"type":        "string",
 				"description": "Contact field to store average order value",
 			},
-			"LCVTotalDue": map[string]interface{}{
+			"lcv_total_due": map[string]interface{}{
 				"type":        "string",
 				"description": "Contact field to store total outstanding balance",
 			},
-			"IncludeZero": map[string]interface{}{
+			"include_zero": map[string]interface{}{
 				"type":        "string",
 				"enum":        []string{"Yes", "No"},
 				"description": "Whether to include zero-value invoices in calculations",
@@ -59,7 +59,7 @@ func (h *CustomerLifetimeValue) GetConfigSchema() map[string]interface{} {
 
 func (h *CustomerLifetimeValue) ValidateConfig(config map[string]interface{}) error {
 	// At least one save field should be provided
-	fields := []string{"LCVTotalOrders", "LCVTotalSpend", "LCVAverageOrder", "LCVTotalDue"}
+	fields := []string{"lcv_total_orders", "lcv_total_spend", "lcv_average_order", "lcv_total_due"}
 	hasField := false
 	for _, f := range fields {
 		if v, ok := config[f].(string); ok && v != "" && v != "no_save" {
@@ -68,7 +68,7 @@ func (h *CustomerLifetimeValue) ValidateConfig(config map[string]interface{}) er
 		}
 	}
 	if !hasField {
-		return fmt.Errorf("at least one save field (LCVTotalOrders, LCVTotalSpend, LCVAverageOrder, LCVTotalDue) is required")
+		return fmt.Errorf("at least one save field (lcv_total_orders, lcv_total_spend, lcv_average_order, lcv_total_due) is required")
 	}
 	return nil
 }
@@ -80,7 +80,7 @@ func (h *CustomerLifetimeValue) Execute(ctx context.Context, input helpers.Helpe
 	}
 
 	includeZero := "No"
-	if iz, ok := input.Config["IncludeZero"].(string); ok {
+	if iz, ok := input.Config["include_zero"].(string); ok {
 		includeZero = iz
 	}
 
@@ -121,10 +121,10 @@ func (h *CustomerLifetimeValue) Execute(ctx context.Context, input helpers.Helpe
 	// Build update data
 	updateData := map[string]interface{}{}
 	fieldMappings := map[string]interface{}{
-		"LCVTotalOrders":  int(count),
-		"LCVTotalSpend":   totalPaid,
-		"LCVAverageOrder": average,
-		"LCVTotalDue":     totalOwe,
+		"lcv_total_orders":  int(count),
+		"lcv_total_spend":   totalPaid,
+		"lcv_average_order": average,
+		"lcv_total_due":     totalOwe,
 	}
 
 	for configKey, value := range fieldMappings {

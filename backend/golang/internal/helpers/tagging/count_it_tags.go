@@ -31,7 +31,7 @@ func (h *CountItTags) GetConfigSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
-			"TagId": map[string]interface{}{
+			"tag_id": map[string]interface{}{
 				"type":        "string",
 				"description": "The tag ID to count contacts for",
 			},
@@ -56,19 +56,19 @@ func (h *CountItTags) GetConfigSchema() map[string]interface{} {
 				"description": "Optional field to store the contact's position in the tag list",
 			},
 		},
-		"required": []string{"TagId"},
+		"required": []string{"tag_id"},
 	}
 }
 
 func (h *CountItTags) ValidateConfig(config map[string]interface{}) error {
-	if _, ok := config["TagId"].(string); !ok || config["TagId"] == "" {
-		return fmt.Errorf("TagId is required")
+	if _, ok := config["tag_id"].(string); !ok || config["tag_id"] == "" {
+		return fmt.Errorf("tag_id is required")
 	}
 	return nil
 }
 
 func (h *CountItTags) Execute(ctx context.Context, input helpers.HelperInput) (*helpers.HelperOutput, error) {
-	tagID := input.Config["TagId"].(string)
+	tagID := input.Config["tag_id"].(string)
 
 	output := &helpers.HelperOutput{
 		Actions: make([]helpers.HelperAction, 0),

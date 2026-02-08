@@ -11,6 +11,7 @@ import (
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 
 	crudClient "github.com/myfusionhelper/api/cmd/handlers/helpers/clients/crud"
+	executeClient "github.com/myfusionhelper/api/cmd/handlers/helpers/clients/execute"
 	executionsClient "github.com/myfusionhelper/api/cmd/handlers/helpers/clients/executions"
 	healthClient "github.com/myfusionhelper/api/cmd/handlers/helpers/clients/health"
 	typesClient "github.com/myfusionhelper/api/cmd/handlers/helpers/clients/types"
@@ -46,6 +47,10 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	}
 
 	switch {
+	// API-key-authenticated execute endpoints (Lambda authorizer handles auth)
+	case strings.HasPrefix(path, "/helper/"):
+		return executeClient.Handle(ctx, event)
+
 	// Public endpoints
 	case path == "/helpers/health" && method == "GET":
 		return healthClient.Handle(ctx, event)

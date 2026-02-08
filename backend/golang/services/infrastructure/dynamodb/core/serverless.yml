@@ -183,6 +183,8 @@ resources:
             AttributeType: S
           - AttributeName: account_id
             AttributeType: S
+          - AttributeName: short_key
+            AttributeType: S
         KeySchema:
           - AttributeName: helper_id
             KeyType: HASH
@@ -190,6 +192,12 @@ resources:
           - IndexName: AccountIdIndex
             KeySchema:
               - AttributeName: account_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: ShortKeyIndex
+            KeySchema:
+              - AttributeName: short_key
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
@@ -202,6 +210,8 @@ resources:
         TableName: mfh-${self:provider.stage}-executions
         BillingMode: PAY_PER_REQUEST
         DeletionProtectionEnabled: true
+        StreamSpecification:
+          StreamViewType: NEW_IMAGE
         TimeToLiveSpecification:
           AttributeName: ttl
           Enabled: true
@@ -299,6 +309,22 @@ resources:
           - AttributeName: state
             KeyType: HASH
 
+    # Rate Limits Table (burst rate limiting with TTL auto-cleanup)
+    RateLimitsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: mfh-${self:provider.stage}-rate-limits
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: key
+            AttributeType: S
+        KeySchema:
+          - AttributeName: key
+            KeyType: HASH
+
   Outputs:
     UsersTableName:
       Value: !Ref UsersTable
@@ -366,6 +392,10 @@ resources:
       Value: !GetAtt ExecutionsTable.Arn
       Export:
         Name: ${self:service}-${self:provider.stage}-ExecutionsTableArn
+    ExecutionsTableStreamArn:
+      Value: !GetAtt ExecutionsTable.StreamArn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ExecutionsTableStreamArn
 
     PlatformsTableName:
       Value: !Ref PlatformsTable
@@ -393,3 +423,12 @@ resources:
       Value: !GetAtt OAuthStatesTable.Arn
       Export:
         Name: ${self:service}-${self:provider.stage}-OAuthStatesTableArn
+
+    RateLimitsTableName:
+      Value: !Ref RateLimitsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-RateLimitsTableName
+    RateLimitsTableArn:
+      Value: !GetAtt RateLimitsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-RateLimitsTableArn

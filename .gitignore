@@ -165,3 +165,9 @@ backend/golang/.cache/
 
 # Local env files
 .env*.local
+
+# Reference repos (legacy)
+reference/
+
+# MCP local config
+.mcp.json

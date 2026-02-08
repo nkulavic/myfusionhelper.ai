@@ -19,6 +19,7 @@ import (
 	"github.com/myfusionhelper/api/internal/connectors"
 	"github.com/myfusionhelper/api/internal/connectors/loader"
 	helperEngine "github.com/myfusionhelper/api/internal/helpers"
+	stripeusage "github.com/myfusionhelper/api/internal/stripe"
 
 	// Register all connectors via init()
 	_ "github.com/myfusionhelper/api/internal/connectors"
@@ -92,6 +93,8 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 		} else if result != nil && result.Success {
 			log.Printf("Execution %s completed successfully", job.ExecutionID)
 			updateExecutionResult(ctx, db, job.ExecutionID, "completed", "", result, &now)
+			// Report usage to Stripe (best-effort, non-blocking)
+			go stripeusage.ReportExecution(ctx, db, job.ExecutionID, job.AccountID, now.Unix())
 		} else {
 			errMsg := "execution returned unsuccessful result"
 			if result != nil && result.Error != "" {
@@ -120,6 +123,9 @@ func processJob(ctx context.Context, db *dynamodb.Client, job HelperExecutionJob
 		}
 	}
 
+	// Pre-load service connection credentials (for non-CRM integrations like Zoom, Trello, etc.)
+	serviceAuths := loadServiceAuths(ctx, db, job.Config, job.AccountID)
+
 	// Execute via the helper engine
 	executor := helperEngine.NewExecutor()
 	execReq := helperEngine.ExecutionRequest{
@@ -130,10 +136,45 @@ func processJob(ctx context.Context, db *dynamodb.Client, job HelperExecutionJob
 		AccountID:    job.AccountID,
 		HelperID:     job.HelperID,
 		ConnectionID: job.ConnectionID,
+		ServiceAuths: serviceAuths,
 	}
 
 	result, err := executor.Execute(ctx, execReq, connector)
 	return result, err
+}
+
+// loadServiceAuths reads service_connection_ids from helper config and pre-loads
+// auth credentials for each service. Returns a map keyed by platform slug.
+func loadServiceAuths(ctx context.Context, db *dynamodb.Client, config map[string]interface{}, accountID string) map[string]*connectors.ConnectorConfig {
+	raw, ok := config["service_connection_ids"]
+	if !ok {
+		return nil
+	}
+
+	connMap, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	auths := make(map[string]*connectors.ConnectorConfig, len(connMap))
+	for slug, connIDRaw := range connMap {
+		connID, ok := connIDRaw.(string)
+		if !ok || connID == "" {
+			continue
+		}
+
+		auth, err := loader.LoadServiceAuth(ctx, db, connID, accountID)
+		if err != nil {
+			log.Printf("Warning: failed to load service auth for %s (connection %s): %v", slug, connID, err)
+			continue
+		}
+		auths[slug] = auth
+	}
+
+	if len(auths) == 0 {
+		return nil
+	}
+	return auths
 }
 
 func updateExecutionStatus(ctx context.Context, db *dynamodb.Client, executionID, status, errorMsg string, durationMs int64) {

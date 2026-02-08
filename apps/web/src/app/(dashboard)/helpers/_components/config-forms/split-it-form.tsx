@@ -1,21 +1,15 @@
 'use client'
 
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+// Go keys: mode (enum: tag|goal), option_a, option_b, state_field
+import { FieldPicker } from '@/components/field-picker'
+import { FormTextField, FormRadioGroup } from './form-fields'
 import type { ConfigFormProps } from './types'
 
-const ratioOptions = [
-  { value: 50, label: '50/50', description: 'Even split between groups' },
-  { value: 60, label: '60/40', description: '60% Group A, 40% Group B' },
-  { value: 70, label: '70/30', description: '70% Group A, 30% Group B' },
-  { value: 80, label: '80/20', description: '80% Group A, 20% Group B' },
-  { value: 90, label: '90/10', description: '90% Group A, 10% Group B' },
-]
-
-export function SplitItForm({ config, onChange, disabled }: ConfigFormProps) {
-  const groupATag = (config.groupATag as string) || ''
-  const groupBTag = (config.groupBTag as string) || ''
-  const ratio = (config.ratio as number) ?? 50
+export function SplitItForm({ config, onChange, disabled, platformId, connectionId }: ConfigFormProps) {
+  const mode = (config.mode as string) || 'tag'
+  const optionA = (config.optionA as string) || ''
+  const optionB = (config.optionB as string) || ''
+  const stateField = (config.stateField as string) || ''
 
   const updateConfig = (updates: Record<string, unknown>) => {
     onChange({ ...config, ...updates })
@@ -23,58 +17,47 @@ export function SplitItForm({ config, onChange, disabled }: ConfigFormProps) {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-2">
-        <Label htmlFor="split-ratio">Split Ratio</Label>
-        <select
-          id="split-ratio"
-          value={ratio}
-          onChange={(e) => updateConfig({ ratio: parseInt(e.target.value, 10) })}
-          disabled={disabled}
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        >
-          {ratioOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-muted-foreground">
-          {ratioOptions.find((o) => o.value === ratio)?.description}
-        </p>
-      </div>
+      <FormRadioGroup
+        label="Split Mode"
+        value={mode}
+        onValueChange={(value) => updateConfig({ mode: value })}
+        options={[
+          { value: 'tag', label: 'Tag' },
+          { value: 'goal', label: 'Goal' },
+        ]}
+        disabled={disabled}
+        description="Choose whether to split contacts using tags or goals."
+      />
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="split-group-a">
-            Group A Tag ({ratio}%)
-          </Label>
-          <Input
-            id="split-group-a"
-            placeholder="Tag ID for Group A"
-            value={groupATag}
-            onChange={(e) => updateConfig({ groupATag: e.target.value })}
-            disabled={disabled}
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="split-group-b">
-            Group B Tag ({100 - ratio}%)
-          </Label>
-          <Input
-            id="split-group-b"
-            placeholder="Tag ID for Group B"
-            value={groupBTag}
-            onChange={(e) => updateConfig({ groupBTag: e.target.value })}
-            disabled={disabled}
-          />
-        </div>
+        <FormTextField
+          label={mode === 'tag' ? 'Option A Tag ID' : 'Option A Goal'}
+          placeholder={mode === 'tag' ? 'Tag ID for group A' : 'Goal name for group A'}
+          value={optionA}
+          onChange={(e) => updateConfig({ optionA: e.target.value })}
+          disabled={disabled}
+        />
+        <FormTextField
+          label={mode === 'tag' ? 'Option B Tag ID' : 'Option B Goal'}
+          placeholder={mode === 'tag' ? 'Tag ID for group B' : 'Goal name for group B'}
+          value={optionB}
+          onChange={(e) => updateConfig({ optionB: e.target.value })}
+          disabled={disabled}
+        />
       </div>
 
-      <div className="rounded-md border border-dashed bg-muted/50 p-3">
+      <div className="grid gap-2">
+        <label className="text-sm font-medium">State Field</label>
+        <FieldPicker
+          platformId={platformId ?? ''}
+          connectionId={connectionId ?? ''}
+          value={stateField}
+          onChange={(value) => updateConfig({ stateField: value })}
+          placeholder="Select field to store split state..."
+          disabled={disabled}
+        />
         <p className="text-xs text-muted-foreground">
-          Each contact processed by this helper will be randomly assigned to Group A
-          or Group B based on the split ratio. The corresponding tag will be applied.
-          Useful for A/B testing campaigns or splitting audiences.
+          A contact field used to remember which group (A or B) this contact was assigned to.
         </p>
       </div>
     </div>

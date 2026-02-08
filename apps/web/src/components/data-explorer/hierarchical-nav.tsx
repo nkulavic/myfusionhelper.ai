@@ -39,7 +39,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useDataExplorerStore } from '@/lib/stores/data-explorer-store'
 import { PlatformLogo } from '@/components/platform-logo'
-import { getCRMPlatform } from '@/lib/crm-platforms'
+import { usePlatforms } from '@/lib/hooks/use-connections'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -514,7 +514,10 @@ const PlatformRow = React.memo(function PlatformRow({
   onConnectionClick,
   onObjectTypeClick,
 }: PlatformRowProps) {
-  const crmPlatform = getCRMPlatform(platform.platformId)
+  const { data: allPlatforms } = usePlatforms()
+  const apiPlatform = allPlatforms?.find(
+    (p) => p.slug === platform.platformId || p.platformId === platform.platformId
+  )
 
   return (
     <div>
@@ -535,8 +538,8 @@ const PlatformRow = React.memo(function PlatformRow({
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         )}
 
-        {crmPlatform ? (
-          <PlatformLogo platform={crmPlatform} size={24} />
+        {apiPlatform ? (
+          <PlatformLogo definition={apiPlatform} size={24} />
         ) : (
           <div
             className="flex items-center justify-center rounded-md bg-muted text-muted-foreground font-bold"
@@ -563,7 +566,7 @@ const PlatformRow = React.memo(function PlatformRow({
             <ConnectionRow
               key={connection.connectionId}
               connection={connection}
-              platformColor={crmPlatform?.color ?? '#888'}
+              platformColor={apiPlatform?.displayConfig?.color ?? '#888'}
               isExpanded={expandedNodes.includes(
                 `connection:${connection.connectionId}`
               )}

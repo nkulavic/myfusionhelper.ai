@@ -148,7 +148,7 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	userID := "user:" + *createUserResult.User.Username
-	accountID := "account:" + uuid.New().String()
+	accountID := "account:" + uuid.Must(uuid.NewV7()).String()
 
 	companyName := req.Company
 	if companyName == "" {

@@ -1,7 +1,8 @@
 'use client'
 
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+// Schema: see schemas.ts > dateCalcSchema
+import { FieldPicker } from '@/components/field-picker'
+import { FormSelect, FormTextField } from './form-fields'
 import type { ConfigFormProps } from './types'
 
 const operations = [
@@ -9,8 +10,10 @@ const operations = [
   { value: 'subtract_days', label: 'Subtract Days', description: 'Subtract days from the date' },
   { value: 'add_months', label: 'Add Months', description: 'Add months to the date' },
   { value: 'subtract_months', label: 'Subtract Months', description: 'Subtract months from the date' },
-  { value: 'diff_days', label: 'Difference in Days', description: 'Calculate days between two dates' },
+  { value: 'add_years', label: 'Add Years', description: 'Add years to the date' },
+  { value: 'subtract_years', label: 'Subtract Years', description: 'Subtract years from the date' },
   { value: 'set_now', label: 'Set to Now', description: 'Set the field to the current date/time' },
+  { value: 'diff_days', label: 'Difference in Days', description: 'Calculate days between two dates' },
   { value: 'format', label: 'Format Date', description: 'Reformat the date to a specific pattern' },
 ]
 
@@ -22,51 +25,41 @@ const dateFormats = [
   { value: 'MMMM DD, YYYY', label: 'MMMM DD, YYYY (January 15, 2025)' },
 ]
 
-export function DateCalcForm({ config, onChange, disabled }: ConfigFormProps) {
+export function DateCalcForm({ config, onChange, disabled, platformId, connectionId }: ConfigFormProps) {
   const operation = (config.operation as string) || 'add_days'
-  const dateField = (config.dateField as string) || ''
+  const field = (config.field as string) || ''
   const amount = (config.amount as number) ?? 0
   const targetField = (config.targetField as string) || ''
-  const secondDateField = (config.secondDateField as string) || ''
-  const dateFormat = (config.dateFormat as string) || 'YYYY-MM-DD'
+  const compareField = (config.compareField as string) || ''
+  const outputFormat = (config.outputFormat as string) || 'YYYY-MM-DD'
 
   const updateConfig = (updates: Record<string, unknown>) => {
     onChange({ ...config, ...updates })
   }
 
-  const needsAmount = ['add_days', 'subtract_days', 'add_months', 'subtract_months'].includes(operation)
-  const needsSecondDate = operation === 'diff_days'
+  const needsAmount = ['add_days', 'subtract_days', 'add_months', 'subtract_months', 'add_years', 'subtract_years'].includes(operation)
+  const needsCompareField = operation === 'diff_days'
   const needsFormat = operation === 'format'
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-2">
-        <Label htmlFor="date-operation">Operation</Label>
-        <select
-          id="date-operation"
-          value={operation}
-          onChange={(e) => updateConfig({ operation: e.target.value })}
-          disabled={disabled}
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        >
-          {operations.map((op) => (
-            <option key={op.value} value={op.value}>
-              {op.label}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-muted-foreground">
-          {operations.find((o) => o.value === operation)?.description}
-        </p>
-      </div>
+      <FormSelect
+        label="Operation"
+        description={operations.find((o) => o.value === operation)?.description}
+        value={operation}
+        onValueChange={(v) => updateConfig({ operation: v })}
+        options={operations}
+        disabled={disabled}
+      />
 
       <div className="grid gap-2">
-        <Label htmlFor="date-field">Date Field</Label>
-        <Input
-          id="date-field"
-          placeholder="e.g. _DateCreated, custom_date_1"
-          value={dateField}
-          onChange={(e) => updateConfig({ dateField: e.target.value })}
+        <label className="text-sm font-medium">Field</label>
+        <FieldPicker
+          platformId={platformId ?? ''}
+          connectionId={connectionId ?? ''}
+          value={field}
+          onChange={(value) => updateConfig({ field: value })}
+          placeholder="Select date field..."
           disabled={disabled}
         />
         <p className="text-xs text-muted-foreground">
@@ -75,30 +68,26 @@ export function DateCalcForm({ config, onChange, disabled }: ConfigFormProps) {
       </div>
 
       {needsAmount && (
-        <div className="grid gap-2">
-          <Label htmlFor="date-amount">Amount</Label>
-          <Input
-            id="date-amount"
-            type="number"
-            placeholder="0"
-            value={amount}
-            onChange={(e) => updateConfig({ amount: parseInt(e.target.value, 10) || 0 })}
-            disabled={disabled}
-          />
-          <p className="text-xs text-muted-foreground">
-            Number of {operation.includes('month') ? 'months' : 'days'} to add or subtract.
-          </p>
-        </div>
+        <FormTextField
+          label="Amount"
+          type="number"
+          placeholder="0"
+          value={amount}
+          onChange={(e) => updateConfig({ amount: parseInt(e.target.value, 10) || 0 })}
+          disabled={disabled}
+          description={`Number of ${operation.includes('year') ? 'years' : operation.includes('month') ? 'months' : 'days'} to add or subtract.`}
+        />
       )}
 
-      {needsSecondDate && (
+      {needsCompareField && (
         <div className="grid gap-2">
-          <Label htmlFor="date-second">Second Date Field</Label>
-          <Input
-            id="date-second"
-            placeholder="e.g. _LastPurchaseDate"
-            value={secondDateField}
-            onChange={(e) => updateConfig({ secondDateField: e.target.value })}
+          <label className="text-sm font-medium">Compare Field</label>
+          <FieldPicker
+            platformId={platformId ?? ''}
+            connectionId={connectionId ?? ''}
+            value={compareField}
+            onChange={(value) => updateConfig({ compareField: value })}
+            placeholder="Select second date field..."
             disabled={disabled}
           />
           <p className="text-xs text-muted-foreground">
@@ -108,31 +97,23 @@ export function DateCalcForm({ config, onChange, disabled }: ConfigFormProps) {
       )}
 
       {needsFormat && (
-        <div className="grid gap-2">
-          <Label htmlFor="date-format">Output Format</Label>
-          <select
-            id="date-format"
-            value={dateFormat}
-            onChange={(e) => updateConfig({ dateFormat: e.target.value })}
-            disabled={disabled}
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          >
-            {dateFormats.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <FormSelect
+          label="Output Format"
+          value={outputFormat}
+          onValueChange={(v) => updateConfig({ outputFormat: v })}
+          options={dateFormats}
+          disabled={disabled}
+        />
       )}
 
       <div className="grid gap-2">
-        <Label htmlFor="date-target">Target Field (optional)</Label>
-        <Input
-          id="date-target"
-          placeholder="Leave empty to update the source field"
+        <label className="text-sm font-medium">Target Field (optional)</label>
+        <FieldPicker
+          platformId={platformId ?? ''}
+          connectionId={connectionId ?? ''}
           value={targetField}
-          onChange={(e) => updateConfig({ targetField: e.target.value })}
+          onChange={(value) => updateConfig({ targetField: value })}
+          placeholder="Leave empty to update the source field"
           disabled={disabled}
         />
         <p className="text-xs text-muted-foreground">
