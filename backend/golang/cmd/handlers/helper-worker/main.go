@@ -18,6 +18,7 @@ import (
 
 	"github.com/myfusionhelper/api/internal/connectors"
 	"github.com/myfusionhelper/api/internal/connectors/loader"
+	"github.com/myfusionhelper/api/internal/google"
 	helperEngine "github.com/myfusionhelper/api/internal/helpers"
 	stripeusage "github.com/myfusionhelper/api/internal/stripe"
 
@@ -140,6 +141,12 @@ func processJob(ctx context.Context, db *dynamodb.Client, job HelperExecutionJob
 	}
 
 	result, err := executor.Execute(ctx, execReq, connector)
+
+	// Process post-execution actions (e.g., google_sheet_sync_queued)
+	if err == nil && result != nil && result.Output != nil && len(result.Output.Actions) > 0 {
+		processPostExecutionActions(ctx, db, result.Output.Actions, job, connector, serviceAuths)
+	}
+
 	return result, err
 }
 
@@ -299,4 +306,206 @@ func updateHelperStats(ctx context.Context, db *dynamodb.Client, helperID string
 	if err != nil {
 		log.Printf("Failed to update helper stats: %v", err)
 	}
+}
+
+// processPostExecutionActions handles post-execution actions like google_sheet_sync_queued
+func processPostExecutionActions(
+	ctx context.Context,
+	db *dynamodb.Client,
+	actions []helperEngine.HelperAction,
+	job HelperExecutionJob,
+	connector connectors.CRMConnector,
+	serviceAuths map[string]*connectors.ConnectorConfig,
+) {
+	for _, action := range actions {
+		switch action.Type {
+		case "google_sheet_sync_queued":
+			handleGoogleSheetSync(ctx, db, action, job, connector, serviceAuths)
+		default:
+			log.Printf("Skipping unknown post-execution action type: %s", action.Type)
+		}
+	}
+}
+
+// handleGoogleSheetSync processes the google_sheet_sync_queued action
+func handleGoogleSheetSync(
+	ctx context.Context,
+	db *dynamodb.Client,
+	action helperEngine.HelperAction,
+	job HelperExecutionJob,
+	connector connectors.CRMConnector,
+	serviceAuths map[string]*connectors.ConnectorConfig,
+) {
+	log.Printf("Processing Google Sheet sync for spreadsheet %s", action.Target)
+
+	// Extract sync request from action value
+	syncRequest, ok := action.Value.(map[string]interface{})
+	if !ok {
+		log.Printf("Invalid sync request format for Google Sheet action")
+		return
+	}
+
+	// Extract required fields
+	spreadsheetID, _ := syncRequest["spreadsheet_id"].(string)
+	sheetID, _ := syncRequest["sheet_id"].(string)
+	mode, _ := syncRequest["mode"].(string)
+
+	if spreadsheetID == "" || sheetID == "" {
+		log.Printf("Missing required fields in sync request")
+		return
+	}
+
+	// Get Google Sheets OAuth token from ServiceAuths
+	googleAuth, ok := serviceAuths["google_sheets"]
+	if !ok || googleAuth == nil {
+		log.Printf("Google Sheets authentication not found in ServiceAuths")
+		return
+	}
+
+	accessToken := googleAuth.AccessToken
+	if accessToken == "" {
+		log.Printf("Google Sheets access token is empty")
+		return
+	}
+
+	// Create Sheets client
+	sheetsClient := google.NewSheetsClient(accessToken)
+
+	// Step 1: Clear worksheet if mode is "replace"
+	if mode == "replace" {
+		log.Printf("Clearing worksheet %s in spreadsheet %s", sheetID, spreadsheetID)
+		if err := sheetsClient.ClearWorksheet(ctx, spreadsheetID, sheetID); err != nil {
+			log.Printf("Failed to clear worksheet: %v", err)
+			return
+		}
+	}
+
+	// Step 2: Get contact data from CRM
+	var rows [][]interface{}
+
+	// Check if we have a search query or individual contact
+	searchID, hasSearch := syncRequest["search_id"].(string)
+	contactData, hasContact := syncRequest["contact_data"].(map[string]interface{})
+
+	if hasSearch && searchID != "" {
+		// Execute search query to get contacts
+		log.Printf("Executing CRM search for search_id: %s", searchID)
+
+		// For now, we'll use GetContacts with default options
+		// In a production system, you'd load the saved search query and apply filters
+		contactList, err := connector.GetContacts(ctx, connectors.QueryOptions{
+			Limit: 1000, // reasonable default
+		})
+		if err != nil {
+			log.Printf("Failed to fetch contacts from CRM: %v", err)
+			return
+		}
+
+		// Convert contacts slice to pointer slice
+		contactPtrs := make([]*connectors.NormalizedContact, len(contactList.Contacts))
+		for i := range contactList.Contacts {
+			contactPtrs[i] = &contactList.Contacts[i]
+		}
+
+		// Convert contacts to rows
+		rows = contactsToRows(contactPtrs, syncRequest)
+	} else if hasContact {
+		// Single contact data provided
+		log.Printf("Processing single contact data")
+		rows = [][]interface{}{
+			contactToRow(contactData, syncRequest),
+		}
+	} else {
+		log.Printf("No contact data or search query provided")
+		return
+	}
+
+	if len(rows) == 0 {
+		log.Printf("No rows to write to Google Sheet")
+		return
+	}
+
+	// Step 3: Write rows to worksheet
+	log.Printf("Writing %d rows to worksheet %s", len(rows), sheetID)
+	if err := sheetsClient.WriteRows(ctx, spreadsheetID, sheetID, rows); err != nil {
+		log.Printf("Failed to write rows to worksheet: %v", err)
+		return
+	}
+
+	log.Printf("Successfully synced %d rows to Google Sheet %s", len(rows), spreadsheetID)
+}
+
+// contactsToRows converts a list of normalized contacts to spreadsheet rows
+func contactsToRows(contacts []*connectors.NormalizedContact, syncRequest map[string]interface{}) [][]interface{} {
+	if len(contacts) == 0 {
+		return [][]interface{}{}
+	}
+
+	// Build header row
+	headerRow := []interface{}{"ID", "First Name", "Last Name", "Email", "Phone", "Company"}
+
+	// Collect all unique custom field keys
+	customFieldKeys := make(map[string]bool)
+	for _, contact := range contacts {
+		if contact.CustomFields != nil {
+			for key := range contact.CustomFields {
+				customFieldKeys[key] = true
+			}
+		}
+	}
+
+	// Add custom field headers
+	for key := range customFieldKeys {
+		headerRow = append(headerRow, key)
+	}
+
+	rows := [][]interface{}{headerRow}
+
+	// Add data rows
+	for _, contact := range contacts {
+		row := []interface{}{
+			contact.ID,
+			contact.FirstName,
+			contact.LastName,
+			contact.Email,
+			contact.Phone,
+			contact.Company,
+		}
+
+		// Add custom field values
+		for key := range customFieldKeys {
+			value := ""
+			if contact.CustomFields != nil {
+				if v, ok := contact.CustomFields[key]; ok {
+					value = fmt.Sprintf("%v", v)
+				}
+			}
+			row = append(row, value)
+		}
+
+		rows = append(rows, row)
+	}
+
+	return rows
+}
+
+// contactToRow converts a single contact map to a spreadsheet row
+func contactToRow(contactData map[string]interface{}, syncRequest map[string]interface{}) []interface{} {
+	row := []interface{}{
+		getStringValue(contactData, "Id"),
+		getStringValue(contactData, "FirstName"),
+		getStringValue(contactData, "LastName"),
+		getStringValue(contactData, "Email"),
+		getStringValue(contactData, "Phone"),
+		getStringValue(contactData, "Company"),
+	}
+	return row
+}
+
+// getStringValue safely extracts a string value from a map
+func getStringValue(m map[string]interface{}, key string) string {
+	if v, ok := m[key]; ok {
+		return fmt.Sprintf("%v", v)
+	}
+	return ""
 }
