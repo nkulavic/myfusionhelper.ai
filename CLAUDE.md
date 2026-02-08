@@ -136,3 +136,40 @@ npx sls deploy --stage dev     # deploys single service
 ## Helper Categories
 
 Helpers are organized into categories: contact, data, tagging, automation, integration, notification, analytics. Each helper implements the `helpers.Helper` Go interface and is registered in a global registry via `helpers.Register()`.
+
+## Project Management & Planning Workflow
+
+**Teamwork Project ID**: 674054 (myfusionhelper.ai)
+
+### Plan Files Live in Teamwork Notebooks
+
+**IMPORTANT**: All implementation plans, roadmaps, and project status documents MUST be stored as Teamwork notebooks in project 674054 -- NOT as local markdown files in the repo. This ensures plans persist across conversation sessions and are accessible from Teamwork's UI.
+
+**Workflow**:
+1. Before starting significant work, check Teamwork notebooks for existing plans: `teamwork_notebooks list projectId=674054`
+2. When creating a new plan, save it as a Teamwork notebook: `teamwork_notebooks create projectId=674054`
+3. When updating progress, update the relevant notebook: `teamwork_notebooks update notebookId=...`
+4. Use version comments when updating notebooks to track changes over time
+5. Do NOT create `*_PLAN.md`, `*_ROADMAP.md`, or similar planning files in the repo
+
+**Notebook naming convention**:
+- `Implementation Plan` -- current implementation priorities and status
+- `Product Plan` -- product vision, features, pricing, target users
+- `Test Plan` -- QA checklists and test procedures
+- `Architecture Notes` -- technical architecture decisions
+
+### Teamwork Task Tracking
+
+Use Teamwork tasks (project 674054) for tracking work items, bugs, and feature requests. Claude Code has access to Teamwork MCP tools for creating and managing tasks.
+
+### What Belongs in the Repo vs Teamwork
+
+| Content | Location |
+|---------|----------|
+| Code documentation (CLAUDE.md, README) | Repo |
+| API reference docs | Repo (`docs/API.md`) |
+| Implementation plans & roadmaps | Teamwork notebooks |
+| Task tracking & status | Teamwork tasks |
+| Product strategy & vision | Teamwork notebooks |
+| QA test plans | Teamwork notebooks |
+| Landing page copy | Repo (`docs/LANDING_COPY.md`) |
