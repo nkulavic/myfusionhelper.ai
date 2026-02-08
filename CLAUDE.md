@@ -152,11 +152,21 @@ Helpers are organized into categories: contact, data, tagging, automation, integ
 4. Use version comments when updating notebooks to track changes over time
 5. Do NOT create `*_PLAN.md`, `*_ROADMAP.md`, or similar planning files in the repo
 
-**Notebook naming convention**:
-- `Implementation Plan` -- current implementation priorities and status
-- `Product Plan` -- product vision, features, pricing, target users
-- `Test Plan` -- QA checklists and test procedures
-- `Architecture Notes` -- technical architecture decisions
+**Notebook naming convention** (with IDs):
+- `Implementation Plan` (417843) -- current implementation priorities and status
+- `Product Plan` (417844) -- product vision, features, pricing, target users
+- `Test Plan` (417845) -- QA checklists and test procedures
+- `Architecture Notes` (417842) -- technical architecture decisions
+
+**Task Lists** (8 active):
+- P0 - Git & Code Hygiene (3256057)
+- P0 - Infrastructure Deployment (3256058)
+- P0 - End-to-End Smoke Testing (3256059)
+- P1 - Backend Gaps (3256060)
+- P1 - Go Test Suite (3256061)
+- P1 - Helper Migration - Legacy to Go (3256064)
+- P2 - Frontend Polish (3256062)
+- P2 - Launch Prep (3256063)
 
 ### Teamwork Task Tracking
 
