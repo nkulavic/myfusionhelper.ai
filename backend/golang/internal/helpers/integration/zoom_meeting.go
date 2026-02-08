@@ -8,51 +8,51 @@ import (
 )
 
 func init() {
-	helpers.Register("zoom_webinar", func() helpers.Helper { return &ZoomWebinar{} })
+	helpers.Register("zoom_meeting", func() helpers.Helper { return &ZoomMeeting{} })
 }
 
-// ZoomWebinar creates Zoom webinars and registers contacts via Zoom API v2.
-// COMPLETE REWRITE with OAuth implementation via ServiceAuths["zoom"].
-type ZoomWebinar struct{}
+// ZoomMeeting creates Zoom meetings and registers contacts via Zoom API v2.
+// Uses Server-to-Server OAuth via ServiceAuths["zoom"].
+type ZoomMeeting struct{}
 
-func (h *ZoomWebinar) GetName() string     { return "Zoom Webinar" }
-func (h *ZoomWebinar) GetType() string     { return "zoom_webinar" }
-func (h *ZoomWebinar) GetCategory() string { return "integration" }
-func (h *ZoomWebinar) GetDescription() string {
-	return "Create Zoom webinars and register contacts via the Zoom API"
+func (h *ZoomMeeting) GetName() string     { return "Zoom Meeting" }
+func (h *ZoomMeeting) GetType() string     { return "zoom_meeting" }
+func (h *ZoomMeeting) GetCategory() string { return "integration" }
+func (h *ZoomMeeting) GetDescription() string {
+	return "Create Zoom meetings and register contacts via the Zoom API"
 }
-func (h *ZoomWebinar) RequiresCRM() bool       { return true }
-func (h *ZoomWebinar) SupportedCRMs() []string { return nil }
+func (h *ZoomMeeting) RequiresCRM() bool       { return true }
+func (h *ZoomMeeting) SupportedCRMs() []string { return nil }
 
-func (h *ZoomWebinar) GetConfigSchema() map[string]interface{} {
+func (h *ZoomMeeting) GetConfigSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
 			"action": map[string]interface{}{
 				"type":        "string",
 				"enum":        []string{"create", "register"},
-				"description": "Action: 'create' a webinar or 'register' contact for existing webinar",
+				"description": "Action: 'create' a meeting or 'register' contact for existing meeting",
 				"default":     "create",
 			},
 			"user_id": map[string]interface{}{
 				"type":        "string",
 				"description": "Zoom user ID (email or user ID) - required for create action",
 			},
-			"webinar_id": map[string]interface{}{
+			"meeting_id": map[string]interface{}{
 				"type":        "string",
-				"description": "Existing webinar ID - required for register action",
+				"description": "Existing meeting ID - required for register action",
 			},
 			"topic": map[string]interface{}{
 				"type":        "string",
-				"description": "Webinar topic/title - for create action",
+				"description": "Meeting topic/title - for create action",
 			},
 			"start_time": map[string]interface{}{
 				"type":        "string",
-				"description": "Webinar start time (ISO 8601 format: 2024-01-15T10:00:00Z) - for create action",
+				"description": "Meeting start time (ISO 8601 format: 2024-01-15T10:00:00Z) - for create action",
 			},
 			"duration": map[string]interface{}{
 				"type":        "number",
-				"description": "Webinar duration in minutes (default: 60)",
+				"description": "Meeting duration in minutes (default: 60)",
 				"default":     60,
 			},
 			"timezone": map[string]interface{}{
@@ -62,7 +62,7 @@ func (h *ZoomWebinar) GetConfigSchema() map[string]interface{} {
 			},
 			"password": map[string]interface{}{
 				"type":        "string",
-				"description": "Webinar password (optional)",
+				"description": "Meeting password (optional)",
 			},
 			"name_field": map[string]interface{}{
 				"type":        "string",
@@ -78,11 +78,6 @@ func (h *ZoomWebinar) GetConfigSchema() map[string]interface{} {
 				"type":        "string",
 				"description": "CRM field to save join URL to (optional)",
 			},
-			"approval_type": map[string]interface{}{
-				"type":        "number",
-				"description": "Registration approval: 0=auto approve, 1=manual, 2=no registration (default: 0)",
-				"default":     0,
-			},
 			"registration_type": map[string]interface{}{
 				"type":        "number",
 				"description": "Registration type: 1=once, 2=each occurrence, 3=series (default: 1)",
@@ -91,26 +86,15 @@ func (h *ZoomWebinar) GetConfigSchema() map[string]interface{} {
 			"auto_recording": map[string]interface{}{
 				"type":        "string",
 				"enum":        []string{"none", "local", "cloud"},
-				"description": "Auto recording setting (default: cloud)",
-				"default":     "cloud",
-			},
-			"custom_questions": map[string]interface{}{
-				"type": "array",
-				"items": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"title": map[string]interface{}{"type": "string"},
-						"value": map[string]interface{}{"type": "string"},
-					},
-				},
-				"description": "Custom questions for webinar registration",
+				"description": "Auto recording setting (default: none)",
+				"default":     "none",
 			},
 		},
 		"required": []string{"action"},
 	}
 }
 
-func (h *ZoomWebinar) ValidateConfig(config map[string]interface{}) error {
+func (h *ZoomMeeting) ValidateConfig(config map[string]interface{}) error {
 	action, ok := config["action"].(string)
 	if !ok || action == "" {
 		return fmt.Errorf("action is required")
@@ -121,8 +105,8 @@ func (h *ZoomWebinar) ValidateConfig(config map[string]interface{}) error {
 			return fmt.Errorf("user_id is required for create action")
 		}
 	} else if action == "register" {
-		if _, ok := config["webinar_id"].(string); !ok || config["webinar_id"] == "" {
-			return fmt.Errorf("webinar_id is required for register action")
+		if _, ok := config["meeting_id"].(string); !ok || config["meeting_id"] == "" {
+			return fmt.Errorf("meeting_id is required for register action")
 		}
 	} else {
 		return fmt.Errorf("action must be 'create' or 'register'")
@@ -131,7 +115,7 @@ func (h *ZoomWebinar) ValidateConfig(config map[string]interface{}) error {
 	return nil
 }
 
-func (h *ZoomWebinar) Execute(ctx context.Context, input helpers.HelperInput) (*helpers.HelperOutput, error) {
+func (h *ZoomMeeting) Execute(ctx context.Context, input helpers.HelperInput) (*helpers.HelperOutput, error) {
 	output := &helpers.HelperOutput{
 		Logs: make([]string, 0),
 	}
@@ -175,36 +159,31 @@ func (h *ZoomWebinar) Execute(ctx context.Context, input helpers.HelperInput) (*
 	}
 
 	if action == "create" {
-		return h.createWebinar(ctx, input, output, zoomAuth, contact, email, firstName, lastName)
+		return h.createMeeting(ctx, input, output, zoomAuth, contact, email, firstName, lastName)
 	}
 
-	return h.registerForWebinar(ctx, input, output, zoomAuth, contact, email, firstName, lastName)
+	return h.registerForMeeting(ctx, input, output, zoomAuth, contact, email, firstName, lastName)
 }
 
-func (h *ZoomWebinar) createWebinar(ctx context.Context, input helpers.HelperInput, output *helpers.HelperOutput,
+func (h *ZoomMeeting) createMeeting(ctx context.Context, input helpers.HelperInput, output *helpers.HelperOutput,
 	zoomAuth interface{}, contact interface{}, email, firstName, lastName string) (*helpers.HelperOutput, error) {
 
 	userID := input.Config["user_id"].(string)
-	topic := getStringConfigValue(input.Config, "topic", "Webinar")
+	topic := getStringConfigValue(input.Config, "topic", "Meeting")
 	duration := getIntConfigValue(input.Config, "duration", 60)
 	timezone := getStringConfigValue(input.Config, "timezone", "UTC")
 	password := getStringConfigValue(input.Config, "password", "")
-	approvalType := getIntConfigValue(input.Config, "approval_type", 0)
-	registrationType := getIntConfigValue(input.Config, "registration_type", 1)
-	autoRecording := getStringConfigValue(input.Config, "auto_recording", "cloud")
+	autoRecording := getStringConfigValue(input.Config, "auto_recording", "none")
 	startTime := getStringConfigValue(input.Config, "start_time", "")
 
-	// Build webinar creation payload
+	// Build meeting creation payload
 	payload := map[string]interface{}{
 		"topic":    topic,
-		"type":     5, // Webinar
+		"type":     2, // Scheduled meeting
 		"duration": duration,
 		"timezone": timezone,
 		"settings": map[string]interface{}{
-			"approval_type":       approvalType,
-			"registration_type":   registrationType,
-			"auto_recording":      autoRecording,
-			"registrants_email_notification": true,
+			"auto_recording": autoRecording,
 		},
 	}
 
@@ -214,20 +193,23 @@ func (h *ZoomWebinar) createWebinar(ctx context.Context, input helpers.HelperInp
 
 	if password != "" {
 		payload["password"] = password
+		if settings, ok := payload["settings"].(map[string]interface{}); ok {
+			settings["meeting_authentication"] = true
+		}
 	}
 
 	// Make API request
-	apiURL := fmt.Sprintf("https://api.zoom.us/v2/users/%s/webinars", userID)
-	webinarResp, err := makeZoomAPIRequest(ctx, "POST", apiURL, payload, zoomAuth)
+	apiURL := fmt.Sprintf("https://api.zoom.us/v2/users/%s/meetings", userID)
+	meetingResp, err := makeZoomAPIRequest(ctx, "POST", apiURL, payload, zoomAuth)
 	if err != nil {
-		output.Message = fmt.Sprintf("Failed to create webinar: %v", err)
+		output.Message = fmt.Sprintf("Failed to create meeting: %v", err)
 		return output, err
 	}
 
-	webinarID := getStringFromMap(webinarResp, "id", "")
-	joinURL := getStringFromMap(webinarResp, "join_url", "")
+	meetingID := getStringFromMap(meetingResp, "id", "")
+	joinURL := getStringFromMap(meetingResp, "join_url", "")
 
-	output.Logs = append(output.Logs, fmt.Sprintf("Created Zoom webinar: %s (ID: %s)", topic, webinarID))
+	output.Logs = append(output.Logs, fmt.Sprintf("Created Zoom meeting: %s (ID: %s)", topic, meetingID))
 
 	// Optionally save join URL to CRM field
 	if saveField, ok := input.Config["save_join_url_to"].(string); ok && saveField != "" && joinURL != "" {
@@ -239,16 +221,16 @@ func (h *ZoomWebinar) createWebinar(ctx context.Context, input helpers.HelperInp
 	}
 
 	output.Success = true
-	output.Message = fmt.Sprintf("Created webinar '%s'", topic)
+	output.Message = fmt.Sprintf("Created meeting '%s'", topic)
 	output.ModifiedData = map[string]interface{}{
-		"webinar_id": webinarID,
+		"meeting_id": meetingID,
 		"join_url":   joinURL,
 		"topic":      topic,
 	}
 	output.Actions = []helpers.HelperAction{
 		{
-			Type:   "webinar_created",
-			Target: webinarID,
+			Type:   "meeting_created",
+			Target: meetingID,
 			Value:  joinURL,
 		},
 	}
@@ -256,10 +238,10 @@ func (h *ZoomWebinar) createWebinar(ctx context.Context, input helpers.HelperInp
 	return output, nil
 }
 
-func (h *ZoomWebinar) registerForWebinar(ctx context.Context, input helpers.HelperInput, output *helpers.HelperOutput,
+func (h *ZoomMeeting) registerForMeeting(ctx context.Context, input helpers.HelperInput, output *helpers.HelperOutput,
 	zoomAuth interface{}, contact interface{}, email, firstName, lastName string) (*helpers.HelperOutput, error) {
 
-	webinarID := input.Config["webinar_id"].(string)
+	meetingID := input.Config["meeting_id"].(string)
 
 	// Build registration payload
 	payload := map[string]interface{}{
@@ -271,31 +253,18 @@ func (h *ZoomWebinar) registerForWebinar(ctx context.Context, input helpers.Help
 		payload["last_name"] = lastName
 	}
 
-	// Add custom questions if configured
-	if customQuestions, ok := input.Config["custom_questions"].([]interface{}); ok && len(customQuestions) > 0 {
-		var questions []map[string]interface{}
-		for _, q := range customQuestions {
-			if qMap, ok := q.(map[string]interface{}); ok {
-				questions = append(questions, qMap)
-			}
-		}
-		if len(questions) > 0 {
-			payload["custom_questions"] = questions
-		}
-	}
-
 	// Make API request
-	apiURL := fmt.Sprintf("https://api.zoom.us/v2/webinars/%s/registrants", webinarID)
+	apiURL := fmt.Sprintf("https://api.zoom.us/v2/meetings/%s/registrants", meetingID)
 	regResp, err := makeZoomAPIRequest(ctx, "POST", apiURL, payload, zoomAuth)
 	if err != nil {
-		output.Message = fmt.Sprintf("Failed to register for webinar: %v", err)
+		output.Message = fmt.Sprintf("Failed to register for meeting: %v", err)
 		return output, err
 	}
 
 	registrantID := getStringFromMap(regResp, "registrant_id", "")
 	joinURL := getStringFromMap(regResp, "join_url", "")
 
-	output.Logs = append(output.Logs, fmt.Sprintf("Registered %s for webinar %s", email, webinarID))
+	output.Logs = append(output.Logs, fmt.Sprintf("Registered %s for meeting %s", email, meetingID))
 
 	// Optionally save join URL to CRM field
 	if saveField, ok := input.Config["save_join_url_to"].(string); ok && saveField != "" && joinURL != "" {
@@ -307,16 +276,16 @@ func (h *ZoomWebinar) registerForWebinar(ctx context.Context, input helpers.Help
 	}
 
 	output.Success = true
-	output.Message = fmt.Sprintf("Registered for webinar %s", webinarID)
+	output.Message = fmt.Sprintf("Registered for meeting %s", meetingID)
 	output.ModifiedData = map[string]interface{}{
-		"webinar_id":    webinarID,
+		"meeting_id":    meetingID,
 		"registrant_id": registrantID,
 		"join_url":      joinURL,
 	}
 	output.Actions = []helpers.HelperAction{
 		{
-			Type:   "webinar_registered",
-			Target: webinarID,
+			Type:   "meeting_registered",
+			Target: meetingID,
 			Value:  registrantID,
 		},
 	}
