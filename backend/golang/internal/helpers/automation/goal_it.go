@@ -19,7 +19,7 @@ func (h *GoalIt) GetType() string        { return "goal_it" }
 func (h *GoalIt) GetCategory() string    { return "automation" }
 func (h *GoalIt) GetDescription() string { return "Achieve a campaign/automation goal for a contact" }
 func (h *GoalIt) RequiresCRM() bool      { return true }
-func (h *GoalIt) SupportedCRMs() []string { return []string{"keap"} }
+func (h *GoalIt) SupportedCRMs() []string { return nil } // All CRMs
 
 func (h *GoalIt) GetConfigSchema() map[string]interface{} {
 	return map[string]interface{}{
