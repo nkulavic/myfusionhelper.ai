@@ -126,9 +126,11 @@ export const moveItSchema = z.object({
 })
 export type MoveItConfig = z.infer<typeof moveItSchema>
 
-// No Go backend — frontend-only placeholder
 export const contactUpdaterSchema = z.object({
-  updateKey: optionalString,
+  fields: z.record(z.string(), z.any()).refine((val) => Object.keys(val).length > 0, {
+    message: 'At least one field mapping is required',
+  }),
+  secondaryContactIds: z.array(z.string()).optional().default([]),
 })
 export type ContactUpdaterConfig = z.infer<typeof contactUpdaterSchema>
 
@@ -640,8 +642,46 @@ export const routeItSchema = z.object({
     .optional()
     .default([]),
   fallbackUrl: optionalString,
+  saveToField: optionalString,
+  applyTag: optionalString,
 })
 export type RouteItConfig = z.infer<typeof routeItSchema>
+
+export const routeItByDaySchema = z.object({
+  dayRoutes: z.record(z.string(), z.string().url('Must be a valid URL')),
+  fallbackUrl: optionalString,
+  timezone: z.string().optional().default('UTC'),
+  saveToField: optionalString,
+  applyTag: optionalString,
+})
+export type RouteItByDayConfig = z.infer<typeof routeItByDaySchema>
+
+export const routeItByTimeSchema = z.object({
+  timeRoutes: z
+    .array(
+      z.object({
+        startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Must be HH:MM format'),
+        endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Must be HH:MM format'),
+        url: z.string().url('Must be a valid URL'),
+        label: optionalString,
+      })
+    )
+    .min(1, 'At least one time route is required'),
+  fallbackUrl: optionalString,
+  timezone: z.string().optional().default('UTC'),
+  saveToField: optionalString,
+  applyTag: optionalString,
+})
+export type RouteItByTimeConfig = z.infer<typeof routeItByTimeSchema>
+
+export const routeItByCustomSchema = z.object({
+  fieldName: requiredField,
+  valueRoutes: z.record(z.string(), z.string().url('Must be a valid URL')),
+  fallbackUrl: optionalString,
+  saveToField: optionalString,
+  applyTag: optionalString,
+})
+export type RouteItByCustomConfig = z.infer<typeof routeItByCustomSchema>
 
 export const videoTriggerSchema = z.object({
   videoSource: z.enum(['youtube', 'wistia', 'vimeo']).default('youtube'),

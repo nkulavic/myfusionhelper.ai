@@ -47,6 +47,9 @@ import { DripItForm } from './drip-it-form'
 import { StageItForm } from './stage-it-form'
 import { TimezoneTriggersForm } from './timezone-triggers-form'
 import { RouteItForm } from './route-it-form'
+import { RouteItByDayForm } from './route-it-by-day-form'
+import { RouteItByTimeForm } from './route-it-by-time-form'
+import { RouteItByCustomForm } from './route-it-by-custom-form'
 import { VideoTriggerForm } from './video-trigger-form'
 
 // Integration helpers
@@ -145,6 +148,9 @@ const formRegistry: Record<string, React.ComponentType<ConfigFormProps>> = {
   stage_it: StageItForm,
   timezone_triggers: TimezoneTriggersForm,
   route_it: RouteItForm,
+  route_it_by_day: RouteItByDayForm,
+  route_it_by_time: RouteItByTimeForm,
+  route_it_by_custom: RouteItByCustomForm,
   video_trigger_it: VideoTriggerForm,
 
   // ========== Integration helpers ==========
