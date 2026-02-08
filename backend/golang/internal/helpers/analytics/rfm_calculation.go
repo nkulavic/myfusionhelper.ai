@@ -34,6 +34,19 @@ func (h *RFMCalculation) GetConfigSchema() map[string]interface{} {
 			"options": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
+					"score_range": map[string]interface{}{
+						"type":        "object",
+						"description": "Configure score range (default: 1-5, allows 1-10)",
+						"properties": map[string]interface{}{
+							"min": map[string]interface{}{"type": "number", "description": "Minimum score value", "default": 1},
+							"max": map[string]interface{}{"type": "number", "description": "Maximum score value", "default": 5},
+						},
+					},
+					"percentile_based_scoring": map[string]interface{}{
+						"type":        "boolean",
+						"description": "Use percentile-based scoring instead of fixed thresholds",
+						"default":     false,
+					},
 					"recency_calculation": map[string]interface{}{
 						"type": "object",
 						"properties": map[string]interface{}{
@@ -61,6 +74,24 @@ func (h *RFMCalculation) GetConfigSchema() map[string]interface{} {
 							"4_5_threshold": map[string]interface{}{"type": "number", "description": "Total spend threshold for score 5"},
 						},
 					},
+					"segment_labels": map[string]interface{}{
+						"type":        "boolean",
+						"description": "Enable RFM segment labels (Champions, Loyal, At Risk, Hibernating, Lost)",
+						"default":     false,
+					},
+					"segment_tags": map[string]interface{}{
+						"type":        "object",
+						"description": "Tag IDs to apply for each RFM segment",
+						"properties": map[string]interface{}{
+							"champions_tag":    map[string]interface{}{"type": "string", "description": "Tag for Champions (555)"},
+							"loyal_tag":        map[string]interface{}{"type": "string", "description": "Tag for Loyal Customers (4-5, 4-5, 4-5)"},
+							"at_risk_tag":      map[string]interface{}{"type": "string", "description": "Tag for At Risk (2-3, 2-3, 4-5)"},
+							"hibernating_tag":  map[string]interface{}{"type": "string", "description": "Tag for Hibernating (1-2, 1-2, 2-3)"},
+							"lost_tag":         map[string]interface{}{"type": "string", "description": "Tag for Lost (1, 1, 1-2)"},
+							"promising_tag":    map[string]interface{}{"type": "string", "description": "Tag for Promising (3-4, 1-2, 1-2)"},
+							"need_attention_tag": map[string]interface{}{"type": "string", "description": "Tag for Need Attention (2-3, 2-3, 2-3)"},
+						},
+					},
 					"save_data": map[string]interface{}{
 						"type": "object",
 						"properties": map[string]interface{}{
@@ -68,6 +99,7 @@ func (h *RFMCalculation) GetConfigSchema() map[string]interface{} {
 							"frequency_score":       map[string]interface{}{"type": "string"},
 							"monetary_score":        map[string]interface{}{"type": "string"},
 							"rfm_composite_score":   map[string]interface{}{"type": "string"},
+							"rfm_segment_label":     map[string]interface{}{"type": "string", "description": "Field to store segment label"},
 							"total_order_value":     map[string]interface{}{"type": "string"},
 							"average_order_value":   map[string]interface{}{"type": "string"},
 							"total_order_count":     map[string]interface{}{"type": "string"},
@@ -100,6 +132,28 @@ func (h *RFMCalculation) Execute(ctx context.Context, input helpers.HelperInput)
 	output := &helpers.HelperOutput{
 		Actions: make([]helpers.HelperAction, 0),
 		Logs:    make([]string, 0),
+	}
+
+	// Parse score range configuration
+	scoreMin := 1
+	scoreMax := 5
+	if scoreRange, ok := options["score_range"].(map[string]interface{}); ok {
+		if minVal, ok := scoreRange["min"].(float64); ok && minVal > 0 {
+			scoreMin = int(minVal)
+		}
+		if maxVal, ok := scoreRange["max"].(float64); ok && maxVal > float64(scoreMin) {
+			scoreMax = int(maxVal)
+		}
+	}
+
+	percentileBasedScoring := false
+	if pbs, ok := options["percentile_based_scoring"].(bool); ok {
+		percentileBasedScoring = pbs
+	}
+
+	segmentLabelsEnabled := false
+	if sle, ok := options["segment_labels"].(bool); ok {
+		segmentLabelsEnabled = sle
 	}
 
 	// Get order/invoice data from the CRM
@@ -141,56 +195,75 @@ func (h *RFMCalculation) Execute(ctx context.Context, input helpers.HelperInput)
 		}
 	}
 
-	// Calculate Recency score (1-5)
+	// Calculate Recency score
 	recencyCalc := extractMap(options["recency_calculation"])
-	recencyScore := 1
-	if daysSinceLastOrder <= int(toFloat64(recencyCalc["1_2_threshold"])) {
-		recencyScore = 2
-	}
-	if daysSinceLastOrder <= int(toFloat64(recencyCalc["2_3_threshold"])) {
-		recencyScore = 3
-	}
-	if daysSinceLastOrder <= int(toFloat64(recencyCalc["3_4_threshold"])) {
-		recencyScore = 4
-	}
-	if daysSinceLastOrder <= int(toFloat64(recencyCalc["4_5_threshold"])) {
-		recencyScore = 5
+	recencyScore := scoreMin
+	if percentileBasedScoring {
+		// Simplified percentile: lower days = higher score
+		recencyScore = calculatePercentileScore(float64(daysSinceLastOrder), 0, 365, scoreMin, scoreMax, true)
+	} else {
+		// Fixed thresholds
+		if daysSinceLastOrder <= int(toFloat64(recencyCalc["1_2_threshold"])) {
+			recencyScore = scaleScore(2, scoreMin, scoreMax)
+		}
+		if daysSinceLastOrder <= int(toFloat64(recencyCalc["2_3_threshold"])) {
+			recencyScore = scaleScore(3, scoreMin, scoreMax)
+		}
+		if daysSinceLastOrder <= int(toFloat64(recencyCalc["3_4_threshold"])) {
+			recencyScore = scaleScore(4, scoreMin, scoreMax)
+		}
+		if daysSinceLastOrder <= int(toFloat64(recencyCalc["4_5_threshold"])) {
+			recencyScore = scaleScore(5, scoreMin, scoreMax)
+		}
 	}
 
-	// Calculate Frequency score (1-5)
+	// Calculate Frequency score
 	frequencyCalc := extractMap(options["frequency_calculation"])
-	frequencyScore := 1
-	if totalOrders >= toFloat64(frequencyCalc["1_2_threshold"]) {
-		frequencyScore = 2
-	}
-	if totalOrders >= toFloat64(frequencyCalc["2_3_threshold"]) {
-		frequencyScore = 3
-	}
-	if totalOrders >= toFloat64(frequencyCalc["3_4_threshold"]) {
-		frequencyScore = 4
-	}
-	if totalOrders >= toFloat64(frequencyCalc["4_5_threshold"]) {
-		frequencyScore = 5
+	frequencyScore := scoreMin
+	if percentileBasedScoring {
+		frequencyScore = calculatePercentileScore(totalOrders, 0, 100, scoreMin, scoreMax, false)
+	} else {
+		// Fixed thresholds
+		if totalOrders >= toFloat64(frequencyCalc["1_2_threshold"]) {
+			frequencyScore = scaleScore(2, scoreMin, scoreMax)
+		}
+		if totalOrders >= toFloat64(frequencyCalc["2_3_threshold"]) {
+			frequencyScore = scaleScore(3, scoreMin, scoreMax)
+		}
+		if totalOrders >= toFloat64(frequencyCalc["3_4_threshold"]) {
+			frequencyScore = scaleScore(4, scoreMin, scoreMax)
+		}
+		if totalOrders >= toFloat64(frequencyCalc["4_5_threshold"]) {
+			frequencyScore = scaleScore(5, scoreMin, scoreMax)
+		}
 	}
 
-	// Calculate Monetary score (1-5)
+	// Calculate Monetary score
 	monetaryCalc := extractMap(options["monetary_calculation"])
-	monetaryScore := 1
-	if totalSpendRounded >= toFloat64(monetaryCalc["1_2_threshold"]) {
-		monetaryScore = 2
-	}
-	if totalSpendRounded >= toFloat64(monetaryCalc["2_3_threshold"]) {
-		monetaryScore = 3
-	}
-	if totalSpendRounded >= toFloat64(monetaryCalc["3_4_threshold"]) {
-		monetaryScore = 4
-	}
-	if totalSpendRounded >= toFloat64(monetaryCalc["4_5_threshold"]) {
-		monetaryScore = 5
+	monetaryScore := scoreMin
+	if percentileBasedScoring {
+		monetaryScore = calculatePercentileScore(totalSpendRounded, 0, 10000, scoreMin, scoreMax, false)
+	} else {
+		// Fixed thresholds
+		if totalSpendRounded >= toFloat64(monetaryCalc["1_2_threshold"]) {
+			monetaryScore = scaleScore(2, scoreMin, scoreMax)
+		}
+		if totalSpendRounded >= toFloat64(monetaryCalc["2_3_threshold"]) {
+			monetaryScore = scaleScore(3, scoreMin, scoreMax)
+		}
+		if totalSpendRounded >= toFloat64(monetaryCalc["3_4_threshold"]) {
+			monetaryScore = scaleScore(4, scoreMin, scoreMax)
+		}
+		if totalSpendRounded >= toFloat64(monetaryCalc["4_5_threshold"]) {
+			monetaryScore = scaleScore(5, scoreMin, scoreMax)
+		}
 	}
 
-	// Composite score (concatenated digits, e.g. 543)
+	// Composite score (concatenated digits, e.g. 543 or 10-9-8)
 	compositeScore := recencyScore*100 + frequencyScore*10 + monetaryScore
+
+	// Determine RFM segment label
+	segmentLabel := determineRFMSegment(recencyScore, frequencyScore, monetaryScore, scoreMax)
 
 	// Build update data based on save_data field mappings
 	saveData := extractMap(options["save_data"])
@@ -201,6 +274,7 @@ func (h *RFMCalculation) Execute(ctx context.Context, input helpers.HelperInput)
 		"frequency_score":       frequencyScore,
 		"monetary_score":        monetaryScore,
 		"rfm_composite_score":   compositeScore,
+		"rfm_segment_label":     segmentLabel,
 		"total_order_value":     totalSpendRounded,
 		"average_order_value":   averageOrderSize,
 		"total_order_count":     int(totalOrders),
@@ -232,6 +306,41 @@ func (h *RFMCalculation) Execute(ctx context.Context, input helpers.HelperInput)
 		}
 	}
 
+	// Apply segment-specific tags if configured
+	if segmentLabelsEnabled {
+		segmentTags := extractMap(options["segment_tags"])
+		segmentTagMap := map[string]string{
+			"Champions":       "champions_tag",
+			"Loyal":           "loyal_tag",
+			"At Risk":         "at_risk_tag",
+			"Hibernating":     "hibernating_tag",
+			"Lost":            "lost_tag",
+			"Promising":       "promising_tag",
+			"Need Attention":  "need_attention_tag",
+		}
+
+		for segment, tagField := range segmentTagMap {
+			if tagID, ok := segmentTags[tagField].(string); ok && tagID != "" {
+				if segment == segmentLabel {
+					if err := input.Connector.ApplyTag(ctx, input.ContactID, tagID); err != nil {
+						output.Logs = append(output.Logs, fmt.Sprintf("Failed to apply %s tag: %v", segment, err))
+					} else {
+						output.Actions = append(output.Actions, helpers.HelperAction{
+							Type:   "tag_applied",
+							Target: tagID,
+							Value:  segment,
+						})
+						output.Logs = append(output.Logs, fmt.Sprintf("Applied %s segment tag (%s)", segment, tagID))
+					}
+				} else {
+					if err := input.Connector.RemoveTag(ctx, input.ContactID, tagID); err == nil {
+						output.Logs = append(output.Logs, fmt.Sprintf("Removed %s segment tag (%s)", segment, tagID))
+					}
+				}
+			}
+		}
+	}
+
 	// Fire RFM score goals
 	integration := "myfusionhelper"
 	helperID := input.HelperID
@@ -256,12 +365,13 @@ func (h *RFMCalculation) Execute(ctx context.Context, input helpers.HelperInput)
 	}
 
 	output.Success = true
-	output.Message = fmt.Sprintf("RFM scores calculated: R=%d F=%d M=%d (composite: %d)", recencyScore, frequencyScore, monetaryScore, compositeScore)
+	output.Message = fmt.Sprintf("RFM scores calculated: R=%d F=%d M=%d (composite: %d, segment: %s)", recencyScore, frequencyScore, monetaryScore, compositeScore, segmentLabel)
 	output.ModifiedData = map[string]interface{}{
 		"recency_score":         recencyScore,
 		"frequency_score":       frequencyScore,
 		"monetary_score":        monetaryScore,
 		"composite_score":       compositeScore,
+		"segment_label":         segmentLabel,
 		"total_spend":           totalSpendRounded,
 		"total_invoice_amount":  totalInvoiceRounded,
 		"total_orders":          int(totalOrders),
@@ -273,7 +383,7 @@ func (h *RFMCalculation) Execute(ctx context.Context, input helpers.HelperInput)
 		"last_order_date":       lastOrderDate,
 		"last_order_value":      lastOrderValue,
 	}
-	output.Logs = append(output.Logs, fmt.Sprintf("RFM for contact %s: R=%d F=%d M=%d composite=%d", input.ContactID, recencyScore, frequencyScore, monetaryScore, compositeScore))
+	output.Logs = append(output.Logs, fmt.Sprintf("RFM for contact %s: R=%d F=%d M=%d composite=%d segment=%s", input.ContactID, recencyScore, frequencyScore, monetaryScore, compositeScore, segmentLabel))
 
 	return output, nil
 }
@@ -314,4 +424,113 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// scaleScore scales a 1-5 score to the configured score range
+func scaleScore(score, min, max int) int {
+	if max == 5 && min == 1 {
+		return score
+	}
+	// Linear scaling from 1-5 to min-max
+	scaled := min + ((score - 1) * (max - min) / 4)
+	if scaled < min {
+		return min
+	}
+	if scaled > max {
+		return max
+	}
+	return scaled
+}
+
+// calculatePercentileScore calculates a score based on percentile within a range
+func calculatePercentileScore(value, rangeMin, rangeMax float64, scoreMin, scoreMax int, inverse bool) int {
+	if value <= rangeMin {
+		if inverse {
+			return scoreMax
+		}
+		return scoreMin
+	}
+	if value >= rangeMax {
+		if inverse {
+			return scoreMin
+		}
+		return scoreMax
+	}
+
+	percentile := (value - rangeMin) / (rangeMax - rangeMin)
+	if inverse {
+		percentile = 1.0 - percentile
+	}
+
+	scoreRange := float64(scoreMax - scoreMin)
+	score := scoreMin + int(percentile*scoreRange)
+
+	if score < scoreMin {
+		return scoreMin
+	}
+	if score > scoreMax {
+		return scoreMax
+	}
+	return score
+}
+
+// determineRFMSegment assigns a segment label based on RFM scores
+func determineRFMSegment(r, f, m, maxScore int) string {
+	// Normalize scores to 1-5 scale for segment logic
+	rNorm := normalizeToFive(r, maxScore)
+	fNorm := normalizeToFive(f, maxScore)
+	mNorm := normalizeToFive(m, maxScore)
+
+	// Champions: 5-5-5
+	if rNorm >= 5 && fNorm >= 5 && mNorm >= 5 {
+		return "Champions"
+	}
+
+	// Loyal: R 4-5, F 4-5, M 4-5
+	if rNorm >= 4 && fNorm >= 4 && mNorm >= 4 {
+		return "Loyal"
+	}
+
+	// Promising: R 3-4, F 1-2, M 1-2
+	if rNorm >= 3 && rNorm <= 4 && fNorm <= 2 && mNorm <= 2 {
+		return "Promising"
+	}
+
+	// At Risk: R 2-3, F 2-3, M 4-5
+	if rNorm >= 2 && rNorm <= 3 && fNorm >= 2 && fNorm <= 3 && mNorm >= 4 {
+		return "At Risk"
+	}
+
+	// Hibernating: R 1-2, F 1-2, M 2-3
+	if rNorm <= 2 && fNorm <= 2 && mNorm >= 2 && mNorm <= 3 {
+		return "Hibernating"
+	}
+
+	// Lost: R 1, F 1, M 1-2
+	if rNorm <= 1 && fNorm <= 1 && mNorm <= 2 {
+		return "Lost"
+	}
+
+	// Need Attention: R 2-3, F 2-3, M 2-3
+	if rNorm >= 2 && rNorm <= 3 && fNorm >= 2 && fNorm <= 3 && mNorm >= 2 && mNorm <= 3 {
+		return "Need Attention"
+	}
+
+	// Default
+	return "Other"
+}
+
+// normalizeToFive normalizes a score from any range to 1-5 scale
+func normalizeToFive(score, max int) int {
+	if max == 5 {
+		return score
+	}
+	normalized := 1 + ((score - 1) * 4 / (max - 1))
+	if normalized < 1 {
+		return 1
+	}
+	if normalized > 5 {
+		return 5
+	}
+	return normalized
 }
