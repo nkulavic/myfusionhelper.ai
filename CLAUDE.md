@@ -157,6 +157,7 @@ Helpers are organized into categories: contact, data, tagging, automation, integ
 - `Product Plan` (417844) -- product vision, features, pricing, target users
 - `Test Plan` (417845) -- QA checklists and test procedures
 - `Architecture Notes` (417842) -- technical architecture decisions
+- `Helper Architecture & Migration Plan` (417846) -- helper execution system, service connections, legacy-to-Go migration plan
 
 **Task Lists** (8 active):
 - P0 - Git & Code Hygiene (3256057)

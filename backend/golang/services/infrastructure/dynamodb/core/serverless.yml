@@ -325,6 +325,38 @@ resources:
           - AttributeName: key
             KeyType: HASH
 
+    # Countdown Timers Table (helper feature with TTL auto-cleanup)
+    CountdownTimersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: mfh-${self:provider.stage}-countdown-timers
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: expires_at
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: timer_key
+            AttributeType: S
+        KeySchema:
+          - AttributeName: timer_key
+            KeyType: HASH
+
+    # Email Validations Table (temporary validation codes with TTL auto-cleanup)
+    EmailValidationsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: mfh-${self:provider.stage}-email-validations
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: expires_at
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: account_email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: account_email
+            KeyType: HASH
+
   Outputs:
     UsersTableName:
       Value: !Ref UsersTable
@@ -432,3 +464,21 @@ resources:
       Value: !GetAtt RateLimitsTable.Arn
       Export:
         Name: ${self:service}-${self:provider.stage}-RateLimitsTableArn
+
+    CountdownTimersTableName:
+      Value: !Ref CountdownTimersTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CountdownTimersTableName
+    CountdownTimersTableArn:
+      Value: !GetAtt CountdownTimersTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CountdownTimersTableArn
+
+    EmailValidationsTableName:
+      Value: !Ref EmailValidationsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailValidationsTableName
+    EmailValidationsTableArn:
+      Value: !GetAtt EmailValidationsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailValidationsTableArn
