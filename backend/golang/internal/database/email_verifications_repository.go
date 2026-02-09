@@ -2,9 +2,11 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/myfusionhelper/api/internal/types"
@@ -42,7 +44,7 @@ func (r *EmailVerificationsRepository) GetByEmail(ctx context.Context, email str
 }
 
 // GetPendingByEmail retrieves pending verifications for an email.
-func (r *EmailVerificationsRepository) GetPendingByEmail(ctx context.Context, email string) ([]*types.EmailVerification, error) {
+func (r *EmailVerificationsRepository) GetPendingByEmail(ctx context.Context, email string) ([]types.EmailVerification, error) {
 	indexName := "EmailIndex"
 	return queryIndex[types.EmailVerification](ctx, r.client, &dynamodb.QueryInput{
 		TableName:              &r.tableName,
@@ -55,7 +57,7 @@ func (r *EmailVerificationsRepository) GetPendingByEmail(ctx context.Context, em
 		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
 			":email":  stringVal(email),
 			":status": stringVal("pending"),
-			":now":    &ddbtypes.AttributeValueMemberN{Value: aws.String(formatInt64(time.Now().Unix()))},
+			":now":    &ddbtypes.AttributeValueMemberN{Value: formatInt64(time.Now().Unix())},
 		},
 	})
 }
@@ -81,7 +83,7 @@ func (r *EmailVerificationsRepository) GetByToken(ctx context.Context, token str
 	}
 
 	var verification types.EmailVerification
-	if err := unmarshalMap(output.Items[0], &verification); err != nil {
+	if err := attributevalue.UnmarshalMap(output.Items[0], &verification); err != nil {
 		return nil, err
 	}
 
@@ -151,5 +153,5 @@ func (r *EmailVerificationsRepository) Delete(ctx context.Context, verificationI
 
 // Helper function to format int64 as string for DynamoDB N type
 func formatInt64(n int64) string {
-	return aws.String(string(rune(n)))
+	return fmt.Sprintf("%d", n)
 }

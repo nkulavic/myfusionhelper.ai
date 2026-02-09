@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/myfusionhelper/api/internal/types"
@@ -27,7 +28,7 @@ func (r *EmailTemplatesRepository) GetByID(ctx context.Context, templateID strin
 }
 
 // GetByAccountID retrieves all templates for an account using the AccountIdIndex GSI.
-func (r *EmailTemplatesRepository) GetByAccountID(ctx context.Context, accountID string) ([]*types.EmailTemplate, error) {
+func (r *EmailTemplatesRepository) GetByAccountID(ctx context.Context, accountID string) ([]types.EmailTemplate, error) {
 	indexName := "AccountIdIndex"
 	return queryIndex[types.EmailTemplate](ctx, r.client, &dynamodb.QueryInput{
 		TableName:              &r.tableName,
@@ -58,7 +59,7 @@ func (r *EmailTemplatesRepository) GetSystemTemplates(ctx context.Context) ([]*t
 	templates := make([]*types.EmailTemplate, 0, len(output.Items))
 	for _, item := range output.Items {
 		var tmpl types.EmailTemplate
-		if err := unmarshalMap(item, &tmpl); err != nil {
+		if err := attributevalue.UnmarshalMap(item, &tmpl); err != nil {
 			continue
 		}
 		templates = append(templates, &tmpl)
@@ -68,7 +69,7 @@ func (r *EmailTemplatesRepository) GetSystemTemplates(ctx context.Context) ([]*t
 }
 
 // GetActiveTemplates retrieves all active templates for an account.
-func (r *EmailTemplatesRepository) GetActiveTemplates(ctx context.Context, accountID string) ([]*types.EmailTemplate, error) {
+func (r *EmailTemplatesRepository) GetActiveTemplates(ctx context.Context, accountID string) ([]types.EmailTemplate, error) {
 	indexName := "AccountIdIndex"
 	return queryIndex[types.EmailTemplate](ctx, r.client, &dynamodb.QueryInput{
 		TableName:              &r.tableName,

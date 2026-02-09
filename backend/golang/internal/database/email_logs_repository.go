@@ -26,7 +26,7 @@ func (r *EmailLogsRepository) GetByID(ctx context.Context, emailID string) (*typ
 }
 
 // GetByAccountID retrieves email logs for an account using the AccountIdIndex GSI.
-func (r *EmailLogsRepository) GetByAccountID(ctx context.Context, accountID string, limit int32) ([]*types.EmailLog, error) {
+func (r *EmailLogsRepository) GetByAccountID(ctx context.Context, accountID string, limit int32) ([]types.EmailLog, error) {
 	indexName := "AccountIdIndex"
 	input := &dynamodb.QueryInput{
 		TableName:              &r.tableName,
@@ -46,7 +46,7 @@ func (r *EmailLogsRepository) GetByAccountID(ctx context.Context, accountID stri
 }
 
 // GetByRecipientEmail retrieves email logs by recipient email using the RecipientEmailIndex GSI.
-func (r *EmailLogsRepository) GetByRecipientEmail(ctx context.Context, recipientEmail string, limit int32) ([]*types.EmailLog, error) {
+func (r *EmailLogsRepository) GetByRecipientEmail(ctx context.Context, recipientEmail string, limit int32) ([]types.EmailLog, error) {
 	indexName := "RecipientEmailIndex"
 	input := &dynamodb.QueryInput{
 		TableName:              &r.tableName,
@@ -66,7 +66,7 @@ func (r *EmailLogsRepository) GetByRecipientEmail(ctx context.Context, recipient
 }
 
 // GetByAccountIDAndStatus retrieves email logs filtered by status for an account.
-func (r *EmailLogsRepository) GetByAccountIDAndStatus(ctx context.Context, accountID, status string, limit int32) ([]*types.EmailLog, error) {
+func (r *EmailLogsRepository) GetByAccountIDAndStatus(ctx context.Context, accountID, status string, limit int32) ([]types.EmailLog, error) {
 	indexName := "AccountIdIndex"
 	input := &dynamodb.QueryInput{
 		TableName:              &r.tableName,
