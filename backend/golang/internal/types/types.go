@@ -557,3 +557,106 @@ type StreamChatResponse struct {
 	ToolResult *ToolResult `json:"tool_result,omitempty"`
 	Done       bool        `json:"done,omitempty"`
 }
+
+// ========== EMAIL TYPES ==========
+
+// EmailTemplate represents an email template stored in DynamoDB
+type EmailTemplate struct {
+	TemplateID   string          `json:"template_id" dynamodbav:"template_id"`
+	AccountID    string          `json:"account_id,omitempty" dynamodbav:"account_id,omitempty"` // Empty for system templates
+	Name         string          `json:"name" dynamodbav:"name"`
+	Subject      string          `json:"subject" dynamodbav:"subject"`
+	HTMLTemplate string          `json:"html_template" dynamodbav:"html_template"`
+	TextTemplate string          `json:"text_template" dynamodbav:"text_template"`
+	Variables    []EmailVariable `json:"variables,omitempty" dynamodbav:"variables,omitempty"`
+	IsSystem     bool            `json:"is_system" dynamodbav:"is_system"`
+	IsActive     bool            `json:"is_active" dynamodbav:"is_active"`
+	CreatedAt    string          `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt    string          `json:"updated_at" dynamodbav:"updated_at"`
+}
+
+// EmailVariable represents a template variable
+type EmailVariable struct {
+	Name        string `json:"name" dynamodbav:"name"`
+	Description string `json:"description" dynamodbav:"description"`
+	Required    bool   `json:"required" dynamodbav:"required"`
+}
+
+// EmailLog represents a sent email record
+type EmailLog struct {
+	EmailID        string `json:"email_id" dynamodbav:"email_id"`
+	AccountID      string `json:"account_id" dynamodbav:"account_id"`
+	RecipientEmail string `json:"recipient_email" dynamodbav:"recipient_email"`
+	Subject        string `json:"subject" dynamodbav:"subject"`
+	TemplateID     string `json:"template_id,omitempty" dynamodbav:"template_id,omitempty"`
+	Status         string `json:"status" dynamodbav:"status"` // sent, failed, bounced
+	MessageID      string `json:"message_id,omitempty" dynamodbav:"message_id,omitempty"`
+	ErrorMessage   string `json:"error_message,omitempty" dynamodbav:"error_message,omitempty"`
+	CreatedAt      string `json:"created_at" dynamodbav:"created_at"`
+	SentAt         string `json:"sent_at,omitempty" dynamodbav:"sent_at,omitempty"`
+	TTL            int64  `json:"ttl" dynamodbav:"ttl"` // Auto-delete after 90 days
+}
+
+// EmailVerification represents an email verification record
+type EmailVerification struct {
+	VerificationID string `json:"verification_id" dynamodbav:"verification_id"`
+	Email          string `json:"email" dynamodbav:"email"`
+	Token          string `json:"token" dynamodbav:"token"`
+	ExpiresAt      int64  `json:"expires_at" dynamodbav:"expires_at"` // Unix timestamp, also used for TTL
+	CreatedAt      string `json:"created_at" dynamodbav:"created_at"`
+	VerifiedAt     string `json:"verified_at,omitempty" dynamodbav:"verified_at,omitempty"`
+	Status         string `json:"status" dynamodbav:"status"` // pending, verified, expired
+}
+
+// SendEmailRequest represents a request to send an email
+type SendEmailRequest struct {
+	To           []string               `json:"to"`
+	Cc           []string               `json:"cc,omitempty"`
+	Bcc          []string               `json:"bcc,omitempty"`
+	Subject      string                 `json:"subject"`
+	HTMLBody     string                 `json:"html_body,omitempty"`
+	TextBody     string                 `json:"text_body,omitempty"`
+	TemplateID   string                 `json:"template_id,omitempty"`
+	TemplateData map[string]interface{} `json:"template_data,omitempty"`
+	FromEmail    string                 `json:"from_email,omitempty"`
+	FromName     string                 `json:"from_name,omitempty"`
+	ReplyTo      []string               `json:"reply_to,omitempty"`
+}
+
+// SendEmailResponse represents the response for sending an email
+type SendEmailResponse struct {
+	EmailID   string `json:"email_id"`
+	MessageID string `json:"message_id"`
+	Status    string `json:"status"`
+}
+
+// GetEmailHistoryResponse represents the response for getting email history
+type GetEmailHistoryResponse struct {
+	Emails []EmailLog `json:"emails"`
+	Total  int        `json:"total"`
+}
+
+// CreateTemplateRequest represents a request to create an email template
+type CreateTemplateRequest struct {
+	Name         string          `json:"name"`
+	Subject      string          `json:"subject"`
+	HTMLTemplate string          `json:"html_template"`
+	TextTemplate string          `json:"text_template,omitempty"`
+	Variables    []EmailVariable `json:"variables,omitempty"`
+}
+
+// UpdateTemplateRequest represents a request to update an email template
+type UpdateTemplateRequest struct {
+	Name         string          `json:"name,omitempty"`
+	Subject      string          `json:"subject,omitempty"`
+	HTMLTemplate string          `json:"html_template,omitempty"`
+	TextTemplate string          `json:"text_template,omitempty"`
+	Variables    []EmailVariable `json:"variables,omitempty"`
+	IsActive     *bool           `json:"is_active,omitempty"`
+}
+
+// ListTemplatesResponse represents the response for listing templates
+type ListTemplatesResponse struct {
+	Templates []EmailTemplate `json:"templates"`
+	Total     int             `json:"total"`
+}

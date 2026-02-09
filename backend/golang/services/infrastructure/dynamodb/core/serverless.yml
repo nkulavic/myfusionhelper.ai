@@ -431,158 +431,95 @@ resources:
           - AttributeName: phone_number
             KeyType: HASH
 
-  Outputs:
-    UsersTableName:
-      Value: !Ref UsersTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-UsersTableName
-    UsersTableArn:
-      Value: !GetAtt UsersTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-UsersTableArn
-    UsersTableStreamArn:
-      Value: !GetAtt UsersTable.StreamArn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-UsersTableStreamArn
+    # Email Logs Table (sent email history with TTL cleanup)
+    EmailLogsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-email-logs
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: email_id
+            AttributeType: S
+          - AttributeName: account_id
+            AttributeType: S
+          - AttributeName: created_at
+            AttributeType: S
+          - AttributeName: recipient_email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: email_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: AccountIdIndex
+            KeySchema:
+              - AttributeName: account_id
+                KeyType: HASH
+              - AttributeName: created_at
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: RecipientEmailIndex
+            KeySchema:
+              - AttributeName: recipient_email
+                KeyType: HASH
+              - AttributeName: created_at
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
 
-    AccountsTableName:
-      Value: !Ref AccountsTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-AccountsTableName
-    AccountsTableArn:
-      Value: !GetAtt AccountsTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-AccountsTableArn
+    # Email Templates Table (system and user templates)
+    EmailTemplatesTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-email-templates
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        AttributeDefinitions:
+          - AttributeName: template_id
+            AttributeType: S
+          - AttributeName: account_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: template_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: AccountIdIndex
+            KeySchema:
+              - AttributeName: account_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
 
-    UserAccountsTableName:
-      Value: !Ref UserAccountsTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-UserAccountsTableName
-    UserAccountsTableArn:
-      Value: !GetAtt UserAccountsTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-UserAccountsTableArn
-
-    ApiKeysTableName:
-      Value: !Ref ApiKeysTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-ApiKeysTableName
-    ApiKeysTableArn:
-      Value: !GetAtt ApiKeysTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-ApiKeysTableArn
-
-    ConnectionsTableName:
-      Value: !Ref ConnectionsTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-ConnectionsTableName
-    ConnectionsTableArn:
-      Value: !GetAtt ConnectionsTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-ConnectionsTableArn
-
-    HelpersTableName:
-      Value: !Ref HelpersTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-HelpersTableName
-    HelpersTableArn:
-      Value: !GetAtt HelpersTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-HelpersTableArn
-
-    ExecutionsTableName:
-      Value: !Ref ExecutionsTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-ExecutionsTableName
-    ExecutionsTableArn:
-      Value: !GetAtt ExecutionsTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-ExecutionsTableArn
-    ExecutionsTableStreamArn:
-      Value: !GetAtt ExecutionsTable.StreamArn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-ExecutionsTableStreamArn
-
-    PlatformsTableName:
-      Value: !Ref PlatformsTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-PlatformsTableName
-    PlatformsTableArn:
-      Value: !GetAtt PlatformsTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-PlatformsTableArn
-
-    PlatformConnectionAuthsTableName:
-      Value: !Ref PlatformConnectionAuthsTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-PlatformConnectionAuthsTableName
-    PlatformConnectionAuthsTableArn:
-      Value: !GetAtt PlatformConnectionAuthsTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-PlatformConnectionAuthsTableArn
-
-    OAuthStatesTableName:
-      Value: !Ref OAuthStatesTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-OAuthStatesTableName
-    OAuthStatesTableArn:
-      Value: !GetAtt OAuthStatesTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-OAuthStatesTableArn
-
-    RateLimitsTableName:
-      Value: !Ref RateLimitsTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-RateLimitsTableName
-    RateLimitsTableArn:
-      Value: !GetAtt RateLimitsTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-RateLimitsTableArn
-
-    CountdownTimersTableName:
-      Value: !Ref CountdownTimersTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-CountdownTimersTableName
-    CountdownTimersTableArn:
-      Value: !GetAtt CountdownTimersTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-CountdownTimersTableArn
-
-    EmailValidationsTableName:
-      Value: !Ref EmailValidationsTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-EmailValidationsTableName
-    EmailValidationsTableArn:
-      Value: !GetAtt EmailValidationsTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-EmailValidationsTableArn
-
-    ChatConversationsTableName:
-      Value: !Ref ChatConversationsTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-ChatConversationsTableName
-    ChatConversationsTableArn:
-      Value: !GetAtt ChatConversationsTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-ChatConversationsTableArn
-
-    ChatMessagesTableName:
-      Value: !Ref ChatMessagesTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-ChatMessagesTableName
-    ChatMessagesTableArn:
-      Value: !GetAtt ChatMessagesTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-ChatMessagesTableArn
-
-    PhoneMappingsTableName:
-      Value: !Ref PhoneMappingsTable
-      Export:
-        Name: ${self:service}-${self:provider.stage}-PhoneMappingsTableName
-    PhoneMappingsTableArn:
-      Value: !GetAtt PhoneMappingsTable.Arn
-      Export:
-        Name: ${self:service}-${self:provider.stage}-PhoneMappingsTableArn
+    # Email Verifications Table (email verification tokens with TTL)
+    EmailVerificationsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: mfh-${self:provider.stage}-email-verifications
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: expires_at
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: verification_id
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: verification_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: EmailIndex
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
 
   Outputs:
     UsersTableName:
@@ -736,3 +673,30 @@ resources:
       Value: !GetAtt PhoneMappingsTable.Arn
       Export:
         Name: ${self:service}-${self:provider.stage}-PhoneMappingsTableArn
+
+    EmailLogsTableName:
+      Value: !Ref EmailLogsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailLogsTableName
+    EmailLogsTableArn:
+      Value: !GetAtt EmailLogsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailLogsTableArn
+
+    EmailTemplatesTableName:
+      Value: !Ref EmailTemplatesTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailTemplatesTableName
+    EmailTemplatesTableArn:
+      Value: !GetAtt EmailTemplatesTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailTemplatesTableArn
+
+    EmailVerificationsTableName:
+      Value: !Ref EmailVerificationsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailVerificationsTableName
+    EmailVerificationsTableArn:
+      Value: !GetAtt EmailVerificationsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailVerificationsTableArn
