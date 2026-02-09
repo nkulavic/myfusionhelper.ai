@@ -1,21 +1,17 @@
 'use client'
 
 // Schema: see schemas.ts > orderItSchema
+
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { FormTextField, DynamicList, AddItemRow } from './form-fields'
 import type { ConfigFormProps } from './types'
 
-interface OrderProduct {
-  productId: string
-  quantity: number
-  price: string
-}
-
 export function OrderItForm({ config, onChange, disabled }: ConfigFormProps) {
-  const orderTitle = (config.orderTitle as string) || ''
-  const products = (config.products as OrderProduct[]) || []
-  const paymentPlan = (config.paymentPlan as string) || ''
+  const productId = (config.product_id as number) || 0
+  const quantity = (config.quantity as number) || 1
+  const promoCodes = (config.promo_codes as string[]) || []
+  const applyTag = (config.apply_tag as string) || ''
 
   const updateConfig = (updates: Record<string, unknown>) => {
     onChange({ ...config, ...updates })
@@ -24,56 +20,69 @@ export function OrderItForm({ config, onChange, disabled }: ConfigFormProps) {
   return (
     <div className="space-y-4">
       <FormTextField
-        label="Order Title"
-        placeholder="Order description"
-        value={orderTitle}
-        onChange={(e) => updateConfig({ orderTitle: e.target.value })}
+        label="Product ID"
+        type="number"
+        placeholder="Enter Keap product ID"
+        value={productId.toString()}
+        onChange={(e) => updateConfig({ product_id: parseInt(e.target.value, 10) || 0 })}
         disabled={disabled}
+        description="The Keap product ID to add to the order."
+        required
       />
 
-      <DynamicList<OrderProduct>
-        label="Products"
-        description="Add products to include in the order."
-        items={products}
-        onItemsChange={(items) => updateConfig({ products: items })}
-        renderItem={(p) => (
-          <>
-            <span className="font-mono">{p.productId}</span>
-            <span className="text-muted-foreground">x{p.quantity}</span>
-            {p.price && <span className="font-medium">${p.price}</span>}
-          </>
-        )}
+      <FormTextField
+        label="Quantity"
+        type="number"
+        placeholder="1"
+        value={quantity.toString()}
+        onChange={(e) => updateConfig({ quantity: parseInt(e.target.value, 10) || 1 })}
+        disabled={disabled}
+        description="Number of items to order (default: 1)."
+      />
+
+      <DynamicList<string>
+        label="Promo Codes (optional)"
+        description="Add promotional codes to apply to the order."
+        items={promoCodes}
+        onItemsChange={(items) => updateConfig({ promo_codes: items })}
+        renderItem={(code) => <span className="font-mono">{code}</span>}
         renderAddForm={(onAdd) => {
-          const ProductAddForm = () => {
-            const [productId, setProductId] = useState('')
-            const [qty, setQty] = useState('1')
-            const [price, setPrice] = useState('')
+          const PromoCodeAddForm = () => {
+            const [code, setCode] = useState('')
             const handleAdd = () => {
-              if (!productId.trim()) return
-              onAdd({ productId: productId.trim(), quantity: parseInt(qty, 10) || 1, price: price.trim() })
-              setProductId('')
-              setQty('1')
-              setPrice('')
+              if (!code.trim()) return
+              onAdd(code.trim())
+              setCode('')
             }
             return (
-              <AddItemRow onAdd={handleAdd} disabled={disabled} canAdd={!!productId.trim()}>
-                <Input placeholder="Product ID" value={productId} onChange={(e) => setProductId(e.target.value)} disabled={disabled} className="w-1/3" />
-                <Input placeholder="Qty" type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} disabled={disabled} className="w-16" />
-                <Input placeholder="Price" value={price} onChange={(e) => setPrice(e.target.value)} disabled={disabled} className="w-24" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd() } }} />
+              <AddItemRow onAdd={handleAdd} disabled={disabled} canAdd={!!code.trim()}>
+                <Input
+                  placeholder="Enter promo code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  disabled={disabled}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleAdd()
+                    }
+                  }}
+                />
               </AddItemRow>
             )
           }
-          return <ProductAddForm />
+          return <PromoCodeAddForm />
         }}
         disabled={disabled}
       />
 
       <FormTextField
-        label="Payment Plan ID"
-        placeholder="Payment plan (optional)"
-        value={paymentPlan}
-        onChange={(e) => updateConfig({ paymentPlan: e.target.value })}
+        label="Apply Tag (optional)"
+        placeholder="Tag ID to apply after order creation"
+        value={applyTag}
+        onChange={(e) => updateConfig({ apply_tag: e.target.value })}
         disabled={disabled}
+        description="Tag ID to apply to the contact after the order is created."
       />
     </div>
   )
