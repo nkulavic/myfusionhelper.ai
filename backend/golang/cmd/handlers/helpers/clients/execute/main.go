@@ -116,6 +116,9 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		connectionID = event.QueryStringParameters["connection_id"]
 	}
 
+	// Extract x-api-key header for relay helpers (chain_it, etc.)
+	apiKey := event.Headers["x-api-key"]
+
 	// Create execution record with status="queued".
 	// DynamoDB Streams auto-dispatches to SQS FIFO.
 	now := time.Now().UTC()
@@ -127,6 +130,7 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		"helper_id":     helperID,
 		"account_id":    accountID,
 		"api_key_id":    apiKeyID,
+		"api_key":       apiKey, // Store for relay helpers (TTL auto-cleanup)
 		"connection_id": connectionID,
 		"contact_id":    contactID,
 		"status":        "queued",

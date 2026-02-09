@@ -174,10 +174,10 @@ func (h *ChainIt) Execute(ctx context.Context, input helpers.HelperInput) (*help
 		apiURL = "https://a95gb181u4.execute-api.us-west-2.amazonaws.com" // fallback
 	}
 
-	// Get API key from input (passed through from the original request)
-	apiKey := os.Getenv("INTERNAL_API_KEY")
+	// Use the original API key from the request for relay calls
+	apiKey := input.APIKey
 	if apiKey == "" {
-		return nil, fmt.Errorf("INTERNAL_API_KEY not configured for chain execution")
+		return nil, fmt.Errorf("no API key available for chain execution (relay requires x-api-key)")
 	}
 
 	httpClient := &http.Client{

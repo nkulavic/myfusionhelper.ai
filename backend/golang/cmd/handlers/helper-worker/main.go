@@ -52,6 +52,7 @@ type HelperExecutionJob struct {
 	ContactID    string                 `json:"contact_id"`
 	Config       map[string]interface{} `json:"config"`
 	Input        map[string]interface{} `json:"input"`
+	APIKey       string                 `json:"api_key"`        // Original x-api-key for relay helpers
 	RetryCount   int                    `json:"retry_count"`
 }
 
@@ -138,6 +139,7 @@ func processJob(ctx context.Context, db *dynamodb.Client, job HelperExecutionJob
 		HelperID:     job.HelperID,
 		ConnectionID: job.ConnectionID,
 		ServiceAuths: serviceAuths,
+		APIKey:       job.APIKey,
 	}
 
 	result, err := executor.Execute(ctx, execReq, connector)

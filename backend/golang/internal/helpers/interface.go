@@ -37,6 +37,7 @@ type HelperInput struct {
 	UserID       string                                  `json:"user_id"`
 	AccountID    string                                  `json:"account_id"`
 	HelperID     string                                  `json:"helper_id"`
+	APIKey       string                                  `json:"-"` // Original x-api-key header for relay helpers
 }
 
 // HelperOutput represents the result of a helper execution

@@ -19,6 +19,7 @@ type ExecutionRequest struct {
 	HelperID     string                                  `json:"helper_id"`
 	ConnectionID string                                  `json:"connection_id"`
 	ServiceAuths map[string]*connectors.ConnectorConfig   `json:"-"` // pre-loaded service connection credentials
+	APIKey       string                                  `json:"-"` // Original x-api-key header for relay helpers
 }
 
 // ExecutionResult represents the full result of a helper execution
@@ -94,6 +95,7 @@ func (e *Executor) Execute(ctx context.Context, req ExecutionRequest, connector 
 		UserID:       req.UserID,
 		AccountID:    req.AccountID,
 		HelperID:     req.HelperID,
+		APIKey:       req.APIKey,
 	}
 
 	// Execute the helper
