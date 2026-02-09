@@ -1,0 +1,40 @@
+{
+  "platform_id": "platform:box",
+  "name": "Box",
+  "slug": "box",
+  "category": "storage",
+  "types": ["integration", "storage"],
+  "description": "Enterprise content management and file sharing platform for secure collaboration",
+  "status": "active",
+  "version": "v2",
+  "logo_url": "/images/platforms/box.png",
+  "documentation_url": "https://developer.box.com/reference/",
+  "oauth": {
+    "auth_url": "https://account.box.com/api/oauth2/authorize",
+    "token_url": "https://api.box.com/oauth2/token",
+    "user_info_url": "https://api.box.com/2.0/users/me",
+    "scopes": [
+      "root_readwrite"
+    ],
+    "response_type": "code"
+  },
+  "api_config": {
+    "base_url": "https://api.box.com/2.0",
+    "auth_type": "oauth2",
+    "test_endpoint": "https://api.box.com/2.0/users/me",
+    "rate_limits": {
+      "requests_per_second": 10,
+      "requests_per_minute": 0,
+      "requests_per_hour": 0,
+      "burst_limit": 20
+    },
+    "required_headers": {},
+    "version": "v2"
+  },
+  "capabilities": [
+    "files",
+    "folders",
+    "sharing",
+    "collaboration"
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "platform_id": "platform:dropbox",
+  "name": "Dropbox",
+  "slug": "dropbox",
+  "category": "storage",
+  "types": ["integration", "storage"],
+  "description": "Cloud file storage and collaboration platform for teams and individuals",
+  "status": "active",
+  "version": "v2",
+  "logo_url": "/images/platforms/dropbox.png",
+  "documentation_url": "https://www.dropbox.com/developers/documentation/http/overview",
+  "oauth": {
+    "auth_url": "https://www.dropbox.com/oauth2/authorize",
+    "token_url": "https://api.dropboxapi.com/oauth2/token",
+    "user_info_url": "https://api.dropboxapi.com/2/users/get_current_account",
+    "scopes": [
+      "files.content.write",
+      "files.content.read"
+    ],
+    "response_type": "code"
+  },
+  "api_config": {
+    "base_url": "https://api.dropboxapi.com/2",
+    "auth_type": "oauth2",
+    "test_endpoint": "https://api.dropboxapi.com/2/users/get_current_account",
+    "rate_limits": {
+      "requests_per_second": 10,
+      "requests_per_minute": 0,
+      "requests_per_hour": 0,
+      "burst_limit": 20
+    },
+    "required_headers": {},
+    "version": "v2"
+  },
+  "capabilities": [
+    "files",
+    "folders",
+    "sharing"
+  ]
+}
