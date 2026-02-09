@@ -1,9 +1,15 @@
 package automation
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/myfusionhelper/api/internal/helpers"
 )
@@ -13,8 +19,14 @@ func init() {
 }
 
 // ChainIt chains multiple helper executions together with conditional logic and timing control.
-// Returns output with actions listing helpers to chain (actual chaining done by execution layer).
+// Makes HTTP POST requests to execute each helper in sequence.
 type ChainIt struct{}
+
+// helperConfig represents a helper to execute in the chain
+type helperConfig struct {
+	ID     string
+	Config map[string]interface{}
+}
 
 func (h *ChainIt) GetName() string        { return "Chain It" }
 func (h *ChainIt) GetType() string        { return "chain_it" }
@@ -28,9 +40,21 @@ func (h *ChainIt) GetConfigSchema() map[string]interface{} {
 		"type": "object",
 		"properties": map[string]interface{}{
 			"helpers": map[string]interface{}{
-				"type":        "array",
-				"items":       map[string]interface{}{"type": "string"},
-				"description": "List of helper type strings to chain in sequence",
+				"type": "array",
+				"items": map[string]interface{}{
+					"oneOf": []interface{}{
+						map[string]interface{}{"type": "string"},
+						map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"id":     map[string]interface{}{"type": "string"},
+								"config": map[string]interface{}{"type": "object"},
+							},
+							"required": []string{"id"},
+						},
+					},
+				},
+				"description": "List of helper IDs/short keys to chain. Can be strings or objects with 'id' and optional 'config'",
 			},
 			"conditional_field": map[string]interface{}{
 				"type":        "string",
@@ -118,7 +142,11 @@ func (h *ChainIt) ValidateConfig(config map[string]interface{}) error {
 }
 
 func (h *ChainIt) Execute(ctx context.Context, input helpers.HelperInput) (*helpers.HelperOutput, error) {
-	helperTypes := extractStringSlice(input.Config["helpers"])
+	// Parse helpers config (can be strings or objects)
+	helpersChain, err := h.parseHelpersConfig(input.Config["helpers"])
+	if err != nil {
+		return nil, fmt.Errorf("invalid helpers configuration: %w", err)
+	}
 
 	output := &helpers.HelperOutput{
 		Actions: make([]helpers.HelperAction, 0),
@@ -140,50 +168,207 @@ func (h *ChainIt) Execute(ctx context.Context, input helpers.HelperInput) (*help
 	// Extract delay configuration
 	delaySeconds := h.getDelaySeconds(input.Config)
 
-	// Build chain actions for the execution layer to process
-	for i, helperType := range helperTypes {
-		actionValue := map[string]interface{}{
-			"index": i,
+	// Get API endpoint from environment
+	apiURL := os.Getenv("API_URL")
+	if apiURL == "" {
+		apiURL = "https://a95gb181u4.execute-api.us-west-2.amazonaws.com" // fallback
+	}
+
+	// Get API key from input (passed through from the original request)
+	apiKey := os.Getenv("INTERNAL_API_KEY")
+	if apiKey == "" {
+		return nil, fmt.Errorf("INTERNAL_API_KEY not configured for chain execution")
+	}
+
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	allSucceeded := true
+	var chainResults []map[string]interface{}
+
+	// Execute each helper in sequence
+	for i, helper := range helpersChain {
+		// Apply delay before executing (except for first helper)
+		if i > 0 && delaySeconds > 0 {
+			output.Logs = append(output.Logs, fmt.Sprintf("Waiting %d seconds before next helper...", delaySeconds))
+			time.Sleep(time.Duration(delaySeconds) * time.Second)
 		}
 
-		// Add delay metadata if configured
-		if delaySeconds > 0 {
-			actionValue["delay_seconds"] = delaySeconds
-			output.Logs = append(output.Logs, fmt.Sprintf("Chained helper %d: %s (with %d second delay)", i+1, helperType, delaySeconds))
+		// Build request payload - use helper-specific config if provided, otherwise use shared config
+		configToUse := input.Config
+		if helper.Config != nil {
+			configToUse = helper.Config
+		}
+
+		requestPayload := map[string]interface{}{
+			"contact_id": input.ContactID,
+			"config":     configToUse,
+		}
+
+		jsonPayload, err := json.Marshal(requestPayload)
+		if err != nil {
+			output.Logs = append(output.Logs, fmt.Sprintf("Helper %d (%s): Failed to marshal request: %v", i+1, helper.ID, err))
+			allSucceeded = false
+			continue
+		}
+
+		// Make POST request to helper execution endpoint
+		endpoint := fmt.Sprintf("%s/helper/%s/execute", apiURL, helper.ID)
+		req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonPayload))
+		if err != nil {
+			output.Logs = append(output.Logs, fmt.Sprintf("Helper %d (%s): Failed to create request: %v", i+1, helper.ID, err))
+			allSucceeded = false
+			continue
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-api-key", apiKey)
+
+		output.Logs = append(output.Logs, fmt.Sprintf("Executing helper %d: %s", i+1, helper.ID))
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			output.Logs = append(output.Logs, fmt.Sprintf("Helper %d (%s): HTTP request failed: %v", i+1, helper.ID, err))
+			allSucceeded = false
+			continue
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode >= 400 {
+			output.Logs = append(output.Logs, fmt.Sprintf("Helper %d (%s): Failed with status %d: %s", i+1, helper.ID, resp.StatusCode, string(body)))
+			allSucceeded = false
+			continue
+		}
+
+		// Parse response
+		var helperResponse map[string]interface{}
+		if err := json.Unmarshal(body, &helperResponse); err == nil {
+			chainResults = append(chainResults, helperResponse)
+			output.Logs = append(output.Logs, fmt.Sprintf("Helper %d (%s): Completed successfully", i+1, helper.ID))
 		} else {
-			output.Logs = append(output.Logs, fmt.Sprintf("Chained helper %d: %s", i+1, helperType))
+			output.Logs = append(output.Logs, fmt.Sprintf("Helper %d (%s): Failed to parse response: %v", i+1, helper.ID, err))
+			allSucceeded = false
 		}
-
-		output.Actions = append(output.Actions, helpers.HelperAction{
-			Type:   "helper_chain",
-			Target: helperType,
-			Value:  actionValue,
-		})
 	}
 
-	// Add success/failure handler metadata
-	if successHelpers := extractStringSlice(input.Config["on_success_helpers"]); len(successHelpers) > 0 {
-		output.Actions = append(output.Actions, helpers.HelperAction{
-			Type:   "helper_chain_success_handler",
-			Target: "chain_completion",
-			Value:  successHelpers,
-		})
-		output.Logs = append(output.Logs, fmt.Sprintf("Configured %d success handler(s)", len(successHelpers)))
+	// Handle success/failure handlers
+	var handlerResults []map[string]interface{}
+	if allSucceeded {
+		if successHelpers, err := h.parseHelpersConfig(input.Config["on_success_helpers"]); err == nil && len(successHelpers) > 0 {
+			output.Logs = append(output.Logs, fmt.Sprintf("All helpers succeeded, executing %d success handler(s)", len(successHelpers)))
+			handlerResults = h.executeHandlers(ctx, successHelpers, input, httpClient, apiURL, apiKey)
+		}
+	} else {
+		if failureHelpers, err := h.parseHelpersConfig(input.Config["on_failure_helpers"]); err == nil && len(failureHelpers) > 0 {
+			output.Logs = append(output.Logs, fmt.Sprintf("Some helpers failed, executing %d failure handler(s)", len(failureHelpers)))
+			handlerResults = h.executeHandlers(ctx, failureHelpers, input, httpClient, apiURL, apiKey)
+		}
 	}
 
-	if failureHelpers := extractStringSlice(input.Config["on_failure_helpers"]); len(failureHelpers) > 0 {
-		output.Actions = append(output.Actions, helpers.HelperAction{
-			Type:   "helper_chain_failure_handler",
-			Target: "chain_completion",
-			Value:  failureHelpers,
-		})
-		output.Logs = append(output.Logs, fmt.Sprintf("Configured %d failure handler(s)", len(failureHelpers)))
+	// Combine all results
+	output.ModifiedData = map[string]interface{}{
+		"chain_results":   chainResults,
+		"handler_results": handlerResults,
+		"all_succeeded":   allSucceeded,
+		"executed_count":  len(chainResults),
 	}
 
-	output.Success = true
-	output.Message = fmt.Sprintf("Chained %d helper(s) for sequential execution", len(helperTypes))
+	output.Success = allSucceeded
+	if allSucceeded {
+		output.Message = fmt.Sprintf("Successfully chained %d helper(s)", len(helpersChain))
+	} else {
+		output.Message = fmt.Sprintf("Chained %d helper(s) with some failures", len(helpersChain))
+	}
 
 	return output, nil
+}
+
+// parseHelpersConfig parses the helpers configuration which can be strings or objects
+func (h *ChainIt) parseHelpersConfig(val interface{}) ([]helperConfig, error) {
+	if val == nil {
+		return []helperConfig{}, nil
+	}
+
+	switch v := val.(type) {
+	case []interface{}:
+		result := make([]helperConfig, 0, len(v))
+		for _, item := range v {
+			switch itemVal := item.(type) {
+			case string:
+				// Simple string helper ID
+				result = append(result, helperConfig{ID: itemVal})
+			case map[string]interface{}:
+				// Object with id and optional config
+				if id, ok := itemVal["id"].(string); ok {
+					cfg := helperConfig{ID: id}
+					if config, ok := itemVal["config"].(map[string]interface{}); ok {
+						cfg.Config = config
+					}
+					result = append(result, cfg)
+				}
+			}
+		}
+		return result, nil
+	case []string:
+		result := make([]helperConfig, 0, len(v))
+		for _, id := range v {
+			result = append(result, helperConfig{ID: id})
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("helpers must be an array")
+	}
+}
+
+// executeHandlers executes success or failure handler helpers
+func (h *ChainIt) executeHandlers(ctx context.Context, handlers []helperConfig, input helpers.HelperInput, httpClient *http.Client, apiURL, apiKey string) []map[string]interface{} {
+	var results []map[string]interface{}
+
+	for _, helper := range handlers {
+		configToUse := input.Config
+		if helper.Config != nil {
+			configToUse = helper.Config
+		}
+
+		requestPayload := map[string]interface{}{
+			"contact_id": input.ContactID,
+			"config":     configToUse,
+		}
+
+		jsonPayload, err := json.Marshal(requestPayload)
+		if err != nil {
+			continue
+		}
+
+		endpoint := fmt.Sprintf("%s/helper/%s/execute", apiURL, helper.ID)
+		req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonPayload))
+		if err != nil {
+			continue
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-api-key", apiKey)
+
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			continue
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode < 400 {
+			var helperResponse map[string]interface{}
+			if err := json.Unmarshal(body, &helperResponse); err == nil {
+				results = append(results, helperResponse)
+			}
+		}
+	}
+
+	return results
 }
 
 // evaluateCondition checks if the chain should execute based on conditional configuration
