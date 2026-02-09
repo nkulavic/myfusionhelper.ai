@@ -80,6 +80,9 @@ func (m *mockConnectorForCLV) GetMetadata() connectors.ConnectorMetadata {
 func (m *mockConnectorForCLV) GetCapabilities() []connectors.Capability {
 	return nil
 }
+func (m *mockConnectorForCLV) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	return nil
+}
 
 func TestCustomerLifetimeValue_GetMetadata(t *testing.T) {
 	h := &CustomerLifetimeValue{}

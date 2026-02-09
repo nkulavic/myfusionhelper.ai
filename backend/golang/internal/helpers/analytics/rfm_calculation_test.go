@@ -90,6 +90,9 @@ func (m *mockConnectorForRFM) GetMetadata() connectors.ConnectorMetadata {
 func (m *mockConnectorForRFM) GetCapabilities() []connectors.Capability {
 	return nil
 }
+func (m *mockConnectorForRFM) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	return nil
+}
 
 func TestRFMCalculation_GetMetadata(t *testing.T) {
 	h := &RFMCalculation{}
