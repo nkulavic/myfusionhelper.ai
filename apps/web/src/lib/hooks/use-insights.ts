@@ -243,17 +243,9 @@ function generateHelperEfficiency(
     .slice(0, 8)
 }
 
-// Mock tag distribution (until backend provides real tag analytics)
-const MOCK_TAG_DISTRIBUTION: TagDistribution[] = [
-  { name: 'Customer', count: 4250, percentage: 28.5 },
-  { name: 'Hot Lead', count: 2100, percentage: 14.1 },
-  { name: 'Newsletter', count: 1890, percentage: 12.7 },
-  { name: 'VIP', count: 1340, percentage: 9.0 },
-  { name: 'Prospect', count: 1180, percentage: 7.9 },
-  { name: 'Event Attendee', count: 920, percentage: 6.2 },
-  { name: 'Warm Lead', count: 870, percentage: 5.8 },
-  { name: 'Other', count: 2350, percentage: 15.8 },
-]
+// Tag distribution requires a dedicated analytics backend endpoint
+// TODO: Implement GET /analytics/tags endpoint in backend to aggregate tag usage across connections
+// For now, return empty array - the UI gracefully handles this with a "No tag data available" message
 
 // ---------- Hook ----------
 
@@ -309,7 +301,7 @@ export function useInsights(
 
       return {
         aiInsights,
-        tagDistribution: MOCK_TAG_DISTRIBUTION,
+        tagDistribution: [], // Requires backend analytics endpoint - UI shows "No tag data available"
         helperEfficiency,
         engagementScore,
         automationRoi: {
