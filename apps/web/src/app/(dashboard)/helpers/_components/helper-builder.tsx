@@ -1031,6 +1031,442 @@ function HelperTypeConfig({
         </div>
       )
 
+    case 'route_it_by_custom':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Custom Field Name</label>
+            <input
+              type="text"
+              placeholder="e.g., ProductInterest, LeadType"
+              className={inputClass}
+              onChange={(e) => setConfig('field_name', e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              The custom field to check for routing decisions
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Value Routes (JSON)</label>
+            <textarea
+              rows={5}
+              placeholder={'{\n  "premium": "https://example.com/premium",\n  "standard": "https://example.com/standard"\n}'}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              onChange={(e) => {
+                try {
+                  const parsed = JSON.parse(e.target.value)
+                  setConfig('value_routes', parsed)
+                } catch {
+                  // Invalid JSON, ignore
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Map of field values to redirect URLs
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Fallback URL</label>
+            <input
+              type="url"
+              placeholder="https://example.com/default"
+              className={inputClass}
+              onChange={(e) => setConfig('fallback_url', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Save URL To Field (Optional)</label>
+            <input
+              type="text"
+              placeholder="e.g., RedirectURL"
+              className={inputClass}
+              onChange={(e) => setConfig('save_to_field', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Apply Tag ID (Optional)</label>
+            <input
+              type="text"
+              placeholder="Tag ID to apply when routing"
+              className={inputClass}
+              onChange={(e) => setConfig('apply_tag', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'route_it_by_day':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Day Routes (JSON)</label>
+            <textarea
+              rows={7}
+              placeholder={'{\n  "Monday": "https://example.com/monday",\n  "Tuesday": "https://example.com/tuesday",\n  "Wednesday": "https://example.com/wednesday"\n}'}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              onChange={(e) => {
+                try {
+                  const parsed = JSON.parse(e.target.value)
+                  setConfig('day_routes', parsed)
+                } catch {
+                  // Invalid JSON, ignore
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Map of day names to redirect URLs (e.g., Monday, Tuesday)
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Timezone</label>
+            <input
+              type="text"
+              placeholder="America/New_York"
+              defaultValue="UTC"
+              className={inputClass}
+              onChange={(e) => setConfig('timezone', e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              IANA timezone name (e.g., America/New_York, Europe/London)
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Fallback URL</label>
+            <input
+              type="url"
+              placeholder="https://example.com/default"
+              className={inputClass}
+              onChange={(e) => setConfig('fallback_url', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Save URL To Field (Optional)</label>
+            <input
+              type="text"
+              placeholder="e.g., RedirectURL"
+              className={inputClass}
+              onChange={(e) => setConfig('save_to_field', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Apply Tag ID (Optional)</label>
+            <input
+              type="text"
+              placeholder="Tag ID to apply when routing"
+              className={inputClass}
+              onChange={(e) => setConfig('apply_tag', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'route_it_by_time':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Time Routes (JSON Array)</label>
+            <textarea
+              rows={8}
+              placeholder={'[\n  {\n    "start_time": "09:00",\n    "end_time": "17:00",\n    "url": "https://example.com/business-hours",\n    "label": "Business Hours"\n  }\n]'}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              onChange={(e) => {
+                try {
+                  const parsed = JSON.parse(e.target.value)
+                  setConfig('time_routes', parsed)
+                } catch {
+                  // Invalid JSON, ignore
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Array of time ranges with start_time, end_time (HH:MM format, 24-hour), url, and optional label
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Timezone</label>
+            <input
+              type="text"
+              placeholder="America/New_York"
+              defaultValue="UTC"
+              className={inputClass}
+              onChange={(e) => setConfig('timezone', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Fallback URL</label>
+            <input
+              type="url"
+              placeholder="https://example.com/after-hours"
+              className={inputClass}
+              onChange={(e) => setConfig('fallback_url', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Save URL To Field (Optional)</label>
+            <input
+              type="text"
+              placeholder="e.g., RedirectURL"
+              className={inputClass}
+              onChange={(e) => setConfig('save_to_field', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Apply Tag ID (Optional)</label>
+            <input
+              type="text"
+              placeholder="Tag ID to apply when routing"
+              className={inputClass}
+              onChange={(e) => setConfig('apply_tag', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'route_it_geo':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">IP Address</label>
+            <input
+              type="text"
+              placeholder="e.g., {{ContactIP}} or 8.8.8.8"
+              className={inputClass}
+              onChange={(e) => setConfig('ip_address', e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              IP address to geolocate (supports merge fields)
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Country Routes (JSON, Optional)</label>
+            <textarea
+              rows={4}
+              placeholder={'{\n  "US": "https://example.com/us",\n  "CA": "https://example.com/canada"\n}'}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              onChange={(e) => {
+                try {
+                  const parsed = JSON.parse(e.target.value)
+                  setConfig('country_routes', parsed)
+                } catch {
+                  // Invalid JSON, ignore
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Map of country codes (e.g., US, CA, GB) to redirect URLs
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Region Routes (JSON, Optional)</label>
+            <textarea
+              rows={4}
+              placeholder={'{\n  "California": "https://example.com/ca",\n  "Texas": "https://example.com/tx"\n}'}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              onChange={(e) => {
+                try {
+                  const parsed = JSON.parse(e.target.value)
+                  setConfig('region_routes', parsed)
+                } catch {
+                  // Invalid JSON, ignore
+                }
+              }}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Fallback URL</label>
+            <input
+              type="url"
+              placeholder="https://example.com/default"
+              className={inputClass}
+              onChange={(e) => setConfig('fallback_url', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Save URL To Field (Optional)</label>
+            <input
+              type="text"
+              placeholder="e.g., RedirectURL"
+              className={inputClass}
+              onChange={(e) => setConfig('save_to_field', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Save Location To Field (Optional)</label>
+            <input
+              type="text"
+              placeholder="e.g., Location"
+              className={inputClass}
+              onChange={(e) => setConfig('save_location_to', e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Save the formatted location string (e.g., "San Francisco, California, USA")
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Apply Tag ID (Optional)</label>
+            <input
+              type="text"
+              placeholder="Tag ID to apply when routing"
+              className={inputClass}
+              onChange={(e) => setConfig('apply_tag', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'route_it_score':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Score Field</label>
+            <input
+              type="text"
+              placeholder="Score"
+              defaultValue="Score"
+              className={inputClass}
+              onChange={(e) => setConfig('score_field', e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Contact field containing the lead score (numeric)
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Score Ranges (JSON Array)</label>
+            <textarea
+              rows={10}
+              placeholder={'[\n  {\n    "label": "Hot Lead",\n    "min_score": 80,\n    "redirect_url": "https://example.com/hot-leads"\n  },\n  {\n    "label": "Warm Lead",\n    "min_score": 50,\n    "max_score": 79,\n    "redirect_url": "https://example.com/warm-leads"\n  }\n]'}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              onChange={(e) => {
+                try {
+                  const parsed = JSON.parse(e.target.value)
+                  setConfig('score_ranges', parsed)
+                } catch {
+                  // Invalid JSON, ignore
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Array of score ranges with optional label, min_score, max_score, and redirect_url
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Fallback URL</label>
+            <input
+              type="url"
+              placeholder="https://example.com/default"
+              className={inputClass}
+              onChange={(e) => setConfig('fallback_url', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Save URL To Field (Optional)</label>
+            <input
+              type="text"
+              placeholder="e.g., RedirectURL"
+              className={inputClass}
+              onChange={(e) => setConfig('save_to_field', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Apply Tag ID (Optional)</label>
+            <input
+              type="text"
+              placeholder="Tag ID to apply when routing"
+              className={inputClass}
+              onChange={(e) => setConfig('apply_tag', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
+    case 'route_it_source':
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Source Field</label>
+            <input
+              type="text"
+              placeholder="LeadSource"
+              defaultValue="LeadSource"
+              className={inputClass}
+              onChange={(e) => setConfig('source_field', e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Contact field containing the traffic source (e.g., LeadSource, utm_source)
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Source Routes (JSON)</label>
+            <textarea
+              rows={6}
+              placeholder={'{\n  "google": "https://example.com/google",\n  "facebook": "https://example.com/facebook",\n  "direct": "https://example.com/direct"\n}'}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              onChange={(e) => {
+                try {
+                  const parsed = JSON.parse(e.target.value)
+                  setConfig('source_routes', parsed)
+                } catch {
+                  // Invalid JSON, ignore
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Map of source values to redirect URLs
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Match Mode</label>
+            <select
+              className={selectClass}
+              defaultValue="exact"
+              onChange={(e) => setConfig('match_mode', e.target.value)}
+            >
+              <option value="exact">Exact Match</option>
+              <option value="contains">Contains</option>
+              <option value="starts_with">Starts With</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="case_sensitive"
+              className="rounded"
+              onChange={(e) => setConfig('case_sensitive', e.target.checked)}
+            />
+            <label htmlFor="case_sensitive" className="text-sm">
+              Case sensitive matching
+            </label>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Fallback URL</label>
+            <input
+              type="url"
+              placeholder="https://example.com/default"
+              className={inputClass}
+              onChange={(e) => setConfig('fallback_url', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Save URL To Field (Optional)</label>
+            <input
+              type="text"
+              placeholder="e.g., RedirectURL"
+              className={inputClass}
+              onChange={(e) => setConfig('save_to_field', e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Apply Tag ID (Optional)</label>
+            <input
+              type="text"
+              placeholder="Tag ID to apply when routing"
+              className={inputClass}
+              onChange={(e) => setConfig('apply_tag', e.target.value)}
+            />
+          </div>
+        </div>
+      )
+
     default:
       return <DynamicSchemaForm helper={helper} configRef={configRef} />
   }

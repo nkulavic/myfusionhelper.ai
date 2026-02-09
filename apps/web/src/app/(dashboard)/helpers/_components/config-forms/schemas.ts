@@ -164,6 +164,17 @@ export const mathItSchema = z.object({
 })
 export type MathItConfig = z.infer<typeof mathItSchema>
 
+export const advanceMathSchema = z.object({
+  sourceField: requiredField,
+  operation: z
+    .enum(['power', 'sqrt', 'abs', 'round', 'ceil', 'floor', 'min', 'max'])
+    .default('sqrt'),
+  operand: z.number().optional(),
+  secondField: optionalField,
+  targetField: requiredField,
+})
+export type AdvanceMathConfig = z.infer<typeof advanceMathSchema>
+
 export const dateCalcSchema = z.object({
   field: requiredField,
   operation: z
@@ -258,6 +269,23 @@ export const ipLocationSchema = z.object({
   zipField: optionalField,
 })
 export type IpLocationConfig = z.infer<typeof ipLocationSchema>
+
+export const ipNotificationsSchema = z.object({
+  ip_address: requiredField,
+  match_countries: z.array(z.string()).optional().default([]),
+  match_regions: z.array(z.string()).optional().default([]),
+  apply_tag: optionalString,
+  save_location_to: optionalField,
+})
+export type IpNotificationsConfig = z.infer<typeof ipNotificationsSchema>
+
+export const ipRedirectsSchema = z.object({
+  ip_address: requiredField,
+  country_urls: z.record(z.string()).optional().default({}),
+  default_url: optionalString,
+  save_redirect_to: optionalField,
+})
+export type IpRedirectsConfig = z.infer<typeof ipRedirectsSchema>
 
 export const getRecordSchema = z.object({
   type: z
@@ -474,11 +502,49 @@ export const zoomWebinarSchema = z.object({
 })
 export type ZoomWebinarConfig = z.infer<typeof zoomWebinarSchema>
 
+export const zoomMeetingSchema = z.object({
+  action: z.enum(['create', 'register']).default('create'),
+  userId: optionalString,
+  meetingId: optionalString,
+  topic: optionalString,
+  startTime: optionalString,
+  duration: z.number().min(1).optional().default(60),
+  timezone: z.string().optional().default('UTC'),
+  password: optionalString,
+  nameField: z.string().optional().default('FirstName'),
+  emailField: z.string().optional().default('Email'),
+  saveJoinUrlTo: optionalField,
+  registrationType: z.number().min(1).max(3).optional().default(1),
+  autoRecording: z.enum(['none', 'local', 'cloud']).optional().default('none'),
+})
+export type ZoomMeetingConfig = z.infer<typeof zoomMeetingSchema>
+
 export const emailFieldSchema = z.object({
   emailField: z.enum(['Email', 'EmailAddress2', 'EmailAddress3']).default('Email'),
   saveTo: requiredField,
 })
 export type EmailFieldConfig = z.infer<typeof emailFieldSchema>
+
+export const gotowebinarSchema = z.object({
+  organizer_key: requiredString,
+  webinar_key: requiredString,
+  apply_tag: optionalString,
+})
+export type GotoWebinarConfig = z.infer<typeof gotowebinarSchema>
+
+export const everwebinarSchema = z.object({
+  webinar_id: requiredString,
+  schedule: optionalString,
+  apply_tag: optionalString,
+})
+export type EverWebinarConfig = z.infer<typeof everwebinarSchema>
+
+export const webinarJamSchema = z.object({
+  webinar_id: requiredString,
+  schedule: optionalString,
+  apply_tag: optionalString,
+})
+export type WebinarJamConfig = z.infer<typeof webinarJamSchema>
 
 // ─── NOTIFICATION HELPERS ───────────────────────────────
 
@@ -599,18 +665,10 @@ export const quoteItSchema = z.object({
 export type QuoteItConfig = z.infer<typeof quoteItSchema>
 
 export const orderItSchema = z.object({
-  orderTitle: optionalString,
-  products: z
-    .array(
-      z.object({
-        productId: z.string(),
-        quantity: z.number().min(1).default(1),
-        price: z.string().optional(),
-      })
-    )
-    .optional()
-    .default([]),
-  paymentPlan: optionalString,
+  product_id: z.number().min(1, 'Product ID is required'),
+  quantity: z.number().min(1).optional().default(1),
+  promo_codes: z.array(z.string()).optional().default([]),
+  apply_tag: optionalString,
 })
 export type OrderItConfig = z.infer<typeof orderItSchema>
 
@@ -739,6 +797,29 @@ export const webinarSchema = z.object({
 })
 export type WebinarConfig = z.infer<typeof webinarSchema>
 
+export const zoomWebinarAbsenteeSchema = z.object({
+  webinarId: optionalString,
+  tagPrefix: z.string().optional().default('Webinar'),
+  applyNoShowTag: z.boolean().optional().default(true),
+  applyRegisteredTag: z.boolean().optional().default(true),
+  customTags: z.array(z.string()).optional().default([]),
+})
+export type ZoomWebinarAbsenteeConfig = z.infer<typeof zoomWebinarAbsenteeSchema>
+
+export const zoomWebinarParticipantSchema = z.object({
+  webinarId: optionalString,
+  attendedPercent: z.number().min(0).max(100).optional().default(0),
+  durationMinutes: z.number().min(0).optional().default(0),
+  tagPrefix: z.string().optional().default('Webinar'),
+  highEngagementThreshold: z.number().min(0).max(100).optional().default(75),
+  mediumEngagementThreshold: z.number().min(0).max(100).optional().default(50),
+  applyAttendanceTag: z.boolean().optional().default(true),
+  applyEngagementTags: z.boolean().optional().default(true),
+  applyDurationTag: z.boolean().optional().default(false),
+  customTags: z.array(z.string()).optional().default([]),
+})
+export type ZoomWebinarParticipantConfig = z.infer<typeof zoomWebinarParticipantSchema>
+
 export const cloudStorageSchema = z.object({
   templateFolder: requiredString,
   folderNameField: requiredField,
@@ -778,19 +859,30 @@ export const stripeHooksSchema = z.object({
 export type StripeHooksConfig = z.infer<typeof stripeHooksSchema>
 
 export const trelloItSchema = z.object({
-  boardId: requiredString,
-  listId: requiredString,
-  cardTitle: requiredString,
-  cardDescription: optionalString,
-  checklist: optionalString,
+  board_id: requiredString,
+  list_id: requiredString,
+  card_name_template: requiredString,
+  card_description_template: optionalString,
+  apply_tag: optionalString,
+  service_connection_ids: z
+    .object({
+      trello: optionalString,
+    })
+    .optional()
+    .default({}),
 })
 export type TrelloItConfig = z.infer<typeof trelloItSchema>
 
 export const donorSearchSchema = z.object({
-  resultField: optionalField,
-  capacityField: optionalField,
-  foundTags: z.array(z.string()).optional().default([]),
-  notFoundTags: z.array(z.string()).optional().default([]),
+  ds_rating_field: optionalField,
+  ds_profile_link_field: optionalField,
+  apply_tag: optionalString,
+  service_connection_ids: z
+    .object({
+      donorlead: optionalString,
+    })
+    .optional()
+    .default({}),
 })
 export type DonorSearchConfig = z.infer<typeof donorSearchSchema>
 

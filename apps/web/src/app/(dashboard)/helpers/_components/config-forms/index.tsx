@@ -19,6 +19,7 @@ import { ContactUpdaterForm } from './contact-updater-form'
 // Data helpers
 import { FormatItForm } from './format-it-form'
 import { MathItForm } from './math-it-form'
+import { AdvanceMathForm } from './advance-math-form'
 import { DateCalcForm } from './date-calc-form'
 import { TextItForm } from './text-it-form'
 import { SplitItForm } from './split-it-form'
@@ -54,6 +55,10 @@ import { VideoTriggerForm } from './video-trigger-form'
 
 // Integration helpers
 import { HookItForm } from './hook-it-form'
+import { HookItV2Form } from './hook-it-v2-form'
+import { HookItV3Form } from './hook-it-v3-form'
+import { HookItV4Form } from './hook-it-v4-form'
+import { HookItByTagForm } from './hook-it-by-tag-form'
 import { SlackItForm } from './slack-it-form'
 import { PhoneLookupForm } from './phone-lookup-form'
 import { SpreadsheetForm } from './spreadsheet-form'
@@ -62,6 +67,9 @@ import { EmailScrubForm } from './email-scrub-form'
 import { EmailValidateForm } from './email-validate-form'
 import { EmailAttachItForm } from './email-attach-it-form'
 import { WebinarForm } from './webinar-form'
+import { ZoomWebinarAbsenteeForm } from './zoom-webinar-absentee-form'
+import { ZoomWebinarParticipantForm } from './zoom-webinar-participant-form'
+import { ZoomMeetingForm } from './zoom-meeting-form'
 import { CalendlyForm } from './calendly-form'
 import { CloudStorageForm } from './cloud-storage-form'
 import { FacebookAudienceForm } from './facebook-audience-form'
@@ -70,6 +78,9 @@ import { StripeHooksForm } from './stripe-hooks-form'
 import { TrelloItForm } from './trello-it-form'
 import { DonorSearchForm } from './donor-search-form'
 import { UploadItForm } from './upload-it-form'
+import { GotoWebinarForm } from './gotowebinar-form'
+import { EverWebinarForm } from './everwebinar-form'
+import { WebinarJamForm } from './webinarjam-form'
 
 // HubSpot helpers
 import { HubspotDealStagerForm } from './hubspot-deal-stager-form'
@@ -86,6 +97,8 @@ import { EmailEngagementForm } from './email-engagement-form'
 import { RfmForm } from './rfm-form'
 import { ClvForm } from './clv-form'
 import { IpLocationForm } from './ip-location-form'
+import { IpNotificationsForm } from './ip-notifications-form'
+import { IpRedirectsForm } from './ip-redirects-form'
 
 import type { ConfigFormProps } from './types'
 
@@ -118,6 +131,7 @@ const formRegistry: Record<string, React.ComponentType<ConfigFormProps>> = {
   // ========== Data helpers ==========
   format_it: FormatItForm,
   math_it: MathItForm,
+  advance_math: AdvanceMathForm,
   date_calc: DateCalcForm,
   text_it: TextItForm,
   split_it: SplitItForm,
@@ -155,6 +169,10 @@ const formRegistry: Record<string, React.ComponentType<ConfigFormProps>> = {
 
   // ========== Integration helpers ==========
   hook_it: HookItForm,
+  hook_it_v2: HookItV2Form,
+  hook_it_v3: HookItV3Form,
+  hook_it_v4: HookItV4Form,
+  hook_it_by_tag: HookItByTagForm,
   slack_it: SlackItForm,
   phone_lookup: PhoneLookupForm,
   google_sheet_it: SpreadsheetForm,
@@ -165,11 +183,13 @@ const formRegistry: Record<string, React.ComponentType<ConfigFormProps>> = {
   email_scrub_validate: EmailValidateForm,
   email_attach_it: EmailAttachItForm,
   zoom_webinar: WebinarForm,
-  zoom_meeting: WebinarForm,
+  zoom_meeting: ZoomMeetingForm,
   zoom_webinar_oauth: WebinarForm,
-  gotowebinar: WebinarForm,
-  everwebinar: WebinarForm,
-  webinar_jam: WebinarForm,
+  zoom_webinar_absentee: ZoomWebinarAbsenteeForm,
+  zoom_webinar_participant: ZoomWebinarParticipantForm,
+  gotowebinar: GotoWebinarForm,
+  everwebinar: EverWebinarForm,
+  webinar_jam: WebinarJamForm,
   calendly_it: CalendlyForm,
   dropbox_it: CloudStorageForm,
   google_drive_it: CloudStorageForm,
@@ -200,6 +220,10 @@ const formRegistry: Record<string, React.ComponentType<ConfigFormProps>> = {
   rfm_calculation: RfmForm,
   customer_lifetime_value: ClvForm,
   ip_location: IpLocationForm,
+
+  // ========== Automation helpers (IP-based) ==========
+  ip_notifications: IpNotificationsForm,
+  ip_redirects: IpRedirectsForm,
 }
 
 export function getConfigForm(helperType: string): React.ComponentType<ConfigFormProps> | null {
