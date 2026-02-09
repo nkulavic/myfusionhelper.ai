@@ -1106,3 +1106,456 @@ Role defaults:
 - **Owner/Admin**: all permissions
 - **Member**: manage + execute helpers, manage connections, view analytics
 - **Viewer**: view analytics only
+
+---
+
+## 8. Chat Service (`mfh-chat`)
+
+AI-powered chat interface with MCP (Model Context Protocol) tool calling for querying CRM data and invoking helpers.
+
+### GET /chat/health
+
+Health check endpoint.
+
+**Auth**: None
+
+**Response** (200):
+```json
+{
+  "status": "healthy",
+  "service": "chat",
+  "version": "2025.02.09.0001"
+}
+```
+
+---
+
+### POST /chat/conversations
+
+Create a new conversation.
+
+**Auth**: Required
+
+**Request**:
+```json
+{
+  "title": "My Conversation"  // optional, auto-generated if not provided
+}
+```
+
+**Response** (200):
+```json
+{
+  "conversation_id": "conv:uuid",
+  "account_id": "account:uuid",
+  "title": "My Conversation",
+  "created_at": "2026-02-09T00:00:00Z",
+  "updated_at": "2026-02-09T00:00:00Z"
+}
+```
+
+---
+
+### GET /chat/conversations
+
+List all conversations for the current user.
+
+**Auth**: Required
+
+**Query Parameters**:
+- `limit` (optional, default: 50): Max conversations to return
+- `offset` (optional, default: 0): Pagination offset
+
+**Response** (200):
+```json
+{
+  "conversations": [
+    {
+      "conversation_id": "conv:uuid",
+      "title": "My Conversation",
+      "created_at": "2026-02-09T00:00:00Z",
+      "updated_at": "2026-02-09T00:00:00Z",
+      "message_count": 5
+    }
+  ],
+  "total": 10,
+  "has_more": false
+}
+```
+
+---
+
+### GET /chat/conversations/{id}
+
+Get conversation details with message history.
+
+**Auth**: Required
+
+**Response** (200):
+```json
+{
+  "conversation_id": "conv:uuid",
+  "title": "My Conversation",
+  "created_at": "2026-02-09T00:00:00Z",
+  "messages": [
+    {
+      "message_id": "msg:uuid",
+      "role": "user",
+      "content": "Show my Keap contacts",
+      "created_at": "2026-02-09T00:00:00Z"
+    },
+    {
+      "message_id": "msg:uuid",
+      "role": "assistant",
+      "content": "You have 142 contacts in Keap...",
+      "tool_calls": [
+        {
+          "id": "call_abc",
+          "type": "function",
+          "function": {
+            "name": "query_crm_data",
+            "arguments": "{\"connection_id\":\"conn:xyz\"}"
+          }
+        }
+      ],
+      "created_at": "2026-02-09T00:00:01Z"
+    }
+  ]
+}
+```
+
+---
+
+### DELETE /chat/conversations/{id}
+
+Delete a conversation and all its messages.
+
+**Auth**: Required
+
+**Response** (200):
+```json
+{
+  "success": true,
+  "message": "Conversation deleted"
+}
+```
+
+---
+
+### POST /chat/conversations/{id}/messages
+
+Send a message and get AI response (with Server-Sent Events streaming).
+
+**Auth**: Required
+
+**Request**:
+```json
+{
+  "content": "Show my Keap contacts",
+  "connection_id": "conn:xyz"  // optional, for CRM-specific queries
+}
+```
+
+**Response** (200, text/event-stream):
+```
+event: message
+data: {"type":"content","delta":"You"}
+
+event: message
+data: {"type":"content","delta":" have"}
+
+event: message
+data: {"type":"tool_call","tool":"query_crm_data","arguments":"..."}
+
+event: message
+data: {"type":"done"}
+```
+
+**Notes**:
+- Uses Groq LLM (llama-3.3-70b-versatile)
+- Supports tool calling for CRM operations
+- Available tools: `query_crm_data`, `get_contacts`, `get_contact_detail`, `invoke_helper`, `list_helpers`, `get_helper_config`, `get_connections`
+- Conversation history persists in DynamoDB with 90-day TTL
+
+---
+
+### GET /chat/conversations/{id}/messages
+
+Get all messages in a conversation.
+
+**Auth**: Required
+
+**Query Parameters**:
+- `limit` (optional, default: 100): Max messages to return
+- `offset` (optional, default: 0): Pagination offset
+
+**Response** (200):
+```json
+{
+  "messages": [
+    {
+      "message_id": "msg:uuid",
+      "role": "user",
+      "content": "Show my contacts",
+      "sequence": 1,
+      "created_at": "2026-02-09T00:00:00Z"
+    }
+  ],
+  "total": 5,
+  "has_more": false
+}
+```
+
+---
+
+## 9. Internal Email Service (`mfh-internal-email`)
+
+Internal-only service for sending transactional emails (welcome, password reset, notifications). Not exposed to frontend.
+
+**Base Path**: `/internal/emails`
+
+**Auth**: Service-to-service (no Cognito auth)
+
+### POST /internal/emails/send
+
+Send a transactional email using predefined templates.
+
+**Request**:
+```json
+{
+  "template_type": "welcome",
+  "to": "user@example.com",
+  "data": {
+    "user_name": "John Doe",
+    "login_url": "https://app.myfusionhelper.ai/login"
+  },
+  "account_id": "account:uuid"  // for logging
+}
+```
+
+**Template Types**:
+- `welcome`: New user welcome email
+- `password_reset`: Password reset notification
+- `execution_alert`: Helper execution result
+- `billing_event`: Subscription changes
+- `connection_alert`: CRM connection issues
+- `usage_alert`: Approaching plan limits
+- `weekly_summary`: Weekly activity digest
+- `team_invite`: Team member invitation
+
+**Response** (200):
+```json
+{
+  "email_id": "email:uuid",
+  "message_id": "<ses-message-id>",
+  "status": "sent"
+}
+```
+
+---
+
+### GET /internal/emails/history
+
+Get email delivery history (admin/debugging only).
+
+**Query Parameters**:
+- `account_id` (optional): Filter by account
+- `start_date` (optional): ISO date
+- `end_date` (optional): ISO date
+- `status` (optional): `sent`, `failed`, `bounced`
+- `limit` (optional, default: 50)
+
+**Response** (200):
+```json
+{
+  "logs": [
+    {
+      "email_id": "email:uuid",
+      "account_id": "account:uuid",
+      "recipient": "user@example.com",
+      "template_type": "welcome",
+      "status": "sent",
+      "message_id": "<ses-message-id>",
+      "sent_at": "2026-02-09T00:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### GET /internal/emails/health
+
+Health check endpoint.
+
+**Response** (200):
+```json
+{
+  "status": "healthy",
+  "service": "internal-email",
+  "ses_configured": true
+}
+```
+
+---
+
+## 10. Data Explorer Service (`mfh-data-explorer`)
+
+Query CRM data with natural language or structured filters using DuckDB on Parquet files.
+
+**Note**: Some endpoints return large datasets. Server-side pagination is enforced.
+
+### POST /data/query
+
+Execute a data query with optional natural language processing.
+
+**Auth**: Required
+
+**Request**:
+```json
+{
+  "connection_id": "conn:uuid",
+  "nl_query": "show contacts tagged as VIP",  // optional, natural language
+  "filters": {                                // optional, structured filters
+    "object_type": "contacts",
+    "tags": ["VIP"],
+    "date_field": "created_at",
+    "date_from": "2026-01-01",
+    "date_to": "2026-02-09"
+  },
+  "limit": 100,
+  "offset": 0
+}
+```
+
+**Response** (200):
+```json
+{
+  "results": [
+    {
+      "id": "12345",
+      "email": "john@example.com",
+      "first_name": "John",
+      "last_name": "Doe",
+      "tags": ["VIP", "Customer"],
+      "created_at": "2026-01-15T00:00:00Z"
+    }
+  ],
+  "total": 42,
+  "query_time_ms": 150,
+  "has_more": false
+}
+```
+
+**Notes**:
+- Uses DuckDB for fast Parquet queries (97-99% cost reduction vs Athena)
+- Analytics bucket: `listbackup-analytics-{stage}`
+- Max limit: 1000 rows per request
+
+---
+
+### GET /data/catalog
+
+Get available data objects for a connection.
+
+**Auth**: Required
+
+**Query Parameters**:
+- `connection_id` (required)
+
+**Response** (200):
+```json
+{
+  "objects": [
+    {
+      "object_type": "contacts",
+      "record_count": 1523,
+      "last_synced": "2026-02-09T00:00:00Z",
+      "fields": ["id", "email", "first_name", "last_name", "tags"]
+    },
+    {
+      "object_type": "tags",
+      "record_count": 45,
+      "last_synced": "2026-02-09T00:00:00Z",
+      "fields": ["id", "name", "category"]
+    }
+  ]
+}
+```
+
+---
+
+### POST /data/export
+
+Export query results as CSV/JSON.
+
+**Auth**: Required
+
+**Request**:
+```json
+{
+  "connection_id": "conn:uuid",
+  "query": { /* same as /data/query */ },
+  "format": "csv"  // or "json"
+}
+```
+
+**Response** (200):
+- Content-Type: `text/csv` or `application/json`
+- Content-Disposition: `attachment; filename="export.csv"`
+
+**Notes**: Exports are limited to 10,000 rows max.
+
+---
+
+## 11. SMS Chat Webhook (`mfh-sms-chat-webhook`)
+
+Twilio webhook for two-way SMS chat interface (internal worker, not directly accessible).
+
+**Base Path**: `/sms-webhook`
+
+**Auth**: Twilio signature validation
+
+**Features**:
+- Phone number to account mapping
+- Rate limiting (10 messages/hour per phone)
+- MCP service integration with tool calling
+- Conversation history tracking
+- SMS response truncation (1600 char limit)
+
+**Note**: This is a worker service called by Twilio, not a user-facing API.
+
+---
+
+## Data Sync & Workers
+
+### Data Sync Worker (`mfh-data-sync`)
+
+SQS-triggered worker that syncs CRM data to S3 Parquet files.
+
+**Trigger**: SQS queue messages from scheduled EventBridge rules
+
+**Process**:
+1. Receives sync job from SQS
+2. Fetches data from CRM API (Keap, GoHighLevel, etc.)
+3. Writes Parquet files to `mfh-{stage}-data` S3 bucket
+4. Updates connection sync metadata
+
+**Note**: Not directly accessible via API.
+
+---
+
+### Helper Execution Worker (`mfh-helper-worker`)
+
+SQS-triggered worker that executes helpers asynchronously.
+
+**Trigger**: SQS queue messages from POST /helpers/{id}/execute
+
+**Process**:
+1. Receives execution request from SQS
+2. Loads helper configuration
+3. Executes helper logic via CRM connectors
+4. Updates execution status in DynamoDB
+5. Sends notification if configured
+
+**Note**: Not directly accessible via API.
