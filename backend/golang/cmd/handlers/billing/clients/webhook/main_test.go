@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
-	stripe "github.com/stripe/stripe-go/v82"
 )
 
 func TestHandle_MethodValidation(t *testing.T) {
