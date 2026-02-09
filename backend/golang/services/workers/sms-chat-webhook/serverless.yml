@@ -1,0 +1,85 @@
+service: mfh-sms-chat-webhook
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: ${opt:region, 'us-west-2'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 29
+  tracing:
+    lambda: true
+  environment:
+    STAGE: ${self:provider.stage}
+    # DynamoDB tables
+    CHAT_CONVERSATIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatConversationsTableName}
+    CHAT_MESSAGES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatMessagesTableName}
+    PHONE_MAPPINGS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PhoneMappingsTableName}
+    # Unified secrets (Groq, Twilio, etc.)
+    INTERNAL_SECRETS: ${ssm:/myfusionhelper/${self:provider.stage}/secrets~true}
+    # Service access token (for SMS users without individual tokens)
+    # This should be a long-lived token for a service account
+    SERVICE_ACCESS_TOKEN: ${ssm:/myfusionhelper/${self:provider.stage}/service-token~true, ''}
+  iam:
+    role:
+      statements:
+        # DynamoDB permissions for chat tables
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatConversationsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatConversationsTableArn}/index/*
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatMessagesTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatMessagesTableArn}/index/*
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PhoneMappingsTableArn}
+        # Rate limits table (to be created)
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/mfh-${self:provider.stage}-rate-limits
+        # X-Ray tracing
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: '*'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ['provided.al2023']
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+functions:
+  sms-webhook:
+    handler: cmd/handlers/sms-chat-webhook/main.go
+    name: mfh-${self:provider.stage}-sms-chat-webhook
+    description: 'Twilio SMS webhook handler for chat conversations'
+    events:
+      - httpApi:
+          path: /sms-webhook
+          method: POST
+          # Reference the shared API Gateway
+          id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+
+resources:
+  Description: SMS Chat Webhook Service for MyFusion Helper
+
+package:
+  patterns:
+    - '!./**'
+    - './bootstrap'

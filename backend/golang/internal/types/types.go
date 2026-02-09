@@ -365,6 +365,54 @@ type APIKey struct {
 	ExpiresAt   *time.Time `json:"expires_at,omitempty" dynamodbav:"expires_at,omitempty"`
 }
 
+// ========== CHAT TYPES ==========
+
+// ChatConversation represents a chat conversation in the system
+type ChatConversation struct {
+	ConversationID string  `json:"conversation_id" dynamodbav:"conversation_id"`
+	AccountID      string  `json:"account_id" dynamodbav:"account_id"`
+	UserID         string  `json:"user_id" dynamodbav:"user_id"`
+	Title          string  `json:"title" dynamodbav:"title"`
+	CreatedAt      string  `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt      string  `json:"updated_at" dynamodbav:"updated_at"`
+	DeletedAt      *string `json:"deleted_at,omitempty" dynamodbav:"deleted_at,omitempty"`
+	MessageCount   int     `json:"message_count" dynamodbav:"message_count"`
+	TTL            *int64  `json:"ttl,omitempty" dynamodbav:"ttl,omitempty"` // 90 days auto-cleanup
+}
+
+// ChatMessage represents a message in a chat conversation
+type ChatMessage struct {
+	MessageID      string                 `json:"message_id" dynamodbav:"message_id"`
+	ConversationID string                 `json:"conversation_id" dynamodbav:"conversation_id"`
+	Sequence       int                    `json:"sequence" dynamodbav:"sequence"`
+	Role           string                 `json:"role" dynamodbav:"role"` // "user" or "assistant"
+	Content        string                 `json:"content" dynamodbav:"content"`
+	ToolCalls      []ToolCall             `json:"tool_calls,omitempty" dynamodbav:"tool_calls,omitempty"`
+	ToolResults    []ToolResult           `json:"tool_results,omitempty" dynamodbav:"tool_results,omitempty"`
+	CreatedAt      string                 `json:"created_at" dynamodbav:"created_at"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty" dynamodbav:"metadata,omitempty"`
+}
+
+// ToolCall represents a tool/function call in a message
+// This is the format used by MCP service and compatible with Groq API
+type ToolCall struct {
+	ID       string       `json:"id" dynamodbav:"id"`
+	Type     string       `json:"type" dynamodbav:"type"` // "function"
+	Function FunctionCall `json:"function" dynamodbav:"function"`
+}
+
+// FunctionCall represents the function details in a tool call
+type FunctionCall struct {
+	Name      string `json:"name" dynamodbav:"name"`
+	Arguments string `json:"arguments" dynamodbav:"arguments"` // JSON string
+}
+
+// ToolResult represents the result of a tool/function call
+type ToolResult struct {
+	ToolCallID string `json:"tool_call_id" dynamodbav:"tool_call_id"`
+	Result     string `json:"result" dynamodbav:"result"`
+}
+
 // ========== PLAN TYPES ==========
 
 // PlanLimits defines limits for an account plan
@@ -374,4 +422,138 @@ type PlanLimits struct {
 	MaxConnections  int `json:"max_connections"`
 	MaxTeamMembers  int `json:"max_team_members"`
 	MaxAPIKeys      int `json:"max_api_keys"`
+}
+
+// ========== GROQ API TYPES ==========
+
+// GroqChatRequest represents a Groq Chat API request
+type GroqChatRequest struct {
+	Model       string        `json:"model"`
+	Messages    []GroqMessage `json:"messages"`
+	Temperature float64       `json:"temperature,omitempty"`
+	MaxTokens   int           `json:"max_tokens,omitempty"`
+	Tools       []GroqTool    `json:"tools,omitempty"`
+	Stream      bool          `json:"stream,omitempty"`
+}
+
+// GroqMessage represents a message in the Groq format
+type GroqMessage struct {
+	Role       string         `json:"role"` // "system", "user", "assistant", "tool"
+	Content    string         `json:"content,omitempty"`
+	ToolCalls  []GroqToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string         `json:"tool_call_id,omitempty"` // for role="tool"
+	Name       string         `json:"name,omitempty"`         // for role="tool"
+}
+
+// GroqToolCall represents a tool call in Groq format
+type GroqToolCall struct {
+	ID       string           `json:"id"`
+	Type     string           `json:"type"`
+	Function GroqFunctionCall `json:"function"`
+}
+
+// GroqFunctionCall represents a function call in Groq format
+type GroqFunctionCall struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+// GroqTool represents a tool definition for Groq
+type GroqTool struct {
+	Type     string          `json:"type"`
+	Function GroqFunctionDef `json:"function"`
+}
+
+// GroqFunctionDef represents a function definition for Groq
+type GroqFunctionDef struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Parameters  map[string]interface{} `json:"parameters"`
+}
+
+// GroqChatResponse represents a Groq Chat API response
+type GroqChatResponse struct {
+	ID      string       `json:"id"`
+	Object  string       `json:"object"`
+	Created int64        `json:"created"`
+	Model   string       `json:"model"`
+	Choices []GroqChoice `json:"choices"`
+	Usage   GroqUsage    `json:"usage"`
+}
+
+// GroqChoice represents a choice in the Groq response
+type GroqChoice struct {
+	Index        int         `json:"index"`
+	Message      GroqMessage `json:"message"`
+	FinishReason string      `json:"finish_reason"`
+}
+
+// GroqUsage represents token usage information
+type GroqUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
+// GroqStreamChunk represents a chunk in a streaming response
+type GroqStreamChunk struct {
+	ID      string            `json:"id"`
+	Object  string            `json:"object"`
+	Created int64             `json:"created"`
+	Model   string            `json:"model"`
+	Choices []GroqStreamDelta `json:"choices"`
+}
+
+// GroqStreamDelta represents a delta in a streaming chunk
+type GroqStreamDelta struct {
+	Index        int       `json:"index"`
+	Delta        GroqDelta `json:"delta"`
+	FinishReason *string   `json:"finish_reason"`
+}
+
+// GroqDelta represents delta content in streaming
+type GroqDelta struct {
+	Role      string         `json:"role,omitempty"`
+	Content   string         `json:"content,omitempty"`
+	ToolCalls []GroqToolCall `json:"tool_calls,omitempty"`
+}
+
+// ========== CHAT REQUEST/RESPONSE TYPES ==========
+
+// CreateConversationRequest represents a request to create a new conversation
+type CreateConversationRequest struct {
+	Title string `json:"title,omitempty"`
+}
+
+// CreateConversationResponse represents the response for conversation creation
+type CreateConversationResponse struct {
+	ConversationID string `json:"conversation_id"`
+	Title          string `json:"title"`
+	Status         string `json:"status"`
+	CreatedAt      string `json:"created_at"`
+}
+
+// ListConversationsResponse represents the response for listing conversations
+type ListConversationsResponse struct {
+	Conversations []ChatConversation `json:"conversations"`
+}
+
+// GetConversationResponse represents the response for getting a conversation with messages
+type GetConversationResponse struct {
+	Conversation ChatConversation `json:"conversation"`
+	Messages     []ChatMessage    `json:"messages"`
+}
+
+// SendMessageRequest represents a request to send a message
+type SendMessageRequest struct {
+	Content string `json:"content"`
+}
+
+// StreamChatResponse represents a chunk of streaming chat response
+type StreamChatResponse struct {
+	Type       string      `json:"type"` // "content", "tool_call", "tool_result", "done"
+	Content    string      `json:"content,omitempty"`
+	ToolCall   *ToolCall   `json:"tool_call,omitempty"`
+	ToolResult *ToolResult `json:"tool_result,omitempty"`
+	Done       bool        `json:"done,omitempty"`
 }

@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -163,33 +162,4 @@ func (r *ExecutionsRepository) UpdateResult(ctx context.Context, executionID, st
 		return fmt.Errorf("update execution result: %w", err)
 	}
 	return nil
-}
-
-// encodeCursor serializes a DynamoDB LastEvaluatedKey into a JSON string cursor.
-func encodeCursor(key map[string]ddbtypes.AttributeValue) (string, error) {
-	// Convert to a simple map of string values for portability
-	simple := make(map[string]string)
-	for k, v := range key {
-		if sv, ok := v.(*ddbtypes.AttributeValueMemberS); ok {
-			simple[k] = sv.Value
-		}
-	}
-	b, err := json.Marshal(simple)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
-// decodeCursor deserializes a JSON string cursor back into a DynamoDB ExclusiveStartKey.
-func decodeCursor(cursor string) (map[string]ddbtypes.AttributeValue, error) {
-	var simple map[string]string
-	if err := json.Unmarshal([]byte(cursor), &simple); err != nil {
-		return nil, err
-	}
-	key := make(map[string]ddbtypes.AttributeValue)
-	for k, v := range simple {
-		key[k] = stringVal(v)
-	}
-	return key, nil
 }

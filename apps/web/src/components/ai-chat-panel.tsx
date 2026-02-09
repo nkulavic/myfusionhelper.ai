@@ -1,75 +1,99 @@
 'use client'
 
-import { useEffect, useRef, useState, useMemo, type FormEvent } from 'react'
-import { useChat } from '@ai-sdk/react'
-import { DefaultChatTransport } from 'ai'
-import { Sparkles, Send, Loader2, Settings, AlertCircle } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Sparkles, Send, Loader2, MessageSquare, Trash2, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
-  useAISettingsStore,
-  providerLabels,
-  modelLabels,
-} from '@/lib/stores/ai-settings-store'
+  useConversations,
+  useMessages,
+  useCreateConversation,
+  useDeleteConversation,
+  useStreamChat,
+} from '@/lib/hooks/use-chat'
+import type { ChatMessage } from '@/lib/api/chat'
 
 interface AIChatPanelProps {
   onClose: () => void
 }
 
-function getTextContent(msg: { parts?: Array<{ type: string; text?: string }> }): string {
-  if (!msg.parts) return ''
-  return msg.parts
-    .filter((p): p is { type: 'text'; text: string } => p.type === 'text' && typeof p.text === 'string')
-    .map((p) => p.text)
-    .join('')
-}
-
 export function AIChatPanel({ onClose }: AIChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState('')
-  const {
-    preferredProvider,
-    preferredModel,
-    anthropicApiKey,
-    openaiApiKey,
-  } = useAISettingsStore()
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
+  const [showConversations, setShowConversations] = useState(false)
 
-  const needsKey =
-    (preferredProvider === 'anthropic' && !anthropicApiKey) ||
-    (preferredProvider === 'openai' && !openaiApiKey)
+  // Queries
+  const { data: conversations = [], isLoading: loadingConversations } = useConversations()
+  const { data: messagesData, isLoading: loadingMessages } = useMessages(selectedConversationId)
+  const messages: ChatMessage[] = messagesData || []
 
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: '/api/chat',
-        body: { provider: preferredProvider, model: preferredModel },
-        headers: {
-          ...(preferredProvider === 'anthropic' && anthropicApiKey
-            ? { 'x-anthropic-key': anthropicApiKey }
-            : {}),
-          ...(preferredProvider === 'openai' && openaiApiKey
-            ? { 'x-openai-key': openaiApiKey }
-            : {}),
-        },
-      }),
-    [preferredProvider, preferredModel, anthropicApiKey, openaiApiKey]
-  )
+  // Mutations
+  const createConversation = useCreateConversation()
+  const deleteConversation = useDeleteConversation()
 
-  const { messages, sendMessage, status, error } = useChat({ transport })
+  // Streaming
+  const { sendMessage, isStreaming, streamedContent, toolCalls, error } =
+    useStreamChat(selectedConversationId)
 
-  const isStreaming = status === 'streaming' || status === 'submitted'
+  // Auto-select first conversation or create new one
+  useEffect(() => {
+    if (!selectedConversationId && conversations.length > 0) {
+      setSelectedConversationId(conversations[0].conversationId)
+    }
+  }, [conversations, selectedConversationId])
 
+  // Auto-scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [messages])
+  }, [messages, streamedContent])
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || needsKey || isStreaming) return
-    sendMessage({ text: input })
-    setInput('')
+  const handleCreateConversation = async () => {
+    try {
+      const result = await createConversation.mutateAsync({ title: 'New Conversation' })
+      setSelectedConversationId(result.conversationId)
+      setShowConversations(false)
+    } catch (err) {
+      console.error('Failed to create conversation:', err)
+    }
   }
+
+  const handleDeleteConversation = async (conversationId: string) => {
+    try {
+      await deleteConversation.mutateAsync(conversationId)
+      if (selectedConversationId === conversationId) {
+        setSelectedConversationId(null)
+      }
+    } catch (err) {
+      console.error('Failed to delete conversation:', err)
+    }
+  }
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!input.trim() || isStreaming) return
+
+    // Create conversation if none selected
+    if (!selectedConversationId) {
+      try {
+        const result = await createConversation.mutateAsync({ title: input.slice(0, 50) })
+        setSelectedConversationId(result.conversationId)
+        // Send message after conversation is created
+        await sendMessage({ content: input })
+        setInput('')
+      } catch (err) {
+        console.error('Failed to create conversation:', err)
+      }
+    } else {
+      await sendMessage({ content: input })
+      setInput('')
+    }
+  }
+
+  const currentConversation = conversations.find(
+    (c) => c.conversationId === selectedConversationId
+  )
 
   return (
     <div className="fixed bottom-24 right-6 z-50 flex h-[520px] w-[400px] flex-col rounded-xl border bg-card shadow-2xl">
@@ -80,65 +104,105 @@ export function AIChatPanel({ onClose }: AIChatPanelProps) {
           <div>
             <h3 className="text-sm font-semibold">AI Assistant</h3>
             <p className="text-[10px] text-muted-foreground">
-              {providerLabels[preferredProvider]} &middot;{' '}
-              {modelLabels[preferredModel] || preferredModel}
+              {currentConversation?.title || 'No conversation'}
             </p>
           </div>
         </div>
-        <button
-          onClick={onClose}
-          className="rounded-md p-1 hover:bg-accent"
-        >
-          <span className="text-lg leading-none">&times;</span>
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowConversations(!showConversations)}
+            className="rounded-md p-1 hover:bg-accent"
+            title="Conversations"
+          >
+            <MessageSquare className="h-4 w-4" />
+          </button>
+          <button onClick={onClose} className="rounded-md p-1 hover:bg-accent">
+            <span className="text-lg leading-none">&times;</span>
+          </button>
+        </div>
       </div>
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {needsKey ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-4">
-            <AlertCircle className="h-10 w-10 text-warning" />
-            <p className="text-sm font-medium">API Key Required</p>
-            <p className="text-xs text-muted-foreground">
-              {preferredProvider === 'anthropic' ? 'Claude' : 'OpenAI'} requires
-              your own API key. Configure it in Settings.
-            </p>
-            <a
-              href="/settings"
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+      {/* Conversations Sidebar (toggled) */}
+      {showConversations && (
+        <div className="border-b bg-muted/50 p-2">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">Conversations</span>
+            <button
+              onClick={handleCreateConversation}
+              disabled={createConversation.isPending}
+              className="rounded-md p-1 hover:bg-accent disabled:opacity-50"
+              title="New conversation"
             >
-              <Settings className="h-3 w-3" />
-              Go to Settings
-            </a>
+              <Plus className="h-3 w-3" />
+            </button>
           </div>
-        ) : messages.length === 0 ? (
+          <div className="max-h-32 space-y-1 overflow-y-auto">
+            {loadingConversations ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : conversations.length === 0 ? (
+              <p className="py-2 text-center text-xs text-muted-foreground">
+                No conversations yet
+              </p>
+            ) : (
+              conversations.map((conv) => (
+                <div
+                  key={conv.conversationId}
+                  className={cn(
+                    'flex items-center justify-between rounded-md px-2 py-1.5 text-xs hover:bg-accent',
+                    conv.conversationId === selectedConversationId && 'bg-accent'
+                  )}
+                >
+                  <button
+                    onClick={() => {
+                      setSelectedConversationId(conv.conversationId)
+                      setShowConversations(false)
+                    }}
+                    className="flex-1 truncate text-left"
+                  >
+                    {conv.title}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteConversation(conv.conversationId)}
+                    disabled={deleteConversation.isPending}
+                    className="rounded-md p-0.5 hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
+        {loadingMessages ? (
+          <div className="flex h-full items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : messages.length === 0 && !streamedContent ? (
           <div className="flex gap-3">
             <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
               AI
             </div>
             <div className="rounded-lg bg-muted px-3 py-2 text-sm">
-              <p>
-                Hi! I can help you with your CRM data and automations. Try
-                asking me:
-              </p>
+              <p>Hi! I can help you with your CRM data and automations. Try asking me:</p>
               <ul className="mt-2 space-y-1 text-muted-foreground">
-                <li>&bull; &quot;How do I set up a tag helper?&quot;</li>
+                <li>&bull; &quot;Show my Keap contacts&quot;</li>
                 <li>&bull; &quot;What helpers work with HubSpot?&quot;</li>
-                <li>&bull; &quot;Help me automate follow-up emails&quot;</li>
+                <li>&bull; &quot;Tag all contacts with email john@example.com as VIP&quot;</li>
               </ul>
             </div>
           </div>
         ) : (
-          messages.map((msg) => {
-            const text = getTextContent(msg)
-            if (!text) return null
-            return (
+          <>
+            {messages.map((msg) => (
               <div
-                key={msg.id}
-                className={cn(
-                  'flex gap-3',
-                  msg.role === 'user' ? 'flex-row-reverse' : ''
-                )}
+                key={msg.messageId}
+                className={cn('flex gap-3', msg.role === 'user' ? 'flex-row-reverse' : '')}
               >
                 <div
                   className={cn(
@@ -153,30 +217,54 @@ export function AIChatPanel({ onClose }: AIChatPanelProps) {
                 <div
                   className={cn(
                     'max-w-[280px] rounded-lg px-3 py-2 text-sm',
-                    msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted'
+                    msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
                   )}
                 >
-                  <p className="whitespace-pre-wrap break-words">{text}</p>
+                  <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                  {msg.toolCalls && msg.toolCalls.length > 0 && (
+                    <div className="mt-2 space-y-1 border-t pt-2 text-xs opacity-75">
+                      {msg.toolCalls.map((tc, i) => (
+                        <div key={i}>
+                          🔧 {tc.function.name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-            )
-          })
-        )}
-        {isStreaming && messages[messages.length - 1]?.role !== 'assistant' && (
-          <div className="flex gap-3">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">
-              AI
-            </div>
-            <div className="rounded-lg bg-muted px-3 py-2">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            </div>
-          </div>
+            ))}
+            {/* Streaming message */}
+            {(isStreaming || streamedContent) && (
+              <div className="flex gap-3">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">
+                  AI
+                </div>
+                <div className="max-w-[280px] rounded-lg bg-muted px-3 py-2 text-sm">
+                  {streamedContent ? (
+                    <>
+                      <p className="whitespace-pre-wrap break-words">{streamedContent}</p>
+                      {toolCalls.length > 0 && (
+                        <div className="mt-2 space-y-1 border-t pt-2 text-xs opacity-75">
+                          {toolCalls.map((tc, i) => (
+                            <div key={i}>
+                              🔧 {tc.function.name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {isStreaming && <span className="animate-pulse">▊</span>}
+                    </>
+                  ) : (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
         {error && (
           <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {error.message || 'An error occurred. Please try again.'}
+            {error}
           </div>
         )}
       </div>
@@ -186,19 +274,15 @@ export function AIChatPanel({ onClose }: AIChatPanelProps) {
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             type="text"
-            placeholder={
-              needsKey
-                ? 'Configure API key first...'
-                : 'Ask anything about your data...'
-            }
+            placeholder="Ask about your CRM data..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            disabled={needsKey || isStreaming}
+            disabled={isStreaming}
             className="flex-1 rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
           />
           <button
             type="submit"
-            disabled={needsKey || isStreaming || !input.trim()}
+            disabled={isStreaming || !input.trim()}
             className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             <Send className="h-4 w-4" />

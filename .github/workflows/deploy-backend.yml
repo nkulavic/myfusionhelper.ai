@@ -208,6 +208,7 @@ jobs:
           - platforms
           - data-explorer
           - billing
+          - chat
     steps:
       - uses: actions/checkout@v4
 
@@ -271,6 +272,9 @@ jobs:
           - notification-worker
           - data-sync
           - executions-stream
+          - sms-chat-webhook
+          - alexa-webhook
+          - google-assistant-webhook
     steps:
       - uses: actions/checkout@v4
 

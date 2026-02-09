@@ -21,6 +21,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/marcboeker/go-duckdb v1.8.5
+	github.com/sashabaranov/go-openai v1.17.9
 	github.com/stretchr/testify v1.11.1
 	github.com/stripe/stripe-go/v82 v82.5.1
 	golang.org/x/oauth2 v0.35.0

@@ -1,0 +1,72 @@
+service: mfh-google-assistant-webhook
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: ${opt:region, 'us-west-2'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 29
+  tracing:
+    lambda: true
+  environment:
+    STAGE: ${self:provider.stage}
+    # DynamoDB tables
+    CHAT_CONVERSATIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatConversationsTableName}
+    CHAT_MESSAGES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatMessagesTableName}
+    # Unified secrets (Groq API key)
+    INTERNAL_SECRETS: ${ssm:/myfusionhelper/${self:provider.stage}/secrets~true}
+  iam:
+    role:
+      statements:
+        # DynamoDB permissions for chat tables
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatConversationsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatConversationsTableArn}/index/*
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatMessagesTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatMessagesTableArn}/index/*
+        # X-Ray tracing
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: '*'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ['provided.al2023']
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+functions:
+  google-assistant-webhook:
+    handler: cmd/handlers/google-assistant-webhook/main.go
+    name: mfh-${self:provider.stage}-google-assistant-webhook
+    description: 'Google Assistant action webhook handler for voice queries'
+    events:
+      - httpApi:
+          path: /google-assistant-webhook
+          method: POST
+          # Reference the shared API Gateway
+          id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+
+resources:
+  Description: Google Assistant Action Webhook Service for MyFusion Helper
+
+package:
+  patterns:
+    - '!./**'
+    - './bootstrap'

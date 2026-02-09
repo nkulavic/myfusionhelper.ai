@@ -1,0 +1,211 @@
+service: mfh-chat
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 29
+  tracing:
+    lambda: true
+    apiGateway: true
+  httpApi:
+    id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+  environment:
+    SERVICE_VERSION: "2025.02.09.0001"
+    STAGE: ${self:provider.stage}
+    COGNITO_USER_POOL_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
+    COGNITO_REGION: ${self:provider.region}
+    USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
+    ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
+    USER_ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableName}
+    CHAT_CONVERSATIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatConversationsTableName}
+    CHAT_MESSAGES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatMessagesTableName}
+    CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
+    API_VERSION: v1
+    API_REFERENCE: mfh-api
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+            - dynamodb:DeleteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:DescribeTable
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatConversationsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatMessagesTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatConversationsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatMessagesTableArn}/index/*"
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+          Resource:
+            - "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+functions:
+  # Public endpoints
+  chat-health:
+    handler: cmd/handlers/chat/main.go
+    description: "Health check endpoint"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: chat-health
+    memorySize: 128
+    timeout: 5
+    environment:
+      FUNCTION_NAME: chat-health
+      ENDPOINT_PATH: /chat/health
+    events:
+      - httpApi:
+          path: /chat/health
+          method: get
+
+  # Protected endpoints
+  conversations-create:
+    handler: cmd/handlers/chat/main.go
+    description: "Create new conversation"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: conversations-create
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: conversations-create
+      ENDPOINT_PATH: /chat/conversations
+    events:
+      - httpApi:
+          path: /chat/conversations
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  conversations-list:
+    handler: cmd/handlers/chat/main.go
+    description: "List conversations for current user"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: conversations-list
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: conversations-list
+      ENDPOINT_PATH: /chat/conversations
+    events:
+      - httpApi:
+          path: /chat/conversations
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  conversations-get:
+    handler: cmd/handlers/chat/main.go
+    description: "Get conversation details"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: conversations-get
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: conversations-get
+      ENDPOINT_PATH: /chat/conversations/{id}
+    events:
+      - httpApi:
+          path: /chat/conversations/{id}
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  conversations-delete:
+    handler: cmd/handlers/chat/main.go
+    description: "Delete conversation"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: conversations-delete
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: conversations-delete
+      ENDPOINT_PATH: /chat/conversations/{id}
+    events:
+      - httpApi:
+          path: /chat/conversations/{id}
+          method: delete
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  messages-create:
+    handler: cmd/handlers/chat/main.go
+    description: "Send message with MCP tool calling"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: messages-create
+    memorySize: 512
+    timeout: 29
+    environment:
+      FUNCTION_NAME: messages-create
+      ENDPOINT_PATH: /chat/conversations/{id}/messages
+    events:
+      - httpApi:
+          path: /chat/conversations/{id}/messages
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  messages-list:
+    handler: cmd/handlers/chat/main.go
+    description: "List messages in conversation"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: messages-list
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: messages-list
+      ENDPOINT_PATH: /chat/conversations/{id}/messages
+    events:
+      - httpApi:
+          path: /chat/conversations/{id}/messages
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}

@@ -357,6 +357,80 @@ resources:
           - AttributeName: account_email
             KeyType: HASH
 
+    # Chat Conversations Table (MCP chat service)
+    ChatConversationsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-chat-conversations
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: conversation_id
+            AttributeType: S
+          - AttributeName: account_id
+            AttributeType: S
+          - AttributeName: created_at
+            AttributeType: S
+        KeySchema:
+          - AttributeName: conversation_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: AccountIdIndex
+            KeySchema:
+              - AttributeName: account_id
+                KeyType: HASH
+              - AttributeName: created_at
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    # Chat Messages Table (MCP chat service)
+    ChatMessagesTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-chat-messages
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        AttributeDefinitions:
+          - AttributeName: message_id
+            AttributeType: S
+          - AttributeName: conversation_id
+            AttributeType: S
+          - AttributeName: sequence
+            AttributeType: N
+        KeySchema:
+          - AttributeName: message_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: ConversationIdIndex
+            KeySchema:
+              - AttributeName: conversation_id
+                KeyType: HASH
+              - AttributeName: sequence
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    # Phone Mappings Table (SMS chat feature)
+    PhoneMappingsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-phone-mappings
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        AttributeDefinitions:
+          - AttributeName: phone_number
+            AttributeType: S
+        KeySchema:
+          - AttributeName: phone_number
+            KeyType: HASH
+
   Outputs:
     UsersTableName:
       Value: !Ref UsersTable
@@ -482,3 +556,183 @@ resources:
       Value: !GetAtt EmailValidationsTable.Arn
       Export:
         Name: ${self:service}-${self:provider.stage}-EmailValidationsTableArn
+
+    ChatConversationsTableName:
+      Value: !Ref ChatConversationsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ChatConversationsTableName
+    ChatConversationsTableArn:
+      Value: !GetAtt ChatConversationsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ChatConversationsTableArn
+
+    ChatMessagesTableName:
+      Value: !Ref ChatMessagesTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ChatMessagesTableName
+    ChatMessagesTableArn:
+      Value: !GetAtt ChatMessagesTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ChatMessagesTableArn
+
+    PhoneMappingsTableName:
+      Value: !Ref PhoneMappingsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PhoneMappingsTableName
+    PhoneMappingsTableArn:
+      Value: !GetAtt PhoneMappingsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PhoneMappingsTableArn
+
+  Outputs:
+    UsersTableName:
+      Value: !Ref UsersTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UsersTableName
+    UsersTableArn:
+      Value: !GetAtt UsersTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UsersTableArn
+    UsersTableStreamArn:
+      Value: !GetAtt UsersTable.StreamArn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UsersTableStreamArn
+
+    AccountsTableName:
+      Value: !Ref AccountsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AccountsTableName
+    AccountsTableArn:
+      Value: !GetAtt AccountsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AccountsTableArn
+
+    UserAccountsTableName:
+      Value: !Ref UserAccountsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UserAccountsTableName
+    UserAccountsTableArn:
+      Value: !GetAtt UserAccountsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UserAccountsTableArn
+
+    ApiKeysTableName:
+      Value: !Ref ApiKeysTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ApiKeysTableName
+    ApiKeysTableArn:
+      Value: !GetAtt ApiKeysTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ApiKeysTableArn
+
+    ConnectionsTableName:
+      Value: !Ref ConnectionsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ConnectionsTableName
+    ConnectionsTableArn:
+      Value: !GetAtt ConnectionsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ConnectionsTableArn
+
+    HelpersTableName:
+      Value: !Ref HelpersTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HelpersTableName
+    HelpersTableArn:
+      Value: !GetAtt HelpersTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HelpersTableArn
+
+    ExecutionsTableName:
+      Value: !Ref ExecutionsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ExecutionsTableName
+    ExecutionsTableArn:
+      Value: !GetAtt ExecutionsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ExecutionsTableArn
+    ExecutionsTableStreamArn:
+      Value: !GetAtt ExecutionsTable.StreamArn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ExecutionsTableStreamArn
+
+    PlatformsTableName:
+      Value: !Ref PlatformsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PlatformsTableName
+    PlatformsTableArn:
+      Value: !GetAtt PlatformsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PlatformsTableArn
+
+    PlatformConnectionAuthsTableName:
+      Value: !Ref PlatformConnectionAuthsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PlatformConnectionAuthsTableName
+    PlatformConnectionAuthsTableArn:
+      Value: !GetAtt PlatformConnectionAuthsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PlatformConnectionAuthsTableArn
+
+    OAuthStatesTableName:
+      Value: !Ref OAuthStatesTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OAuthStatesTableName
+    OAuthStatesTableArn:
+      Value: !GetAtt OAuthStatesTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OAuthStatesTableArn
+
+    RateLimitsTableName:
+      Value: !Ref RateLimitsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-RateLimitsTableName
+    RateLimitsTableArn:
+      Value: !GetAtt RateLimitsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-RateLimitsTableArn
+
+    CountdownTimersTableName:
+      Value: !Ref CountdownTimersTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CountdownTimersTableName
+    CountdownTimersTableArn:
+      Value: !GetAtt CountdownTimersTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CountdownTimersTableArn
+
+    EmailValidationsTableName:
+      Value: !Ref EmailValidationsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailValidationsTableName
+    EmailValidationsTableArn:
+      Value: !GetAtt EmailValidationsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailValidationsTableArn
+
+    ChatConversationsTableName:
+      Value: !Ref ChatConversationsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ChatConversationsTableName
+    ChatConversationsTableArn:
+      Value: !GetAtt ChatConversationsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ChatConversationsTableArn
+
+    ChatMessagesTableName:
+      Value: !Ref ChatMessagesTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ChatMessagesTableName
+    ChatMessagesTableArn:
+      Value: !GetAtt ChatMessagesTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ChatMessagesTableArn
+
+    PhoneMappingsTableName:
+      Value: !Ref PhoneMappingsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PhoneMappingsTableName
+    PhoneMappingsTableArn:
+      Value: !GetAtt PhoneMappingsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PhoneMappingsTableArn
