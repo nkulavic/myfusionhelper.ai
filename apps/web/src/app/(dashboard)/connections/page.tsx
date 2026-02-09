@@ -164,32 +164,83 @@ export default function ConnectionsPage() {
               ))}
             </div>
           ) : platforms && platforms.length > 0 ? (
-            <div className="animate-stagger-in grid gap-4 sm:grid-cols-2">
-              {platforms.map((platform) => (
-                <button
-                  key={platform.platformId}
-                  onClick={() => setSelectedPlatform(platform)}
-                  className="card-hover flex flex-col items-start rounded-lg border bg-card p-5 text-left transition-all hover:border-primary active:scale-[0.98]"
-                >
-                  <PlatformLogo definition={platform} size={48} className="mb-3" />
-                  <h3 className="mb-1 font-semibold">{platform.name}</h3>
-                  <div className="mb-3 flex flex-wrap gap-1">
-                    {platform.capabilities.slice(0, 3).map((cap) => (
-                      <span key={cap} className="rounded bg-muted px-1.5 py-0.5 text-[10px] capitalize">
-                        {cap}
-                      </span>
-                    ))}
+            <>
+              {/* CRM Platforms */}
+              {platforms.filter((p) => p.types?.includes('crm')).length > 0 && (
+                <div className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground">Primary CRM Platforms</h3>
+                    <p className="text-xs text-muted-foreground/70">Connect your main CRM platform</p>
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    {platform.apiConfig.authType === 'oauth2' ? (
-                      <><Shield className="h-3 w-3" /> OAuth 2.0</>
-                    ) : (
-                      <><Key className="h-3 w-3" /> API Key</>
-                    )}
+                  <div className="animate-stagger-in grid gap-4 sm:grid-cols-2">
+                    {platforms
+                      .filter((p) => p.types?.includes('crm'))
+                      .map((platform) => (
+                        <button
+                          key={platform.platformId}
+                          onClick={() => setSelectedPlatform(platform)}
+                          className="card-hover flex flex-col items-start rounded-lg border bg-card p-5 text-left transition-all hover:border-primary active:scale-[0.98]"
+                        >
+                          <PlatformLogo definition={platform} size={48} className="mb-3" />
+                          <h3 className="mb-1 font-semibold">{platform.name}</h3>
+                          <div className="mb-3 flex flex-wrap gap-1">
+                            {platform.capabilities.slice(0, 3).map((cap) => (
+                              <span key={cap} className="rounded bg-muted px-1.5 py-0.5 text-[10px] capitalize">
+                                {cap}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            {platform.apiConfig.authType === 'oauth2' ? (
+                              <><Shield className="h-3 w-3" /> OAuth 2.0</>
+                            ) : (
+                              <><Key className="h-3 w-3" /> API Key</>
+                            )}
+                          </div>
+                        </button>
+                      ))}
                   </div>
-                </button>
-              ))}
-            </div>
+                </div>
+              )}
+
+              {/* Integration Platforms */}
+              {platforms.filter((p) => p.types?.includes('integration')).length > 0 && (
+                <div className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground">Integration Platforms</h3>
+                    <p className="text-xs text-muted-foreground/70">Additional services for helper automation</p>
+                  </div>
+                  <div className="animate-stagger-in grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {platforms
+                      .filter((p) => p.types?.includes('integration'))
+                      .map((platform) => (
+                        <button
+                          key={platform.platformId}
+                          onClick={() => setSelectedPlatform(platform)}
+                          className="card-hover flex flex-col items-start rounded-lg border bg-card p-5 text-left transition-all hover:border-primary active:scale-[0.98]"
+                        >
+                          <PlatformLogo definition={platform} size={48} className="mb-3" />
+                          <h3 className="mb-1 font-semibold">{platform.name}</h3>
+                          <div className="mb-3 flex flex-wrap gap-1">
+                            {platform.capabilities.slice(0, 3).map((cap) => (
+                              <span key={cap} className="rounded bg-muted px-1.5 py-0.5 text-[10px] capitalize">
+                                {cap}
+                              </span>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            {platform.apiConfig.authType === 'oauth2' ? (
+                              <><Shield className="h-3 w-3" /> OAuth 2.0</>
+                            ) : (
+                              <><Key className="h-3 w-3" /> API Key</>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
               <AlertCircle className="mb-4 h-12 w-12 text-muted-foreground/50" />
@@ -565,42 +616,95 @@ export default function ConnectionsPage() {
 
       {/* Available Platforms */}
       {platforms && platforms.length > 0 && (
-        <div>
-          <h2 className="mb-4 text-lg font-semibold">Available Platforms</h2>
-          <div className="animate-stagger-in grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {platforms.map((platform) => {
-              const connectedCount = connections?.filter((c) => c.platformId === platform.platformId).length || 0
-              return (
-                <div
-                  key={platform.platformId}
-                  className="card-hover relative overflow-hidden rounded-lg border bg-card p-4 transition-all hover:border-primary/50"
-                >
-                  <div
-                    className="absolute inset-x-0 top-0 h-[3px]"
-                    style={{ backgroundColor: platform.displayConfig?.color || 'hsl(var(--primary))' }}
-                  />
-                  <PlatformLogo definition={platform} size={48} className="mb-3" />
-                  <h3 className="font-semibold">{platform.name}</h3>
-                  <div className="mb-3 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70">
-                    {platform.apiConfig.authType === 'oauth2' ? 'OAuth 2.0' : 'API Key'}
-                    {connectedCount > 0 && (
-                      <span className="ml-1 rounded-full bg-success/10 px-1.5 py-0.5 text-success normal-case">
-                        {connectedCount} connected
-                      </span>
-                    )}
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => { setSelectedPlatform(platform); setView('add') }}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Connect
-                  </Button>
-                </div>
-              )
-            })}
-          </div>
+        <div className="space-y-8">
+          {/* CRM Platforms */}
+          {platforms.filter((p) => p.types?.includes('crm')).length > 0 && (
+            <div>
+              <h2 className="mb-4 text-lg font-semibold">Primary CRM Platforms</h2>
+              <div className="animate-stagger-in grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {platforms
+                  .filter((p) => p.types?.includes('crm'))
+                  .map((platform) => {
+                    const connectedCount = connections?.filter((c) => c.platformId === platform.platformId).length || 0
+                    return (
+                      <div
+                        key={platform.platformId}
+                        className="card-hover relative overflow-hidden rounded-lg border bg-card p-4 transition-all hover:border-primary/50"
+                      >
+                        <div
+                          className="absolute inset-x-0 top-0 h-[3px]"
+                          style={{ backgroundColor: platform.displayConfig?.color || 'hsl(var(--primary))' }}
+                        />
+                        <PlatformLogo definition={platform} size={48} className="mb-3" />
+                        <h3 className="font-semibold">{platform.name}</h3>
+                        <div className="mb-3 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                          {platform.apiConfig.authType === 'oauth2' ? 'OAuth 2.0' : 'API Key'}
+                          {connectedCount > 0 && (
+                            <span className="ml-1 rounded-full bg-success/10 px-1.5 py-0.5 text-success normal-case">
+                              {connectedCount} connected
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => { setSelectedPlatform(platform); setView('add') }}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Connect
+                        </Button>
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* Integration Platforms */}
+          {platforms.filter((p) => p.types?.includes('integration')).length > 0 && (
+            <div>
+              <h2 className="mb-4 text-lg font-semibold">Integration Platforms</h2>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Connect additional services to extend helper automation capabilities
+              </p>
+              <div className="animate-stagger-in grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {platforms
+                  .filter((p) => p.types?.includes('integration'))
+                  .map((platform) => {
+                    const connectedCount = connections?.filter((c) => c.platformId === platform.platformId).length || 0
+                    return (
+                      <div
+                        key={platform.platformId}
+                        className="card-hover relative overflow-hidden rounded-lg border bg-card p-4 transition-all hover:border-primary/50"
+                      >
+                        <div
+                          className="absolute inset-x-0 top-0 h-[3px]"
+                          style={{ backgroundColor: platform.displayConfig?.color || 'hsl(var(--primary))' }}
+                        />
+                        <PlatformLogo definition={platform} size={48} className="mb-3" />
+                        <h3 className="font-semibold">{platform.name}</h3>
+                        <div className="mb-3 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+                          {platform.apiConfig.authType === 'oauth2' ? 'OAuth 2.0' : 'API Key'}
+                          {connectedCount > 0 && (
+                            <span className="ml-1 rounded-full bg-success/10 px-1.5 py-0.5 text-success normal-case">
+                              {connectedCount} connected
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => { setSelectedPlatform(platform); setView('add') }}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Connect
+                        </Button>
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
