@@ -328,16 +328,6 @@ jobs:
           role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
           aws-region: us-west-2
 
-      - name: Install seed dependencies
-        working-directory: backend/golang/services/api/platforms/ci_cd/seed
-        run: npm install
-
-      - name: Seed platforms
-        working-directory: backend/golang/services/api/platforms/ci_cd/seed
-        env:
-          STAGE: ${{ env.DEPLOY_STAGE }}
-        run: node seed.js
-
       - name: Verify deployment
         working-directory: backend/golang/scripts
         run: bash verify-deploy.sh ${{ env.DEPLOY_STAGE }} us-west-2
