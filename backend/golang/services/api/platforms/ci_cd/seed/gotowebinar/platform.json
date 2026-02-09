@@ -7,7 +7,7 @@
   "description": "Webinar hosting and online event management platform for businesses",
   "status": "active",
   "version": "v2",
-  "logo_url": "/images/platforms/gotowebinar.png",
+  "logo_url": "/images/platforms/gotowebinar.svg",
   "documentation_url": "https://developer.goto.com/GoToWebinarV2/",
   "oauth": {
     "auth_url": "https://authentication.logmeininc.com/oauth/authorize",

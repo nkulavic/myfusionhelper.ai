@@ -7,7 +7,7 @@
   "description": "Video conferencing, webinars, and online meetings platform for businesses",
   "status": "active",
   "version": "v2",
-  "logo_url": "/images/platforms/zoom.png",
+  "logo_url": "/images/platforms/zoom.svg",
   "documentation_url": "https://developers.zoom.us/docs/api/",
   "oauth": {
     "auth_url": "https://zoom.us/oauth/authorize",
