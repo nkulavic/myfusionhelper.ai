@@ -124,6 +124,7 @@ type Platform struct {
 	Name             string              `json:"name" dynamodbav:"name"`
 	Slug             string              `json:"slug" dynamodbav:"slug"`
 	Category         string              `json:"category" dynamodbav:"category"`
+	Types            []string            `json:"types" dynamodbav:"types"`
 	Description      string              `json:"description" dynamodbav:"description"`
 	Status           string              `json:"status" dynamodbav:"status"`
 	Version          string              `json:"version" dynamodbav:"version"`
