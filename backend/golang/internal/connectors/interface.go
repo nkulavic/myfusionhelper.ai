@@ -99,9 +99,10 @@ const (
 
 // ConnectorConfig holds authentication and configuration for a connector instance
 type ConnectorConfig struct {
-	AccessToken string `json:"access_token"`
-	APIKey      string `json:"api_key,omitempty"`
-	APISecret   string `json:"api_secret,omitempty"`
-	BaseURL     string `json:"base_url,omitempty"`
-	AccountID   string `json:"account_id,omitempty"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	APIKey       string `json:"api_key,omitempty"`
+	APISecret    string `json:"api_secret,omitempty"`
+	BaseURL      string `json:"base_url,omitempty"`
+	AccountID    string `json:"account_id,omitempty"`
 }

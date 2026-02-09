@@ -195,10 +195,11 @@ func LoadServiceAuth(ctx context.Context, db *dynamodb.Client, connectionID, acc
 	}
 
 	return &connectors.ConnectorConfig{
-		AccessToken: auth.AccessToken,
-		APIKey:      auth.APIKey,
-		APISecret:   auth.APISecret,
-		BaseURL:     platform.APIConfig.BaseURL,
-		AccountID:   connection.ExternalAppID,
+		AccessToken:  auth.AccessToken,
+		RefreshToken: auth.RefreshToken,
+		APIKey:       auth.APIKey,
+		APISecret:    auth.APISecret,
+		BaseURL:      platform.APIConfig.BaseURL,
+		AccountID:    connection.ExternalAppID,
 	}, nil
 }
