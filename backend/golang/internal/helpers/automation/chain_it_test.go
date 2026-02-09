@@ -60,6 +60,9 @@ func (m *mockConnectorForChainIt) GetMetadata() connectors.ConnectorMetadata {
 func (m *mockConnectorForChainIt) GetCapabilities() []connectors.Capability {
 	return []connectors.Capability{connectors.CapContacts}
 }
+func (m *mockConnectorForChainIt) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	return fmt.Errorf("not implemented")
+}
 
 // Tests
 

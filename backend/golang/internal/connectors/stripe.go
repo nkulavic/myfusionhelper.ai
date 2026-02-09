@@ -261,6 +261,14 @@ func (s *StripeConnector) AchieveGoal(_ context.Context, _ string, _ string, _ s
 	return NewConnectorError(stripeSlug, 501, "Stripe does not support goal achievement", false)
 }
 
+// ========== MARKETING ==========
+
+func (s *StripeConnector) SetOptInStatus(_ context.Context, _ string, _ bool, _ string) error {
+	// Stripe customers don't have built-in marketing opt-in status
+	// This would typically be managed in a separate marketing platform
+	return NewConnectorError(stripeSlug, 501, "Stripe does not support email opt-in management", false)
+}
+
 // ========== HEALTH ==========
 
 func (s *StripeConnector) TestConnection(ctx context.Context) error {

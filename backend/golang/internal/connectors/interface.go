@@ -29,6 +29,9 @@ type CRMConnector interface {
 	TriggerAutomation(ctx context.Context, contactID string, automationID string) error
 	AchieveGoal(ctx context.Context, contactID string, goalName string, integration string) error
 
+	// Marketing / Opt-In
+	SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error
+
 	// Health & Metadata
 	TestConnection(ctx context.Context) error
 	GetMetadata() ConnectorMetadata

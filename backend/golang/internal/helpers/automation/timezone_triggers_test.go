@@ -83,6 +83,9 @@ func (m *mockConnectorForTimezoneTriggers) GetMetadata() connectors.ConnectorMet
 func (m *mockConnectorForTimezoneTriggers) GetCapabilities() []connectors.Capability {
 	return []connectors.Capability{connectors.CapContacts, connectors.CapGoals}
 }
+func (m *mockConnectorForTimezoneTriggers) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	return nil
+}
 
 func TestTimezoneTriggers_GetMetadata(t *testing.T) {
 	h := &TimezoneTriggers{}

@@ -94,6 +94,10 @@ func (m *mockConnectorForActionIt) GetCapabilities() []connectors.Capability {
 	return []connectors.Capability{connectors.CapContacts, connectors.CapAutomations}
 }
 
+func (m *mockConnectorForActionIt) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	return nil
+}
+
 // Tests
 
 func TestActionIt_GetMetadata(t *testing.T) {

@@ -336,6 +336,34 @@ func (g *GoHighLevelConnector) AchieveGoal(_ context.Context, _ string, _ string
 	return NewConnectorError(ghlSlug, 501, "GoHighLevel does not support goal achievement", false)
 }
 
+// ========== MARKETING ==========
+
+func (g *GoHighLevelConnector) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	// GoHighLevel manages opt-in via DND (Do Not Disturb) settings and email/SMS consent
+	// https://highlevel.stoplight.io/docs/integrations/83f5f97c3ec59-update-contact
+	// dndSettings: { Email: { status: "active" | "inactive" } }
+
+	status := "inactive"
+	if optIn {
+		status = "active"
+	}
+
+	updates := map[string]interface{}{
+		"dndSettings": map[string]interface{}{
+			"Email": map[string]interface{}{
+				"status": status,
+			},
+		},
+	}
+
+	// Add reason to notes if provided
+	if reason != "" {
+		updates["notes"] = fmt.Sprintf("Opt-in status updated: %s. Reason: %s", status, reason)
+	}
+
+	return g.doRequest(ctx, "PUT", "/contacts/"+contactID, updates, nil)
+}
+
 // ========== HEALTH ==========
 
 func (g *GoHighLevelConnector) TestConnection(ctx context.Context) error {

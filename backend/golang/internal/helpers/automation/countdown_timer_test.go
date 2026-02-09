@@ -70,6 +70,9 @@ func (m *mockConnectorForTimer) GetMetadata() connectors.ConnectorMetadata {
 func (m *mockConnectorForTimer) GetCapabilities() []connectors.Capability {
 	return nil
 }
+func (m *mockConnectorForTimer) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	return nil
+}
 
 // Test helper metadata
 func TestCountdownTimer_Metadata(t *testing.T) {

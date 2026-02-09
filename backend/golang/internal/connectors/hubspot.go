@@ -274,6 +274,32 @@ func (h *HubSpotConnector) AchieveGoal(_ context.Context, _ string, _ string, _ 
 	return NewConnectorError(hubspotSlug, 501, "HubSpot does not support goal achievement", false)
 }
 
+// ========== MARKETING ==========
+
+func (h *HubSpotConnector) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	// HubSpot manages marketing email opt-in via specific properties
+	// https://developers.hubspot.com/docs/api/crm/contacts
+	// hs_email_optout: true = opted out, false = opted in
+
+	optOutValue := "true"
+	if optIn {
+		optOutValue = "false"
+	}
+
+	updates := map[string]interface{}{
+		"properties": map[string]interface{}{
+			"hs_email_optout": optOutValue,
+		},
+	}
+
+	// Add reason to notes if provided
+	if reason != "" {
+		updates["properties"].(map[string]interface{})["hs_note"] = fmt.Sprintf("Opt-in status updated: %s. Reason: %s", optOutValue, reason)
+	}
+
+	return h.doRequest(ctx, "PATCH", "/crm/v3/objects/contacts/"+contactID, updates, nil)
+}
+
 // ========== HEALTH ==========
 
 func (h *HubSpotConnector) TestConnection(ctx context.Context) error {

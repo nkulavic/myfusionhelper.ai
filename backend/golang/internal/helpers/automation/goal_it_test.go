@@ -39,6 +39,7 @@ func (m *mockConnectorForGoalIt) TriggerAutomation(ctx context.Context, contactI
 func (m *mockConnectorForGoalIt) TestConnection(ctx context.Context) error { return fmt.Errorf("not implemented") }
 func (m *mockConnectorForGoalIt) GetMetadata() connectors.ConnectorMetadata { return connectors.ConnectorMetadata{PlatformSlug: "keap"} }
 func (m *mockConnectorForGoalIt) GetCapabilities() []connectors.Capability { return []connectors.Capability{connectors.CapGoals} }
+func (m *mockConnectorForGoalIt) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error { return fmt.Errorf("not implemented") }
 
 func TestGoalIt_GetMetadata(t *testing.T) {
 	h := &GoalIt{}

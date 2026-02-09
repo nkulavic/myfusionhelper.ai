@@ -339,6 +339,34 @@ func (o *OntraportConnector) AchieveGoal(_ context.Context, _ string, _ string, 
 	return NewConnectorError(ontraportSlug, 501, "Ontraport does not support goal achievement", false)
 }
 
+// ========== MARKETING ==========
+
+func (o *OntraportConnector) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	// Ontraport manages bulk mail status via specific fields
+	// https://api.ontraport.com/doc/#update-an-object
+	// bulk_mail: 0 = Unsubscribed, 1 = Single Opt-In, 2 = Double Opt-In, 3 = Pending (requires confirmation)
+
+	var bulkMailValue string
+	if optIn {
+		bulkMailValue = "1" // Single Opt-In
+	} else {
+		bulkMailValue = "0" // Unsubscribed
+	}
+
+	updates := map[string]interface{}{
+		"objectID": ontraportContactObjectID,
+		"id":       contactID,
+		"bulk_mail": bulkMailValue,
+	}
+
+	// Add reason to custom field if provided
+	if reason != "" {
+		updates["note"] = fmt.Sprintf("Opt-in status updated: %s. Reason: %s", bulkMailValue, reason)
+	}
+
+	return o.doRequest(ctx, "PUT", "/objects", updates, nil)
+}
+
 // ========== HEALTH ==========
 
 func (o *OntraportConnector) TestConnection(ctx context.Context) error {

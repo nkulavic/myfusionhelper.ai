@@ -93,6 +93,9 @@ func (m *mockConnectorForRouting) GetMetadata() connectors.ConnectorMetadata {
 func (m *mockConnectorForRouting) GetCapabilities() []connectors.Capability {
 	return nil
 }
+func (m *mockConnectorForRouting) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	return nil
+}
 
 func TestRouteItByCustom_Metadata(t *testing.T) {
 	helper := &RouteItByCustom{}

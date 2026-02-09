@@ -64,6 +64,7 @@ func (m *mockConnectorForDripIt) AchieveGoal(ctx context.Context, contactID stri
 func (m *mockConnectorForDripIt) TestConnection(ctx context.Context) error { return fmt.Errorf("not implemented") }
 func (m *mockConnectorForDripIt) GetMetadata() connectors.ConnectorMetadata { return connectors.ConnectorMetadata{PlatformSlug: "test"} }
 func (m *mockConnectorForDripIt) GetCapabilities() []connectors.Capability { return []connectors.Capability{connectors.CapContacts} }
+func (m *mockConnectorForDripIt) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error { return fmt.Errorf("not implemented") }
 
 func TestDripIt_GetMetadata(t *testing.T) {
 	h := &DripIt{}

@@ -355,6 +355,39 @@ func (a *ActiveCampaignConnector) AchieveGoal(_ context.Context, _ string, _ str
 	return NewConnectorError(acSlug, 501, "ActiveCampaign does not support goal achievement", false)
 }
 
+// ========== MARKETING ==========
+
+func (a *ActiveCampaignConnector) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	// ActiveCampaign manages email status via contact fields
+	// https://developers.activecampaign.com/reference/update-a-contact-new
+	// Fields: 0 = Unconfirmed, 1 = Active, 2 = Unsubscribed, 3 = Bounced
+
+	var fieldValue string
+	if optIn {
+		fieldValue = "1" // Active
+	} else {
+		fieldValue = "2" // Unsubscribed
+	}
+
+	updates := map[string]interface{}{
+		"contact": map[string]interface{}{
+			"fieldValues": []map[string]interface{}{
+				{
+					"field": "email_status",
+					"value": fieldValue,
+				},
+			},
+		},
+	}
+
+	// Add reason to note if provided
+	if reason != "" {
+		updates["contact"].(map[string]interface{})["note"] = fmt.Sprintf("Opt-in status updated: %s. Reason: %s", fieldValue, reason)
+	}
+
+	return a.doRequest(ctx, "PUT", "/contacts/"+contactID, updates, nil)
+}
+
 // ========== HEALTH ==========
 
 func (a *ActiveCampaignConnector) TestConnection(ctx context.Context) error {

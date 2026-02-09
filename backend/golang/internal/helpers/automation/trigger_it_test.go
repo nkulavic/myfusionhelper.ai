@@ -39,6 +39,7 @@ func (m *mockConnectorForTriggerIt) AchieveGoal(ctx context.Context, contactID s
 func (m *mockConnectorForTriggerIt) TestConnection(ctx context.Context) error { return fmt.Errorf("not implemented") }
 func (m *mockConnectorForTriggerIt) GetMetadata() connectors.ConnectorMetadata { return connectors.ConnectorMetadata{PlatformSlug: "test"} }
 func (m *mockConnectorForTriggerIt) GetCapabilities() []connectors.Capability { return []connectors.Capability{connectors.CapAutomations} }
+func (m *mockConnectorForTriggerIt) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error { return fmt.Errorf("not implemented") }
 
 func TestTriggerIt_GetMetadata(t *testing.T) {
 	h := &TriggerIt{}

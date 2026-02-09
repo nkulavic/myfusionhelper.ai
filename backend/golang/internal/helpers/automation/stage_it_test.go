@@ -52,6 +52,7 @@ func (m *mockConnectorForStageIt) TriggerAutomation(ctx context.Context, contact
 func (m *mockConnectorForStageIt) TestConnection(ctx context.Context) error { return fmt.Errorf("not implemented") }
 func (m *mockConnectorForStageIt) GetMetadata() connectors.ConnectorMetadata { return connectors.ConnectorMetadata{PlatformSlug: "keap"} }
 func (m *mockConnectorForStageIt) GetCapabilities() []connectors.Capability { return []connectors.Capability{connectors.CapDeals} }
+func (m *mockConnectorForStageIt) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error { return fmt.Errorf("not implemented") }
 
 func TestStageIt_GetMetadata(t *testing.T) {
 	h := &StageIt{}

@@ -331,6 +331,30 @@ func (k *KeapConnector) AchieveGoal(ctx context.Context, contactID string, goalN
 	return k.doRequest(ctx, "POST", "/funnel/achieve?"+params.Encode(), nil, nil)
 }
 
+// ========== MARKETING ==========
+
+func (k *KeapConnector) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	// Keap's email status field: https://developer.infusionsoft.com/docs/rest/#!/Contact/updatePropertiesOnContactUsingPATCH
+	// email_status values: Single Opt In, Double Opt In, Confirmed, UnMarketable, NonMarketable
+	// For simple opt-in automation, we use: Single Opt In (opted in) or UnMarketable (opted out)
+
+	status := "UnMarketable"
+	if optIn {
+		status = "Single Opt In"
+	}
+
+	updates := map[string]interface{}{
+		"email_status": status,
+	}
+
+	// Add reason to notes if provided
+	if reason != "" {
+		updates["notes"] = fmt.Sprintf("Opt-in status updated: %s. Reason: %s", status, reason)
+	}
+
+	return k.doRequest(ctx, "PATCH", "/contacts/"+contactID, updates, nil)
+}
+
 // ========== HEALTH ==========
 
 func (k *KeapConnector) TestConnection(ctx context.Context) error {
