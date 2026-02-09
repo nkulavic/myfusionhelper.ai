@@ -1,9 +1,16 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Search, Plus, Filter, Sparkles, Loader2 } from 'lucide-react'
+import { Search, Plus, Filter, Sparkles, Loader2, ArrowUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import type { HelperTypeDefinition } from '@myfusionhelper/types'
 import {
@@ -90,6 +97,7 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: Helpe
   const [searchQuery, setSearchQuery] = useState('')
   const [showAvailableOnly, setShowAvailableOnly] = useState(false)
   const [selectedCRM, setSelectedCRM] = useState(crmFilter ?? 'all')
+  const [sortBy, setSortBy] = useState<'name-asc' | 'name-desc' | 'category' | 'popular'>('name-asc')
 
   // Merge backend types with static catalog for icons/popularity metadata
   const catalogItems = useMemo(() => {
@@ -119,7 +127,7 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: Helpe
   }, [catalogItems])
 
   const filteredHelpers = useMemo(() => {
-    return catalogItems.filter((helper) => {
+    const filtered = catalogItems.filter((helper) => {
       const matchesCategory =
         selectedCategory === 'all' || helper.category === selectedCategory
       const matchesSearch =
@@ -133,7 +141,29 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: Helpe
         helper.supportedCRMs.includes(selectedCRM)
       return matchesCategory && matchesSearch && matchesAvailability && matchesCRM
     })
-  }, [catalogItems, selectedCategory, searchQuery, showAvailableOnly, selectedCRM])
+
+    // Sort the filtered results
+    return filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'name-asc':
+          return a.name.localeCompare(b.name)
+        case 'name-desc':
+          return b.name.localeCompare(a.name)
+        case 'category':
+          return a.category === b.category
+            ? a.name.localeCompare(b.name)
+            : a.category.localeCompare(b.category)
+        case 'popular':
+          // Popular first, then by name
+          if (a.popular === b.popular) {
+            return a.name.localeCompare(b.name)
+          }
+          return a.popular ? -1 : 1
+        default:
+          return 0
+      }
+    })
+  }, [catalogItems, selectedCategory, searchQuery, showAvailableOnly, selectedCRM, sortBy])
 
   const availableCount = filteredHelpers.filter((h) => h.status === 'available').length
   const comingSoonCount = filteredHelpers.filter((h) => h.status === 'coming_soon').length
@@ -183,6 +213,18 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: Helpe
             <option key={p.slug} value={p.slug}>{p.name}</option>
           ))}
         </select>
+        <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
+          <SelectTrigger className="w-[180px]">
+            <ArrowUpDown className="mr-2 h-4 w-4" />
+            <SelectValue placeholder="Sort by..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+            <SelectItem value="name-desc">Name (Z-A)</SelectItem>
+            <SelectItem value="category">Category</SelectItem>
+            <SelectItem value="popular">Popular First</SelectItem>
+          </SelectContent>
+        </Select>
         <Button
           variant={showAvailableOnly ? 'default' : 'outline'}
           onClick={() => setShowAvailableOnly(!showAvailableOnly)}

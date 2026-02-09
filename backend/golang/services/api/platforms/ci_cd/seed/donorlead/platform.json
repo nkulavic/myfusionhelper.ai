@@ -3,10 +3,11 @@
   "slug": "donorlead",
   "name": "DonorLead",
   "category": "data",
+  "types": ["integration", "data"],
   "description": "Donor data enrichment and prospect research platform for nonprofits",
   "status": "active",
   "version": "v2.1",
-  "logo_url": "https://assets.myfusionhelper.ai/platforms/donorlead-logo.svg",
+  "logo_url": "/images/platforms/donorlead.png",
   "documentation_url": "https://data.donorlead.net/docs",
   "api_config": {
     "base_url": "https://data.donorlead.net/v2.1",

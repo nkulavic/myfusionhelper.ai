@@ -28,7 +28,8 @@ export function usePlatforms() {
     queryKey: ['platforms'],
     queryFn: async () => {
       const res = await connectionsApi.listPlatforms()
-      return Array.isArray(res.data) ? res.data : []
+      // Backend returns { platforms: [...], total: number } in res.data
+      return Array.isArray(res.data?.platforms) ? res.data.platforms : []
     },
   })
 }

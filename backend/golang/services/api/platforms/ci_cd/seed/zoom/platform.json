@@ -3,10 +3,11 @@
   "slug": "zoom",
   "name": "Zoom",
   "category": "webinar",
+  "types": ["integration", "webinar"],
   "description": "Video conferencing, webinars, and online meetings platform for businesses",
   "status": "active",
   "version": "v2",
-  "logo_url": "https://assets.myfusionhelper.ai/platforms/zoom-logo.svg",
+  "logo_url": "/images/platforms/zoom.png",
   "documentation_url": "https://developers.zoom.us/docs/api/",
   "oauth": {
     "auth_url": "https://zoom.us/oauth/authorize",

@@ -1,0 +1,16 @@
+{
+  "name": "mfh-platform-seed",
+  "version": "1.0.0",
+  "description": "Seed platform definitions into DynamoDB",
+  "private": true,
+  "main": "seed.js",
+  "scripts": {
+    "seed": "node seed.js",
+    "seed:dev": "node seed.js dev us-west-2",
+    "seed:prod": "node seed.js prod us-west-2"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/lib-dynamodb": "^3.700.0"
+  }
+}

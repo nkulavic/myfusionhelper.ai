@@ -3,10 +3,11 @@
   "slug": "gotowebinar",
   "name": "GoTo Webinar",
   "category": "webinar",
+  "types": ["integration", "webinar"],
   "description": "Webinar hosting and online event management platform for businesses",
   "status": "active",
   "version": "v2",
-  "logo_url": "https://assets.myfusionhelper.ai/platforms/gotowebinar-logo.svg",
+  "logo_url": "/images/platforms/gotowebinar.png",
   "documentation_url": "https://developer.goto.com/GoToWebinarV2/",
   "oauth": {
     "auth_url": "https://authentication.logmeininc.com/oauth/authorize",

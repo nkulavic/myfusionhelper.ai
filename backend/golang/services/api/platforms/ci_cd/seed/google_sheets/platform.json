@@ -3,10 +3,11 @@
   "slug": "google_sheets",
   "name": "Google Sheets",
   "category": "productivity",
+  "types": ["integration", "productivity"],
   "description": "Cloud-based spreadsheet application for data management and collaboration",
   "status": "active",
   "version": "v4",
-  "logo_url": "https://assets.myfusionhelper.ai/platforms/google_sheets-logo.svg",
+  "logo_url": "/images/platforms/google_sheets.png",
   "documentation_url": "https://developers.google.com/sheets/api/reference/rest",
   "oauth": {
     "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",

@@ -34,13 +34,13 @@ function HelpersContent() {
   const router = useRouter()
 
   const view: HelperView =
-    (searchParams.get('view') as HelperView) || 'my-helpers'
+    (searchParams.get('view') as HelperView) || 'catalog'
   const helperTypeId = searchParams.get('type') || ''
 
   const navigate = useCallback(
     (newView: HelperView, typeId?: string) => {
       const params = new URLSearchParams()
-      if (newView !== 'my-helpers') params.set('view', newView)
+      if (newView !== 'catalog') params.set('view', newView)
       if (typeId) params.set('type', typeId)
       const qs = params.toString()
       router.push(`/helpers${qs ? `?${qs}` : ''}`, { scroll: false })

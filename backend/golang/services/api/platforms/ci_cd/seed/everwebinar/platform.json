@@ -3,10 +3,11 @@
   "slug": "everwebinar",
   "name": "EverWebinar",
   "category": "webinar",
+  "types": ["integration", "webinar"],
   "description": "Automated and evergreen webinar platform for on-demand presentations",
   "status": "active",
   "version": "v1",
-  "logo_url": "https://assets.myfusionhelper.ai/platforms/everwebinar-logo.svg",
+  "logo_url": "/images/platforms/everwebinar.png",
   "documentation_url": "https://documentation.everwebinar.com/",
   "api_config": {
     "base_url": "https://api.webinarjam.com/everwebinar",

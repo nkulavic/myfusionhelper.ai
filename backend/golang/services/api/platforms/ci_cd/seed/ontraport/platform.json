@@ -3,10 +3,11 @@
   "slug": "ontraport",
   "name": "Ontraport",
   "category": "crm",
+  "types": ["crm"],
   "description": "Business automation software for entrepreneurs and small businesses",
   "status": "active",
   "version": "v1",
-  "logo_url": "https://assets.myfusionhelper.ai/platforms/ontraport-logo.svg",
+  "logo_url": "/images/platforms/ontraport.png",
   "documentation_url": "https://api.ontraport.com/doc/",
   "api_config": {
     "base_url": "https://api.ontraport.com/1",

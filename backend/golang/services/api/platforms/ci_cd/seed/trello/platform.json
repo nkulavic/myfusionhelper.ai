@@ -3,10 +3,11 @@
   "slug": "trello",
   "name": "Trello",
   "category": "productivity",
+  "types": ["integration", "productivity"],
   "description": "Visual project management and collaboration tool using boards, lists, and cards",
   "status": "active",
   "version": "v1",
-  "logo_url": "https://assets.myfusionhelper.ai/platforms/trello-logo.svg",
+  "logo_url": "/images/platforms/trello.png",
   "documentation_url": "https://developer.atlassian.com/cloud/trello/rest/",
   "api_config": {
     "base_url": "https://api.trello.com/1",

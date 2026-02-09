@@ -3,10 +3,11 @@
   "slug": "hubspot",
   "name": "HubSpot",
   "category": "crm",
+  "types": ["crm"],
   "description": "Inbound marketing, sales CRM, and customer service platform",
   "status": "active",
   "version": "v3",
-  "logo_url": "https://assets.myfusionhelper.ai/platforms/hubspot-logo.svg",
+  "logo_url": "/images/platforms/hubspot.png",
   "documentation_url": "https://developers.hubspot.com/docs/api/overview",
   "api_config": {
     "base_url": "https://api.hubapi.com",

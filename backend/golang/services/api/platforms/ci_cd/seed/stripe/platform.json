@@ -3,10 +3,11 @@
   "slug": "stripe",
   "name": "Stripe",
   "category": "payments",
+  "types": ["integration", "payments"],
   "description": "Payment processing, subscription management, and billing infrastructure for internet businesses",
   "status": "active",
   "version": "v1",
-  "logo_url": "https://assets.myfusionhelper.ai/platforms/stripe-logo.svg",
+  "logo_url": "/images/platforms/stripe.png",
   "documentation_url": "https://docs.stripe.com/api",
   "api_config": {
     "base_url": "https://api.stripe.com/v1",

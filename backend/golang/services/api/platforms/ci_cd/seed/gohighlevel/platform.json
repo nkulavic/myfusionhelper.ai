@@ -3,10 +3,11 @@
   "slug": "gohighlevel",
   "name": "GoHighLevel",
   "category": "crm",
+  "types": ["crm"],
   "description": "All-in-one marketing platform for agencies with CRM, funnels, and automation",
   "status": "active",
   "version": "v2",
-  "logo_url": "https://assets.myfusionhelper.ai/platforms/gohighlevel-logo.svg",
+  "logo_url": "/images/platforms/gohighlevel.png",
   "documentation_url": "https://highlevel.stoplight.io/docs/integrations/",
   "oauth": {
     "auth_url": "https://marketplace.gohighlevel.com/oauth/chooselocation",

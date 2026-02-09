@@ -3,10 +3,11 @@
   "slug": "activecampaign",
   "name": "ActiveCampaign",
   "category": "crm",
+  "types": ["crm"],
   "description": "Email marketing, marketing automation, and CRM tools for growing businesses",
   "status": "active",
   "version": "v3",
-  "logo_url": "https://assets.myfusionhelper.ai/platforms/activecampaign-logo.svg",
+  "logo_url": "/images/platforms/activecampaign.png",
   "documentation_url": "https://developers.activecampaign.com/reference/overview",
   "api_config": {
     "base_url": "https://{account}.api-us1.com/api/3",
