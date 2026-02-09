@@ -50,9 +50,73 @@ jobs:
       - name: Build
         run: CGO_ENABLED=1 go build ./...
 
-      - name: Test
-        run: CGO_ENABLED=1 go test ./...
+      - name: Test with Coverage
+        run: |
+          CGO_ENABLED=1 go test -coverprofile=coverage.out -covermode=atomic ./...
+          go tool cover -func=coverage.out -o=coverage.txt
+          echo "Coverage report generated"
+          cat coverage.txt
         continue-on-error: true  # TODO: Fix failing tests
+
+      - name: Check Coverage Thresholds
+        if: success() || failure()
+        run: |
+          # Extract coverage percentages for critical packages
+          echo "Checking coverage thresholds for critical packages..."
+
+          MIDDLEWARE_COV=$(grep 'internal/middleware' coverage.txt | tail -1 | awk '{print $NF}' | sed 's/%//')
+          DATABASE_COV=$(grep 'internal/database' coverage.txt | tail -1 | awk '{print $NF}' | sed 's/%//')
+          CONNECTORS_COV=$(grep 'internal/connectors' coverage.txt | tail -1 | awk '{print $NF}' | sed 's/%//')
+          HELPERS_COV=$(grep 'internal/helpers' coverage.txt | tail -1 | awk '{print $NF}' | sed 's/%//')
+
+          # Thresholds (can be adjusted)
+          MIN_MIDDLEWARE=60
+          MIN_DATABASE=50
+          MIN_CONNECTORS=40
+          MIN_HELPERS=50
+
+          FAILED=0
+
+          if (( $(echo "$MIDDLEWARE_COV < $MIN_MIDDLEWARE" | bc -l) )); then
+            echo "❌ Middleware coverage ($MIDDLEWARE_COV%) is below threshold ($MIN_MIDDLEWARE%)"
+            FAILED=1
+          else
+            echo "✅ Middleware coverage: $MIDDLEWARE_COV%"
+          fi
+
+          if (( $(echo "$DATABASE_COV < $MIN_DATABASE" | bc -l) )); then
+            echo "❌ Database coverage ($DATABASE_COV%) is below threshold ($MIN_DATABASE%)"
+            FAILED=1
+          else
+            echo "✅ Database coverage: $DATABASE_COV%"
+          fi
+
+          if (( $(echo "$CONNECTORS_COV < $MIN_CONNECTORS" | bc -l) )); then
+            echo "❌ Connectors coverage ($CONNECTORS_COV%) is below threshold ($MIN_CONNECTORS%)"
+            FAILED=1
+          else
+            echo "✅ Connectors coverage: $CONNECTORS_COV%"
+          fi
+
+          if (( $(echo "$HELPERS_COV < $MIN_HELPERS" | bc -l) )); then
+            echo "❌ Helpers coverage ($HELPERS_COV%) is below threshold ($MIN_HELPERS%)"
+            FAILED=1
+          else
+            echo "✅ Helpers coverage: $HELPERS_COV%"
+          fi
+
+          exit $FAILED
+        continue-on-error: true  # Don't block deploys yet
+
+      - name: Upload Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ env.DEPLOY_STAGE }}
+          path: |
+            backend/golang/coverage.out
+            backend/golang/coverage.txt
+          retention-days: 30
 
   # ──────────────────────────────────────────────
   # 2. Deploy Infrastructure (parallel matrix)
