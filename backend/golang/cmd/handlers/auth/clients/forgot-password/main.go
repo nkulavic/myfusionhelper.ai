@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
+	"github.com/myfusionhelper/api/internal/notifications"
 )
 
 type ForgotPasswordRequest struct {
@@ -66,6 +67,20 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		log.Printf("ForgotPassword failed: %v", err)
 		return handleForgotPasswordError(err), nil
 	}
+
+	// Send branded notification email asynchronously (Cognito will also send the actual reset code email)
+	go func() {
+		notifSvc, err := notifications.New(ctx)
+		if err != nil {
+			log.Printf("Failed to create notification service for password reset notification: %v", err)
+			return
+		}
+		// Note: We're not sending the actual code here - Cognito handles that securely
+		// This is just a branded notification confirming the reset request
+		if err := notifSvc.SendPasswordResetEmail(ctx, req.Email, ""); err != nil {
+			log.Printf("Failed to send password reset notification email: %v", err)
+		}
+	}()
 
 	// Always return success to prevent email enumeration
 	return authMiddleware.CreateSuccessResponse(200, "If an account exists with this email, a reset code has been sent.", nil), nil
