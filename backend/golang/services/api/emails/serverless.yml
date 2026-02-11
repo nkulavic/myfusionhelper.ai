@@ -1,0 +1,253 @@
+service: mfh-emails
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 29
+  tracing:
+    lambda: true
+    apiGateway: true
+  httpApi:
+    id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+    authorizers:
+      cognitoAuthorizer:
+        type: jwt
+        identitySource: $request.header.Authorization
+        issuerUrl: https://cognito-idp.${self:provider.region}.amazonaws.com/${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
+        audience:
+          - ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoClientId}
+  environment:
+    SERVICE_VERSION: "2025.02.11.0001"
+    STAGE: ${self:provider.stage}
+    COGNITO_USER_POOL_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
+    COGNITO_CLIENT_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoClientId}
+    COGNITO_REGION: ${self:provider.region}
+    USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
+    ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
+    USER_ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableName}
+    EMAIL_LOGS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailLogsTableName}
+    EMAIL_TEMPLATES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailTemplatesTableName}
+    EMAIL_VERIFICATIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableName}
+  iam:
+    role:
+      statements:
+        # DynamoDB permissions
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:Scan
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailLogsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailTemplatesTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailLogsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailTemplatesTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableArn}/index/*"
+        # SES permissions
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - ses:SendRawEmail
+          Resource: "*"
+        # CloudWatch Logs
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        # X-Ray
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+functions:
+  # Health check
+  emails-health:
+    handler: cmd/handlers/emails/main.go
+    description: "Emails service health check"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: emails-health
+    memorySize: 128
+    timeout: 5
+    environment:
+      FUNCTION_NAME: emails-health
+      ENDPOINT_PATH: /emails/health
+    events:
+      - httpApi:
+          path: /emails/health
+          method: get
+
+  # List sent emails
+  emails-list:
+    handler: cmd/handlers/emails/main.go
+    description: "List sent emails for account"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: emails-list
+    environment:
+      FUNCTION_NAME: emails-list
+      ENDPOINT_PATH: /emails
+    events:
+      - httpApi:
+          path: /emails
+          method: get
+          authorizer:
+            name: cognitoAuthorizer
+
+  # Send email
+  emails-send:
+    handler: cmd/handlers/emails/main.go
+    description: "Send email"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: emails-send
+    environment:
+      FUNCTION_NAME: emails-send
+      ENDPOINT_PATH: /emails
+    events:
+      - httpApi:
+          path: /emails
+          method: post
+          authorizer:
+            name: cognitoAuthorizer
+
+  # Delete email
+  emails-delete:
+    handler: cmd/handlers/emails/main.go
+    description: "Delete email log"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: emails-delete
+    environment:
+      FUNCTION_NAME: emails-delete
+      ENDPOINT_PATH: /emails/{id}
+    events:
+      - httpApi:
+          path: /emails/{id}
+          method: delete
+          authorizer:
+            name: cognitoAuthorizer
+
+  # List templates
+  templates-list:
+    handler: cmd/handlers/emails/main.go
+    description: "List email templates"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: templates-list
+    environment:
+      FUNCTION_NAME: templates-list
+      ENDPOINT_PATH: /emails/templates
+    events:
+      - httpApi:
+          path: /emails/templates
+          method: get
+          authorizer:
+            name: cognitoAuthorizer
+
+  # Get template
+  templates-get:
+    handler: cmd/handlers/emails/main.go
+    description: "Get email template by ID"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: templates-get
+    environment:
+      FUNCTION_NAME: templates-get
+      ENDPOINT_PATH: /emails/templates/{id}
+    events:
+      - httpApi:
+          path: /emails/templates/{id}
+          method: get
+          authorizer:
+            name: cognitoAuthorizer
+
+  # Create template
+  templates-create:
+    handler: cmd/handlers/emails/main.go
+    description: "Create email template"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: templates-create
+    environment:
+      FUNCTION_NAME: templates-create
+      ENDPOINT_PATH: /emails/templates
+    events:
+      - httpApi:
+          path: /emails/templates
+          method: post
+          authorizer:
+            name: cognitoAuthorizer
+
+  # Update template
+  templates-update:
+    handler: cmd/handlers/emails/main.go
+    description: "Update email template"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: templates-update
+    environment:
+      FUNCTION_NAME: templates-update
+      ENDPOINT_PATH: /emails/templates/{id}
+    events:
+      - httpApi:
+          path: /emails/templates/{id}
+          method: put
+          authorizer:
+            name: cognitoAuthorizer
+
+  # Delete template
+  templates-delete:
+    handler: cmd/handlers/emails/main.go
+    description: "Delete email template"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: templates-delete
+    environment:
+      FUNCTION_NAME: templates-delete
+      ENDPOINT_PATH: /emails/templates/{id}
+    events:
+      - httpApi:
+          path: /emails/templates/{id}
+          method: delete
+          authorizer:
+            name: cognitoAuthorizer
