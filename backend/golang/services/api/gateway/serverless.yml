@@ -2,6 +2,12 @@ service: mfh-api-gateway
 
 frameworkVersion: '4'
 
+custom:
+  customDomain:
+    dev: api-dev.myfusionhelper.ai
+    staging: api-staging.myfusionhelper.ai
+    prod: api.myfusionhelper.ai
+
 provider:
   name: aws
   runtime: provided.al2023
@@ -47,6 +53,13 @@ provider:
         - DELETE
         - OPTIONS
       maxAge: 86400
+    disableExecuteApiEndpoint: false  # Keep default endpoint during transition
+    domain:
+      domainName: ${self:custom.customDomain.${self:provider.stage}}
+      certificateArn: ${cf:mfh-infrastructure-acm-${self:provider.stage}.CertificateArn}
+      endpointType: REGIONAL
+      securityPolicy: TLS_1_2
+      basePath: ''  # API at root of domain
     authorizers:
       cognitoAuthorizer:
         type: jwt
@@ -164,3 +177,24 @@ resources:
         Ref: HttpApiAuthorizerApiKeyAuthorizer
       Export:
         Name: ${self:service}-${self:provider.stage}-ApiKeyAuthorizerId
+    CustomDomainName:
+      Description: "Custom domain name for API"
+      Value: ${self:custom.customDomain.${self:provider.stage}}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CustomDomainName
+    RegionalDomainName:
+      Description: "API Gateway regional domain name for Route53 alias"
+      Value:
+        Fn::GetAtt:
+          - HttpApiDomainName
+          - RegionalDomainName
+      Export:
+        Name: ${self:service}-${self:provider.stage}-RegionalDomainName
+    RegionalHostedZoneId:
+      Description: "Hosted zone ID for API Gateway regional domain"
+      Value:
+        Fn::GetAtt:
+          - HttpApiDomainName
+          - RegionalHostedZoneId
+      Export:
+        Name: ${self:service}-${self:provider.stage}-RegionalHostedZoneId

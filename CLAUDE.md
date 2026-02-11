@@ -38,7 +38,12 @@ myfusionhelper.ai/
 ## Key Infrastructure
 
 - **AWS Account**: 570331155915, region us-west-2
-- **API Gateway**: `https://a95gb181u4.execute-api.us-west-2.amazonaws.com`
+- **API Gateway**:
+  - Default endpoint: `https://a95gb181u4.execute-api.us-west-2.amazonaws.com`
+  - Custom domain (dev): `https://api-dev.myfusionhelper.ai`
+  - Custom domain (prod): `https://api.myfusionhelper.ai`
+- **Route53 Hosted Zone**: `myfusionhelper.ai` (ID: Z071462818IPQJBH38AMK)
+- **ACM Certificate**: Managed via `services/infrastructure/acm` (DNS validation)
 - **Cognito User Pool**: `us-west-2_1E74cZW97`
 - **DynamoDB table prefix**: `mfh-{stage}-` (e.g., `mfh-dev-users`)
 - **S3 data bucket**: `mfh-{stage}-data`
@@ -107,11 +112,13 @@ Copy `apps/web/.env.example` to `apps/web/.env.local` and fill in:
 Infrastructure must deploy before API services. The CI pipeline enforces this:
 
 1. **Build & test** Go code
-2. **Infrastructure** (parallel): cognito, dynamodb-core, s3, sqs
-3. **API Gateway** (creates HttpApi + Cognito authorizer)
-4. **API services** (parallel, max 3): auth, accounts, api-keys, helpers, platforms, data-explorer, billing
-5. **Workers** (parallel): helper-worker, data-sync
-6. **Post-deploy**: seed platform data + health check verification
+2. **Infrastructure** (parallel): cognito, dynamodb-core, s3, sqs, ses, monitoring, acm (ACM certificate for custom domain)
+3. **Pre-gateway services**: api-key-authorizer, scheduler
+4. **API Gateway** (creates HttpApi + Cognito authorizer + custom domain mapping)
+5. **Route53** (creates DNS records pointing to API Gateway)
+6. **API services** (parallel, max 3): auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat
+7. **Workers** (parallel): helper-worker, notification-worker, data-sync, executions-stream, sms-chat-webhook, alexa-webhook, google-assistant-webhook
+8. **Post-deploy**: seed platform data + health check verification
 
 ### Local Backend Deploy
 

@@ -1,0 +1,57 @@
+service: mfh-infrastructure-acm
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  stackName: ${self:service}-${self:provider.stage}
+  deploymentBucket:
+    name: mfh-serverless-deployments-${aws:accountId}-${self:provider.region}
+
+resources:
+  Resources:
+    # ACM Certificate for API Gateway Custom Domain
+    ApiCertificate:
+      Type: AWS::CertificateManager::Certificate
+      Properties:
+        DomainName: api.myfusionhelper.ai
+        SubjectAlternativeNames:
+          - api-${self:provider.stage}.myfusionhelper.ai
+        ValidationMethod: DNS
+        DomainValidationOptions:
+          - DomainName: api.myfusionhelper.ai
+            HostedZoneId: Z071462818IPQJBH38AMK
+          - DomainName: api-${self:provider.stage}.myfusionhelper.ai
+            HostedZoneId: Z071462818IPQJBH38AMK
+        Tags:
+          - Key: Name
+            Value: mfh-api-certificate-${self:provider.stage}
+          - Key: Service
+            Value: mfh-api-gateway
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: ManagedBy
+            Value: serverless
+
+  Outputs:
+    CertificateArn:
+      Description: ARN of the ACM certificate for API Gateway custom domain
+      Value:
+        Ref: ApiCertificate
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CertificateArn
+
+    CertificateDomainName:
+      Description: Domain name of the certificate
+      Value: api.myfusionhelper.ai
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CertificateDomainName
+
+    CertificateStageDomainName:
+      Description: Stage-specific domain name
+      Value: api-${self:provider.stage}.myfusionhelper.ai
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CertificateStageDomainName
