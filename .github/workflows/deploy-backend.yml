@@ -371,6 +371,7 @@ jobs:
           - sms-chat-webhook
           - alexa-webhook
           - google-assistant-webhook
+          - zoom-webhook
     steps:
       - uses: actions/checkout@v4
 
