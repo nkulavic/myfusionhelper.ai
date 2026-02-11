@@ -59,7 +59,7 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 		log.Printf("Processing notification type=%s for user=%s", job.Type, job.UserID)
 
 		// Look up user info
-		userName, userEmail, prefs, err := lookupUser(ctx, db, job.UserID)
+		_, userEmail, _, err := lookupUser(ctx, db, job.UserID)
 		if err != nil {
 			log.Printf("Failed to look up user %s: %v", job.UserID, err)
 			continue
@@ -75,14 +75,13 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 		case "execution_failure":
 			helperName := getStringData(job.Data, "helper_name")
 			errorMsg := getStringData(job.Data, "error_message")
-			if err := notifSvc.SendExecutionAlert(ctx, userName, userEmail, helperName, errorMsg, prefs); err != nil {
+			if err := notifSvc.SendHelperExecutionAlert(ctx, job.AccountID, userEmail, helperName, errorMsg); err != nil {
 				log.Printf("Failed to send execution alert: %v", err)
 			}
 
 		case "connection_issue":
 			connectionName := getStringData(job.Data, "connection_name")
-			errorMsg := getStringData(job.Data, "error_message")
-			if err := notifSvc.SendConnectionAlert(ctx, userName, userEmail, connectionName, errorMsg, prefs); err != nil {
+			if err := notifSvc.SendConnectionAlert(ctx, job.AccountID, userEmail, connectionName); err != nil {
 				log.Printf("Failed to send connection alert: %v", err)
 			}
 
@@ -91,26 +90,28 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 			current := getIntData(job.Data, "current")
 			limit := getIntData(job.Data, "limit")
 			percent := getIntData(job.Data, "percent")
-			if err := notifSvc.SendUsageAlert(ctx, userName, userEmail, resourceName, current, limit, percent, prefs); err != nil {
+			if err := notifSvc.SendUsageAlert(ctx, job.AccountID, userEmail, resourceName, percent, current, limit); err != nil {
 				log.Printf("Failed to send usage alert: %v", err)
 			}
 
 		case "billing_event":
 			eventType := getStringData(job.Data, "event_type")
 			planName := getStringData(job.Data, "plan_name")
-			if err := notifSvc.SendBillingEvent(ctx, userName, userEmail, eventType, planName); err != nil {
+			if err := notifSvc.SendBillingEvent(ctx, job.AccountID, userEmail, eventType, planName); err != nil {
 				log.Printf("Failed to send billing event email: %v", err)
 			}
 
 		case "weekly_summary":
-			totalHelpers := getIntData(job.Data, "total_helpers")
-			totalExecuted := getIntData(job.Data, "total_executed")
-			totalSucceeded := getIntData(job.Data, "total_succeeded")
-			totalFailed := getIntData(job.Data, "total_failed")
-			successRate := getStringData(job.Data, "success_rate")
-			weekStart := getStringData(job.Data, "week_start")
-			weekEnd := getStringData(job.Data, "week_end")
-			if err := notifSvc.SendWeeklySummary(ctx, userName, userEmail, totalHelpers, totalExecuted, totalSucceeded, totalFailed, successRate, weekStart, weekEnd, prefs); err != nil {
+			summaryData := map[string]interface{}{
+				"total_helpers":    getIntData(job.Data, "total_helpers"),
+				"total_executed":   getIntData(job.Data, "total_executed"),
+				"total_succeeded":  getIntData(job.Data, "total_succeeded"),
+				"total_failed":     getIntData(job.Data, "total_failed"),
+				"success_rate":     getStringData(job.Data, "success_rate"),
+				"week_start":       getStringData(job.Data, "week_start"),
+				"week_end":         getStringData(job.Data, "week_end"),
+			}
+			if err := notifSvc.SendWeeklySummary(ctx, job.AccountID, userEmail, summaryData); err != nil {
 				log.Printf("Failed to send weekly summary: %v", err)
 			}
 
@@ -121,7 +122,7 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 			roleName := getStringData(job.Data, "role_name")
 			accountName := getStringData(job.Data, "account_name")
 			inviteToken := getStringData(job.Data, "invite_token")
-			if err := notifSvc.SendTeamInviteEmail(ctx, recipientEmail, inviterName, inviterEmail, roleName, accountName, inviteToken); err != nil {
+			if err := notifSvc.SendTeamInvite(ctx, inviterName, inviterEmail, recipientEmail, roleName, accountName, inviteToken); err != nil {
 				log.Printf("Failed to send team invite email: %v", err)
 			}
 

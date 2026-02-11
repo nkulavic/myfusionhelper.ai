@@ -159,6 +159,12 @@ func (t *TranslatingConnector) AchieveGoal(ctx context.Context, contactID string
 	return t.inner.AchieveGoal(ctx, contactID, goalName, integration)
 }
 
+// ========== MARKETING / OPT-IN ==========
+
+func (t *TranslatingConnector) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
+	return t.inner.SetOptInStatus(ctx, contactID, optIn, reason)
+}
+
 // ========== HEALTH & METADATA ==========
 
 func (t *TranslatingConnector) TestConnection(ctx context.Context) error {
