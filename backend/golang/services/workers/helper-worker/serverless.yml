@@ -33,7 +33,7 @@ provider:
     PLATFORM_CONNECTION_AUTHS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableName}
     ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
     NOTIFICATION_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueUrl}
-    STRIPE_SECRET_KEY: ${ssm:/${self:provider.stage}/stripe/secret_key}
+    STRIPE_SECRET_KEY: '{{resolve:ssm:/${self:provider.stage}/stripe/secret_key}}'
     API_VERSION: v1
   iam:
     role:

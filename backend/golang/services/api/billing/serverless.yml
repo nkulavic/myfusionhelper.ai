@@ -36,12 +36,12 @@ provider:
     COGNITO_REGION: ${self:provider.region}
     COGNITO_JWKS_URI: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoJwksUri}
     COGNITO_ISSUER: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
-    STRIPE_SECRET_KEY: ${ssm:/${self:provider.stage}/stripe/secret_key}
-    STRIPE_WEBHOOK_SECRET: ${ssm:/${self:provider.stage}/stripe/webhook_secret}
-    STRIPE_PRICE_START: ${ssm:/${self:provider.stage}/stripe/price_start, ''}
-    STRIPE_PRICE_GROW: ${ssm:/${self:provider.stage}/stripe/price_grow, ''}
-    STRIPE_PRICE_DELIVER: ${ssm:/${self:provider.stage}/stripe/price_deliver, ''}
-    APP_URL: ${ssm:/mfh/${self:provider.stage}/app-url, 'https://app.myfusionhelper.ai'}
+    STRIPE_SECRET_KEY: '{{resolve:ssm:/${self:provider.stage}/stripe/secret_key}}'
+    STRIPE_WEBHOOK_SECRET: '{{resolve:ssm:/${self:provider.stage}/stripe/webhook_secret}}'
+    STRIPE_PRICE_START: '{{resolve:ssm:/${self:provider.stage}/stripe/price_start}}'
+    STRIPE_PRICE_GROW: '{{resolve:ssm:/${self:provider.stage}/stripe/price_grow}}'
+    STRIPE_PRICE_DELIVER: '{{resolve:ssm:/${self:provider.stage}/stripe/price_deliver}}'
+    APP_URL: '{{resolve:ssm:/mfh/${self:provider.stage}/app-url}}'
     API_VERSION: v1
     API_REFERENCE: mfh-api
   iam:

@@ -117,7 +117,7 @@ functions:
           path: /emails
           method: get
           authorizer:
-            name: cognitoAuthorizer
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
   # Send email
   emails-send:
@@ -135,7 +135,7 @@ functions:
           path: /emails
           method: post
           authorizer:
-            name: cognitoAuthorizer
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
   # Delete email
   emails-delete:
@@ -153,7 +153,7 @@ functions:
           path: /emails/{id}
           method: delete
           authorizer:
-            name: cognitoAuthorizer
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
   # List templates
   templates-list:
@@ -171,7 +171,7 @@ functions:
           path: /emails/templates
           method: get
           authorizer:
-            name: cognitoAuthorizer
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
   # Get template
   templates-get:
@@ -189,7 +189,7 @@ functions:
           path: /emails/templates/{id}
           method: get
           authorizer:
-            name: cognitoAuthorizer
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
   # Create template
   templates-create:
@@ -207,7 +207,7 @@ functions:
           path: /emails/templates
           method: post
           authorizer:
-            name: cognitoAuthorizer
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
   # Update template
   templates-update:
@@ -225,7 +225,7 @@ functions:
           path: /emails/templates/{id}
           method: put
           authorizer:
-            name: cognitoAuthorizer
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
   # Delete template
   templates-delete:
@@ -243,4 +243,4 @@ functions:
           path: /emails/templates/{id}
           method: delete
           authorizer:
-            name: cognitoAuthorizer
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}

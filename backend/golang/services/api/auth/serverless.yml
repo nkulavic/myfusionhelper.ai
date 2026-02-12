@@ -37,7 +37,7 @@ provider:
     USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
     ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
     USER_ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableName}
-    APP_URL: ${ssm:/mfh/${self:provider.stage}/app-url, 'https://app.myfusionhelper.ai'}
+    APP_URL: '{{resolve:ssm:/mfh/${self:provider.stage}/app-url}}'
     API_VERSION: v1
     API_REFERENCE: mfh-api
   iam:

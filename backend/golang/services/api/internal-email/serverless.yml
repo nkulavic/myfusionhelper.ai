@@ -30,7 +30,7 @@ provider:
     STAGE: ${self:provider.stage}
     DEFAULT_FROM_EMAIL: noreply@myfusionhelper.ai
     DEFAULT_FROM_NAME: MyFusion Helper
-    APP_URL: ${ssm:/mfh/${self:provider.stage}/app-url, 'https://app.myfusionhelper.ai'}
+    APP_URL: '{{resolve:ssm:/mfh/${self:provider.stage}/app-url}}'
     EMAIL_LOGS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailLogsTableName}
     EMAIL_TEMPLATES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailTemplatesTableName}
     EMAIL_VERIFICATIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableName}

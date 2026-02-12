@@ -29,7 +29,7 @@ provider:
   environment:
     STAGE: ${self:provider.stage}
     # Unified secrets (Groq + Twilio)
-    INTERNAL_SECRETS: ${ssm:/${self:provider.stage}/myfusionhelper/secrets~true}
+    INTERNAL_SECRETS: '{{resolve:ssm-secure:/${self:provider.stage}/myfusionhelper/secrets}}'
     # DynamoDB tables
     PHONE_MAPPINGS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PhoneMappingsTableName}
     RATE_LIMITS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.RateLimitsTableName}
