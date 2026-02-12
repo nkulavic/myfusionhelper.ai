@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	appConfig "github.com/myfusionhelper/api/internal/config"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/types"
 	stripe "github.com/stripe/stripe-go/v82"
@@ -21,13 +22,7 @@ import (
 
 var (
 	accountsTable = os.Getenv("ACCOUNTS_TABLE")
-	stripeKey     = os.Getenv("STRIPE_SECRET_KEY")
 	appURL        = os.Getenv("APP_URL")
-
-	// Stripe Price IDs per plan tier (from SSM)
-	priceStart   = os.Getenv("STRIPE_PRICE_START")
-	priceGrow    = os.Getenv("STRIPE_PRICE_GROW")
-	priceDeliver = os.Getenv("STRIPE_PRICE_DELIVER")
 )
 
 // CreateCheckoutRequest is the request body for POST /billing/checkout/sessions
@@ -43,7 +38,13 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		return authMiddleware.CreateErrorResponse(405, "Method not allowed"), nil
 	}
 
-	if stripeKey == "" {
+	secrets, err := appConfig.LoadSecrets(ctx)
+	if err != nil {
+		log.Printf("Failed to load secrets: %v", err)
+		return authMiddleware.CreateErrorResponse(500, "Config error"), nil
+	}
+
+	if secrets.Stripe.SecretKey == "" {
 		return authMiddleware.CreateErrorResponse(503, "Billing service not configured"), nil
 	}
 
@@ -52,7 +53,7 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		return authMiddleware.CreateErrorResponse(400, "Invalid request body"), nil
 	}
 
-	priceID := getPriceID(req.Plan)
+	priceID := getPriceID(req.Plan, secrets)
 	if priceID == "" {
 		return authMiddleware.CreateErrorResponse(400, "Invalid plan. Must be one of: start, grow, deliver"), nil
 	}
@@ -86,7 +87,7 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		return authMiddleware.CreateErrorResponse(500, "Internal error"), nil
 	}
 
-	stripe.Key = stripeKey
+	stripe.Key = secrets.Stripe.SecretKey
 
 	// Get or create Stripe customer
 	customerID := account.StripeCustomerID
@@ -160,14 +161,14 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	}), nil
 }
 
-func getPriceID(plan string) string {
+func getPriceID(plan string, secrets *appConfig.SecretsConfig) string {
 	switch plan {
 	case "start":
-		return priceStart
+		return secrets.Stripe.PriceStart
 	case "grow":
-		return priceGrow
+		return secrets.Stripe.PriceGrow
 	case "deliver":
-		return priceDeliver
+		return secrets.Stripe.PriceDeliver
 	default:
 		return ""
 	}

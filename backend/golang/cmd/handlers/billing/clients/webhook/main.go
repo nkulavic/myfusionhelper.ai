@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	appConfig "github.com/myfusionhelper/api/internal/config"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/notifications"
 	stripe "github.com/stripe/stripe-go/v82"
@@ -24,11 +25,9 @@ import (
 )
 
 var (
-	accountsTable       = os.Getenv("ACCOUNTS_TABLE")
-	usersTable          = os.Getenv("USERS_TABLE")
-	cognitoUserPoolID   = os.Getenv("COGNITO_USER_POOL_ID")
-	stripeKey           = os.Getenv("STRIPE_SECRET_KEY")
-	stripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
+	accountsTable     = os.Getenv("ACCOUNTS_TABLE")
+	usersTable        = os.Getenv("USERS_TABLE")
+	cognitoUserPoolID = os.Getenv("COGNITO_USER_POOL_ID")
 )
 
 // Handle processes Stripe webhook events (public, verified by signature)
@@ -39,8 +38,14 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return authMiddleware.CreateErrorResponse(405, "Method not allowed"), nil
 	}
 
-	if stripeWebhookSecret == "" {
-		log.Printf("ERROR: STRIPE_WEBHOOK_SECRET not configured")
+	secrets, err := appConfig.LoadSecrets(ctx)
+	if err != nil {
+		log.Printf("Failed to load secrets: %v", err)
+		return authMiddleware.CreateErrorResponse(500, "Config error"), nil
+	}
+
+	if secrets.Stripe.WebhookSecret == "" {
+		log.Printf("ERROR: Stripe webhook secret not configured")
 		return authMiddleware.CreateErrorResponse(500, "Webhook not configured"), nil
 	}
 
@@ -50,11 +55,13 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return authMiddleware.CreateErrorResponse(400, "Missing Stripe signature"), nil
 	}
 
-	stripeEvent, err := webhook.ConstructEvent([]byte(event.Body), sig, stripeWebhookSecret)
+	stripeEvent, err := webhook.ConstructEvent([]byte(event.Body), sig, secrets.Stripe.WebhookSecret)
 	if err != nil {
 		log.Printf("Webhook signature verification failed: %v", err)
 		return authMiddleware.CreateErrorResponse(400, "Invalid signature"), nil
 	}
+
+	stripeKey := secrets.Stripe.SecretKey
 
 	log.Printf("Received Stripe event: %s", stripeEvent.Type)
 
@@ -65,7 +72,7 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	case "customer.subscription.deleted":
 		return handleSubscriptionCancelled(ctx, stripeEvent)
 	case "checkout.session.completed":
-		return handleCheckoutSessionCompleted(ctx, stripeEvent)
+		return handleCheckoutSessionCompleted(ctx, stripeEvent, stripeKey)
 	case "invoice.payment_failed":
 		return handlePaymentFailed(ctx, stripeEvent)
 	default:
@@ -173,7 +180,7 @@ func handlePaymentFailed(ctx context.Context, event stripe.Event) (events.APIGat
 	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
 }
 
-func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event) (events.APIGatewayV2HTTPResponse, error) {
+func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event, stripeKey string) (events.APIGatewayV2HTTPResponse, error) {
 	var sess stripe.CheckoutSession
 	if err := json.Unmarshal(event.Data.Raw, &sess); err != nil {
 		log.Printf("Failed to parse checkout session: %v", err)
@@ -266,7 +273,7 @@ func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event) (ev
 
 	// Extract and store stripe_metered_item_id from subscription items
 	if sess.Subscription != nil && sess.Subscription.ID != "" {
-		storeMeteredItemID(ctx, dbClient, accountID, sess.Subscription.ID)
+		storeMeteredItemID(ctx, dbClient, accountID, sess.Subscription.ID, stripeKey)
 	}
 
 	// Send welcome/activation email
@@ -504,7 +511,7 @@ func syncCognitoPlanGroup(ctx context.Context, ownerUserID, newPlan string) {
 
 // storeMeteredItemID retrieves the subscription, finds the metered price item,
 // and stores its ID on the account for usage reporting.
-func storeMeteredItemID(ctx context.Context, dbClient *dynamodb.Client, accountID, subscriptionID string) {
+func storeMeteredItemID(ctx context.Context, dbClient *dynamodb.Client, accountID, subscriptionID, stripeKey string) {
 	stripe.Key = stripeKey
 	if stripe.Key == "" {
 		return

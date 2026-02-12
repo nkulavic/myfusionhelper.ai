@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	appConfig "github.com/myfusionhelper/api/internal/config"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/types"
 	stripe "github.com/stripe/stripe-go/v82"
@@ -19,7 +20,6 @@ import (
 
 var (
 	accountsTable = os.Getenv("ACCOUNTS_TABLE")
-	stripeKey     = os.Getenv("STRIPE_SECRET_KEY")
 )
 
 // InvoiceItem is a simplified invoice for the frontend
@@ -40,6 +40,13 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	if event.RequestContext.HTTP.Method != "GET" {
 		return authMiddleware.CreateErrorResponse(405, "Method not allowed"), nil
 	}
+
+	secrets, err := appConfig.LoadSecrets(ctx)
+	if err != nil {
+		log.Printf("Failed to load secrets: %v", err)
+		return authMiddleware.CreateErrorResponse(500, "Config error"), nil
+	}
+	stripeKey := secrets.Stripe.SecretKey
 
 	if stripeKey == "" {
 		return authMiddleware.CreateErrorResponse(503, "Billing service not configured"), nil
