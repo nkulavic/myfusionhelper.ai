@@ -391,6 +391,104 @@ Common env vars set by Serverless on all Lambda functions:
 - Service-specific tables as needed
 - Billing service: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_START`, `STRIPE_PRICE_GROW`, `STRIPE_PRICE_DELIVER`, `APP_URL` (from SSM)
 
+## Unified Secrets Architecture
+
+Following the listbackup-ai pattern, all internal secrets are stored in ONE SSM parameter containing JSON.
+
+### SSM Parameter
+
+**Parameter:** `/myfusionhelper/${STAGE}/secrets` (SecureString, Advanced tier)
+
+**JSON Structure:**
+```json
+{
+  "stripe": {
+    "secret_key": "sk_...",
+    "publishable_key": "pk_...",
+    "webhook_secret": "whsec_...",
+    "price_start": "price_...",
+    "price_grow": "price_...",
+    "price_deliver": "price_..."
+  },
+  "groq": {
+    "api_key": "gsk_..."
+  },
+  "twilio": {
+    "account_sid": "AC...",
+    "auth_token": "...",
+    "from_number": "+1...",
+    "messaging_sid": "MG..."
+  }
+}
+```
+
+### Loading Secrets in Lambda
+
+```go
+import "github.com/myfusionhelper/api/internal/config"
+
+func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCtx *types.AuthContext) (events.APIGatewayV2HTTPResponse, error) {
+    // Load secrets (cached after first call via singleton pattern)
+    secrets, err := config.LoadSecrets(ctx)
+    if err != nil {
+        log.Printf("Failed to load secrets: %v", err)
+        return authMiddleware.CreateErrorResponse(500, "Config error"), nil
+    }
+
+    // Use secrets
+    stripeKey := secrets.Stripe.SecretKey
+    webhookSecret := secrets.Stripe.WebhookSecret
+
+    // ... handler logic
+}
+```
+
+### GitHub Secrets Sync
+
+Secrets are synced from GitHub Secrets to SSM via the `sync-internal-secrets` workflow:
+
+```bash
+# Manually trigger (requires GitHub Secrets to be set)
+gh workflow run sync-internal-secrets.yml --field stage=dev
+```
+
+**GitHub Secrets Required (per stage):**
+- `{STAGE}_INTERNAL_STRIPE_SECRET_KEY`
+- `{STAGE}_INTERNAL_STRIPE_PUBLISHABLE_KEY`
+- `{STAGE}_INTERNAL_STRIPE_WEBHOOK_SECRET`
+- `{STAGE}_INTERNAL_STRIPE_PRICE_START`
+- `{STAGE}_INTERNAL_STRIPE_PRICE_GROW`
+- `{STAGE}_INTERNAL_STRIPE_PRICE_DELIVER`
+
+Optional (for voice assistants):
+- `{STAGE}_INTERNAL_GROQ_API_KEY`
+- `{STAGE}_INTERNAL_TWILIO_*`
+
+### Serverless Configuration
+
+Services that need secrets add:
+
+```yaml
+provider:
+  environment:
+    INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+          Resource:
+            - "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
+```
+
+### Benefits
+
+- **Single SSM Call:** LoadSecrets() called once per Lambda cold start, cached thereafter
+- **No Package-Time Resolution:** Secrets loaded at runtime, not during Serverless package
+- **Consistent Pattern:** Matches company architecture (listbackup-ai)
+- **Easy to Extend:** Add new secret categories without infrastructure changes
+
 ## CI/CD
 
 GitHub Actions workflows:

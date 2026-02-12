@@ -80,5 +80,5 @@ functions:
       - sqs:
           arn: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueArn}
           batchSize: 5  # Process up to 5 notifications at a time
-          maximumBatchingWindow: 10  # Wait up to 10 seconds to batch
+          # Note: maximumBatchingWindow not supported for FIFO queues
           functionResponseType: ReportBatchItemFailures
