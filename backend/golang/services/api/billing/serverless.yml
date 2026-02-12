@@ -41,7 +41,7 @@ provider:
     STRIPE_PRICE_START: '{{resolve:ssm:/${self:provider.stage}/stripe/price_start}}'
     STRIPE_PRICE_GROW: '{{resolve:ssm:/${self:provider.stage}/stripe/price_grow}}'
     STRIPE_PRICE_DELIVER: '{{resolve:ssm:/${self:provider.stage}/stripe/price_deliver}}'
-    APP_URL: '{{resolve:ssm:/mfh/${self:provider.stage}/app-url}}'
+    APP_URL: ${ssm:/mfh/${self:provider.stage}/app-url, 'https://app.myfusionhelper.ai'}
     API_VERSION: v1
     API_REFERENCE: mfh-api
   iam:

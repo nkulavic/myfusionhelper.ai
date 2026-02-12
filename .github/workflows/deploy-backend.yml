@@ -369,10 +369,11 @@ jobs:
           - notification-worker
           - data-sync
           - executions-stream
-          - sms-chat-webhook
-          - alexa-webhook
-          - google-assistant-webhook
-          - zoom-webhook
+          # Voice assistant workers not yet implemented (from Voice Assistants plan)
+          # - sms-chat-webhook
+          # - alexa-webhook
+          # - google-assistant-webhook
+          # - zoom-webhook
     steps:
       - uses: actions/checkout@v4
 
