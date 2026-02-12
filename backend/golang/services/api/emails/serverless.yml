@@ -25,13 +25,6 @@ provider:
     apiGateway: true
   httpApi:
     id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
-    authorizers:
-      cognitoAuthorizer:
-        type: jwt
-        identitySource: $request.header.Authorization
-        issuerUrl: https://cognito-idp.${self:provider.region}.amazonaws.com/${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
-        audience:
-          - ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolClientId}
   environment:
     SERVICE_VERSION: "2025.02.11.0001"
     STAGE: ${self:provider.stage}
