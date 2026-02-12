@@ -182,19 +182,3 @@ resources:
       Value: ${self:custom.customDomain.${self:provider.stage}}
       Export:
         Name: ${self:service}-${self:provider.stage}-CustomDomainName
-    RegionalDomainName:
-      Description: "API Gateway regional domain name for Route53 alias"
-      Value:
-        Fn::GetAtt:
-          - HttpApiDomainName
-          - RegionalDomainName
-      Export:
-        Name: ${self:service}-${self:provider.stage}-RegionalDomainName
-    RegionalHostedZoneId:
-      Description: "Hosted zone ID for API Gateway regional domain"
-      Value:
-        Fn::GetAtt:
-          - HttpApiDomainName
-          - RegionalHostedZoneId
-      Export:
-        Name: ${self:service}-${self:provider.stage}-RegionalHostedZoneId
