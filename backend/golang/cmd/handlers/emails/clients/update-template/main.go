@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
+	"github.com/myfusionhelper/api/internal/types"
 	"github.com/myfusionhelper/api/internal/services"
 )
 
@@ -21,7 +22,7 @@ type UpdateTemplateRequest struct {
 	IsStarred *bool   `json:"is_starred,omitempty"`
 }
 
-func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCtx *authMiddleware.AuthContext) (events.APIGatewayV2HTTPResponse, error) {
+func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCtx *types.AuthContext) (events.APIGatewayV2HTTPResponse, error) {
 	templateID := event.PathParameters["id"]
 	if templateID == "" {
 		return authMiddleware.CreateErrorResponse(400, "Template ID is required"), nil

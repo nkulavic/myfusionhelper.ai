@@ -9,11 +9,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	ddbTypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
+	"github.com/myfusionhelper/api/internal/types"
 )
 
-func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCtx *authMiddleware.AuthContext) (events.APIGatewayV2HTTPResponse, error) {
+func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCtx *types.AuthContext) (events.APIGatewayV2HTTPResponse, error) {
 	emailID := event.PathParameters["id"]
 	if emailID == "" {
 		return authMiddleware.CreateErrorResponse(400, "Email ID is required"), nil
@@ -31,13 +32,13 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	// Delete email log from DynamoDB
 	_, err = dbClient.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(os.Getenv("EMAIL_LOGS_TABLE")),
-		Key: map[string]types.AttributeValue{
-			"email_id": &types.AttributeValueMemberS{Value: emailID},
+		Key: map[string]ddbTypes.AttributeValue{
+			"email_id": &ddbTypes.AttributeValueMemberS{Value: emailID},
 		},
 		// Security: ensure the email belongs to the user's account
 		ConditionExpression: aws.String("account_id = :account_id"),
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":account_id": &types.AttributeValueMemberS{Value: authCtx.AccountID},
+		ExpressionAttributeValues: map[string]ddbTypes.AttributeValue{
+			":account_id": &ddbTypes.AttributeValueMemberS{Value: authCtx.AccountID},
 		},
 	})
 

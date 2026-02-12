@@ -72,11 +72,11 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	return authMiddleware.CreateErrorResponse(404, "Not found"), nil
 }
 
-// routeToProtectedHandler wraps a handler with auth middleware
-func routeToProtectedHandler(
-	ctx context.Context,
-	event events.APIGatewayV2HTTPRequest,
-	handler func(context.Context, events.APIGatewayV2HTTPRequest, *authMiddleware.AuthContext) (events.APIGatewayV2HTTPResponse, error),
-) (events.APIGatewayV2HTTPResponse, error) {
-	return authMiddleware.WithAuth(ctx, event, handler)
+// routeToProtectedHandler routes requests to handlers that require authentication
+func routeToProtectedHandler(ctx context.Context, event events.APIGatewayV2HTTPRequest, handler authMiddleware.AuthHandlerFunc) (events.APIGatewayV2HTTPResponse, error) {
+	authMiddlewareInstance, err := authMiddleware.NewAuthMiddleware(ctx)
+	if err != nil {
+		return authMiddleware.CreateErrorResponse(500, "Internal server error"), nil
+	}
+	return authMiddlewareInstance.WithAuth(handler)(ctx, event)
 }
