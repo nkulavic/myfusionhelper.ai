@@ -36,8 +36,7 @@ provider:
     COGNITO_REGION: ${self:provider.region}
     COGNITO_JWKS_URI: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoJwksUri}
     COGNITO_ISSUER: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
-    STRIPE_SECRET_KEY: '{{resolve:ssm:/${self:provider.stage}/stripe/secret_key}}'
-    STRIPE_WEBHOOK_SECRET: '{{resolve:ssm:/${self:provider.stage}/stripe/webhook_secret}}'
+    INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
     STRIPE_PRICE_START: '{{resolve:ssm:/${self:provider.stage}/stripe/price_start}}'
     STRIPE_PRICE_GROW: '{{resolve:ssm:/${self:provider.stage}/stripe/price_grow}}'
     STRIPE_PRICE_DELIVER: '{{resolve:ssm:/${self:provider.stage}/stripe/price_deliver}}'
@@ -65,6 +64,7 @@ provider:
           Action:
             - ssm:GetParameter
           Resource:
+            - "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
             - "arn:aws:ssm:${self:provider.region}:*:parameter/${self:provider.stage}/stripe/*"
             - "arn:aws:ssm:${self:provider.region}:*:parameter/mfh/${self:provider.stage}/app-url"
         - Effect: Allow

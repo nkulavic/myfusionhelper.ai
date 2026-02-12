@@ -33,7 +33,7 @@ provider:
     PLATFORM_CONNECTION_AUTHS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableName}
     ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
     NOTIFICATION_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueUrl}
-    STRIPE_SECRET_KEY: '{{resolve:ssm:/${self:provider.stage}/stripe/secret_key}}'
+    INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
     API_VERSION: v1
   iam:
     role:
@@ -69,6 +69,11 @@ provider:
             - sqs:SendMessage
           Resource:
             - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueArn}
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+          Resource:
+            - "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
         - Effect: Allow
           Action:
             - logs:CreateLogGroup
