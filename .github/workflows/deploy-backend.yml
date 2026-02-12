@@ -305,6 +305,7 @@ jobs:
           - data-explorer
           - billing
           - chat
+          - emails
     steps:
       - uses: actions/checkout@v4
 
