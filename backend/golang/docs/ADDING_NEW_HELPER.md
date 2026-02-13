@@ -1,47 +1,58 @@
 # Adding a New Helper - Runbook
 
-This document describes the process for adding a new helper to the MyFusion Helper platform after the microservices migration.
+This document describes the process for adding a new helper to the MyFusion Helper platform.
 
 ## Architecture Overview
 
-As of the microservices migration (Feb 2026), each helper type has its own dedicated Lambda worker and SQS queue:
+Each helper runs as its own **self-contained microservice**: one Serverless Framework service that creates its own SQS FIFO queue, DLQ, and Lambda function.
 
 ```
-User Action → API → DynamoDB Executions Table (with Stream)
-                           ↓
+User Action -> API -> Execution record in DynamoDB (status: "pending")
+                           |
+                    DynamoDB Stream fires
+                           |
                     Stream Router Lambda
-                           ↓
-              (routes by helper_type to appropriate queue)
-                           ↓
-            Helper-specific SQS FIFO Queue
-                           ↓
-         Helper-specific Lambda Worker
-                           ↓
-              Execute helper logic
+                           |
+            Constructs queue URL from helper_type naming convention
+                           |
+                    SQS FIFO queue (per-helper)
+                           |
+              Individual Helper Worker Lambda
+                           |
+                  Execute helper logic
+                           |
+               Update execution status in DynamoDB
 ```
+
+**Key Components:**
+- **Stream Router**: Routes DynamoDB stream events to individual helper SQS queues
+- **Per-Helper SQS FIFO Queue**: `mfh-{stage}-{kebab-name}-executions.fifo`
+- **Per-Helper Lambda**: Each helper has its own worker Lambda
+- **Shared Worker Handler**: `internal/worker/handler.go` -- shared SQS processing logic
+- **Helper Registry**: Runtime lookup of helper implementation by `helper_type`
 
 ## Prerequisites
 
 - Go 1.24+ installed
 - AWS CLI configured with appropriate credentials
-- Node.js 20+ (for Serverless Framework)
-- Access to deploy to us-west-2 region
+- Push access to `dev` branch (triggers CI/CD deployment)
 
 ## Step 1: Determine Helper Category
 
-First, determine which category your helper belongs to:
+Choose the category for your helper:
 
-- **contact**: Contact manipulation (tag_it, copy_it, merge_it, etc.)
+- **contact**: Contact manipulation (copy_it, merge_it, assign_it, etc.)
 - **data**: Data transformation (format_it, math_it, split_it, etc.)
-- **tagging**: Tag management (score_it, group_it, count_tags, etc.)
+- **tagging**: Tag management (tag_it, score_it, group_it, etc.)
 - **automation**: Automation triggers (trigger_it, action_it, chain_it, etc.)
 - **integration**: External integrations (hook_it, mail_it, slack_it, etc.)
-- **notification**: Notifications (notify_me, email_engagement, etc.)
-- **analytics**: Analytics (rfm_calculation, customer_lifetime_value, etc.)
+- **notification**: Notifications (notify_me, email_engagement)
+- **analytics**: Analytics (rfm_calculation, customer_lifetime_value)
+- **platform**: Platform-specific (keap_backup)
 
 ## Step 2: Implement Helper Logic
 
-Create your helper implementation in `backend/golang/internal/helpers/{category}/`:
+Create your helper in `backend/golang/internal/helpers/{category}/`:
 
 ```go
 // backend/golang/internal/helpers/contact/my_new_helper.go
@@ -54,21 +65,12 @@ import (
 
 type MyNewHelper struct{}
 
-func (h *MyNewHelper) GetName() string {
-    return "My New Helper"
-}
+func NewMyNewHelper() helpers.Helper { return &MyNewHelper{} }
 
-func (h *MyNewHelper) GetType() string {
-    return "my_new_helper"
-}
-
-func (h *MyNewHelper) GetCategory() string {
-    return "contact"
-}
-
-func (h *MyNewHelper) GetDescription() string {
-    return "Description of what this helper does"
-}
+func (h *MyNewHelper) GetName() string        { return "My New Helper" }
+func (h *MyNewHelper) GetType() string        { return "my_new_helper" }
+func (h *MyNewHelper) GetCategory() string    { return "contact" }
+func (h *MyNewHelper) GetDescription() string { return "Description of what this helper does" }
 
 func (h *MyNewHelper) GetConfigSchema() map[string]interface{} {
     return map[string]interface{}{
@@ -92,340 +94,166 @@ func (h *MyNewHelper) Execute(ctx context.Context, input helpers.HelperInput) (*
 }
 
 func (h *MyNewHelper) ValidateConfig(config map[string]interface{}) error {
-    // Validation logic
     return nil
 }
 
-func (h *MyNewHelper) RequiresCRM() bool {
-    return true // or false if it doesn't need CRM connection
-}
-
+func (h *MyNewHelper) RequiresCRM() bool    { return true }
 func (h *MyNewHelper) SupportedCRMs() []string {
     return []string{"keap", "gohighlevel", "activecampaign", "ontraport", "hubspot"}
 }
 
+// init() registers in the global registry (backward compatibility with monolith)
 func init() {
-    helpers.Register("my_new_helper", func() helpers.Helper {
-        return &MyNewHelper{}
-    })
+    helpers.Register("my_new_helper", func() helpers.Helper { return &MyNewHelper{} })
 }
 ```
 
-## Step 3: Scaffold Worker Service
+**Important**: You need BOTH:
+- `NewMyNewHelper()` -- exported factory function used by the individual worker
+- `init()` -- registers in global registry for backward compatibility
 
-Use the template to create the worker service:
+## Step 3: Create the Worker Service
 
-```bash
-cd backend/golang/services/workers
+Create `services/workers/my-new-helper-worker/` with two files:
 
-# Copy template
-cp -r _templates/helper-worker my-new-helper-worker
-
-# Update service name in serverless.yml
-cd my-new-helper-worker
-```
-
-Edit `serverless.yml`:
-
-```yaml
-service: mfh-my-new-helper-worker
-
-provider:
-  name: aws
-  runtime: provided.al2023
-  architecture: arm64
-  region: us-west-2
-  stage: ${opt:stage, 'dev'}
-  memorySize: 512
-  timeout: 300
-
-  environment:
-    STAGE: ${self:provider.stage}
-    HELPER_TYPE: my_new_helper
-    CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
-    PLATFORM_CONNECTION_AUTHS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableName}
-    EXECUTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableName}
-    HELPERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableName}
-    PLATFORMS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableName}
-    INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
-
-  iam:
-    role:
-      statements:
-        # DynamoDB permissions
-        - Effect: Allow
-          Action:
-            - dynamodb:GetItem
-            - dynamodb:PutItem
-            - dynamodb:UpdateItem
-            - dynamodb:Query
-          Resource:
-            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}
-            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableArn}
-            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableArn}
-            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableArn}
-            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableArn}
-        # SSM for secrets
-        - Effect: Allow
-          Action:
-            - ssm:GetParameter
-          Resource:
-            - "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
-
-functions:
-  worker:
-    handler: bootstrap
-    events:
-      - sqs:
-          arn: ${cf:mfh-sqs-{category}-helpers-${self:provider.stage}.MyNewHelperQueueArn}
-          batchSize: 10
-          maximumBatchingWindowInSeconds: 5
-          functionResponseType: ReportBatchItemFailures
-
-plugins:
-  - serverless-go-plugin
-
-custom:
-  go:
-    baseDir: ../../..
-    supportedRuntimes: ["provided.al2023"]
-    buildProvidedRuntimeAsBootstrap: true
-    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w" -o .bin/bootstrap ./cmd/handlers/workers/my-new-helper-worker'
-```
-
-## Step 4: Create Handler Entry Point
-
-Create `backend/golang/cmd/handlers/workers/my-new-helper-worker/main.go`:
+### main.go
 
 ```go
 package main
 
 import (
-    "context"
-    "encoding/json"
-    "log"
-    "os"
-
-    "github.com/aws/aws-lambda-go/events"
     "github.com/aws/aws-lambda-go/lambda"
     "github.com/myfusionhelper/api/internal/helpers"
+    "github.com/myfusionhelper/api/internal/helpers/contact"
+    "github.com/myfusionhelper/api/internal/worker"
 
-    // Import your helper category to register it
-    _ "github.com/myfusionhelper/api/internal/helpers/contact"
+    _ "github.com/myfusionhelper/api/internal/connectors"
 )
 
 func main() {
-    lambda.Start(HandleSQSEvent)
-}
-
-func HandleSQSEvent(ctx context.Context, sqsEvent events.SQSEvent) (events.SQSEventResponse, error) {
-    helperType := os.Getenv("HELPER_TYPE")
-
-    failures := []events.SQSBatchItemFailure{}
-
-    for _, record := range sqsEvent.Records {
-        var input helpers.HelperInput
-        if err := json.Unmarshal([]byte(record.Body), &input); err != nil {
-            log.Printf("Failed to unmarshal message: %v", err)
-            failures = append(failures, events.SQSBatchItemFailure{
-                ItemIdentifier: record.MessageId,
-            })
-            continue
-        }
-
-        if err := helpers.Execute(ctx, helperType, input); err != nil {
-            log.Printf("Helper execution failed: %v", err)
-            failures = append(failures, events.SQSBatchItemFailure{
-                ItemIdentifier: record.MessageId,
-            })
-            continue
-        }
-
-        log.Printf("Successfully executed helper %s for execution %s", helperType, input.ExecutionID)
-    }
-
-    return events.SQSEventResponse{
-        BatchItemFailures: failures,
-    }, nil
+    helpers.Register("my_new_helper", contact.NewMyNewHelper)
+    lambda.Start(worker.HandleSQSEvent)
 }
 ```
 
-## Step 5: Add SQS Queue to Infrastructure
+### serverless.yml
 
-Add queue definition to appropriate category in `backend/golang/services/infrastructure/sqs/{category}-helpers/serverless.yml`:
+Copy from `services/workers/tag-it-worker/serverless.yml` and change these 6 values:
 
-```yaml
-MyNewHelperQueue:
-  Type: AWS::SQS::Queue
-  Properties:
-    QueueName: mfh-${self:provider.stage}-my-new-helper-executions.fifo
-    FifoQueue: true
-    ContentBasedDeduplication: true
-    MessageRetentionPeriod: 1209600  # 14 days
-    VisibilityTimeout: 900  # 15 minutes (3x worker timeout)
-    RedrivePolicy:
-      deadLetterTargetArn: !GetAtt MyNewHelperDLQ.Arn
-      maxReceiveCount: 3
+| Field | Change to |
+|-------|-----------|
+| `service` | `mfh-my-new-helper-worker` |
+| `HELPER_TYPE` | `my_new_helper` |
+| `handler` | `services/workers/my-new-helper-worker/main.go` |
+| `description` | `"Process my_new_helper helper execution jobs"` |
+| `QueueName` (queue) | `mfh-${self:provider.stage}-my-new-helper-executions.fifo` |
+| `QueueName` (DLQ) | `mfh-${self:provider.stage}-my-new-helper-dlq.fifo` |
 
-MyNewHelperDLQ:
-  Type: AWS::SQS::Queue
-  Properties:
-    QueueName: mfh-${self:provider.stage}-my-new-helper-executions-dlq.fifo
-    FifoQueue: true
-    MessageRetentionPeriod: 1209600  # 14 days
+**CRITICAL serverless-go-plugin settings (DO NOT CHANGE):**
+- `cmd` must NOT include `-o bootstrap` (plugin handles output naming)
+- `handler` must be Go source path relative to baseDir, NOT `bootstrap`
+- `baseDir: ../../..` (points to `backend/golang/` from worker directory)
 
-# In Outputs section:
-MyNewHelperQueueArn:
-  Value: !GetAtt MyNewHelperQueue.Arn
-  Export:
-    Name: ${self:service}-${self:provider.stage}-MyNewHelperQueueArn
-
-MyNewHelperQueueUrl:
-  Value: !Ref MyNewHelperQueue
-  Export:
-    Name: ${self:service}-${self:provider.stage}-MyNewHelperQueueUrl
-```
-
-## Step 6: Update helpers-inventory.json
-
-Add your helper to the inventory:
+## Step 4: Verify Build
 
 ```bash
 cd backend/golang
+go build ./services/workers/my-new-helper-worker
+go build ./...  # verify nothing else broke
+```
 
-# Add to appropriate category in helpers-inventory.json
-# Example for contact category:
+## Step 5: Deploy via CI/CD
+
+**All deployments MUST go through CI/CD. Never run `npx sls deploy` manually.**
+
+```bash
+git add backend/golang/internal/helpers/contact/my_new_helper.go
+git add backend/golang/services/workers/my-new-helper-worker/
+git commit -m "feat: Add my_new_helper worker"
+git push origin dev
+```
+
+GitHub Actions will:
+1. Build the Go code
+2. Auto-detect the new worker directory via `git diff`
+3. Deploy the new worker's Lambda + SQS queue + DLQ to us-west-2
+4. The stream router will automatically route `my_new_helper` executions to the new queue
+
+## Step 6: Verify Deployment
+
+```bash
+# Check queue exists
+aws sqs get-queue-url --queue-name mfh-dev-my-new-helper-executions.fifo --region us-west-2
+
+# Check Lambda exists
+aws lambda get-function --function-name mfh-my-new-helper-worker-dev-worker --region us-west-2
+
+# Test via API
+POST /helpers
 {
-  "contact": [
-    "assign_it",
-    ...
-    "my_new_helper"  // Add here
-  ],
-  ...
+  "name": "My Test Helper",
+  "helper_type": "my_new_helper",
+  "config": { "field_name": "email" },
+  "connection_id": "conn_xxx",
+  "enabled": true
 }
+
+POST /helpers/{helper_id}/execute
+GET /executions/{execution_id}
+
+# Monitor logs
+aws logs tail /aws/lambda/mfh-my-new-helper-worker-dev-worker --follow --region us-west-2
 ```
 
-## Step 7: Deploy Infrastructure (SQS Queue)
+## Naming Conventions
 
-```bash
-cd backend/golang/services/infrastructure/sqs/{category}-helpers
-npx sls deploy --stage dev --region us-west-2
-```
+| Item | Convention | Example |
+|------|-----------|---------|
+| helper_type | `snake_case` | `my_new_helper` |
+| Worker directory | `{kebab-case}-worker/` | `my-new-helper-worker/` |
+| Service name | `mfh-{kebab}-worker` | `mfh-my-new-helper-worker` |
+| SQS queue | `mfh-{stage}-{kebab}-executions.fifo` | `mfh-dev-my-new-helper-executions.fifo` |
+| SQS DLQ | `mfh-{stage}-{kebab}-dlq.fifo` | `mfh-dev-my-new-helper-dlq.fifo` |
+| Factory function | `New{PascalCase}()` | `NewMyNewHelper()` |
 
-## Step 8: Create SSM Parameter for Queue URL
-
-```bash
-# Get the queue URL from CloudFormation
-QUEUE_URL=$(aws cloudformation describe-stacks \
-  --region us-west-2 \
-  --stack-name mfh-sqs-{category}-helpers-dev \
-  --query 'Stacks[0].Outputs[?OutputKey==`MyNewHelperQueueUrl`].OutputValue' \
-  --output text)
-
-# Create SSM parameter
-aws ssm put-parameter \
-  --region us-west-2 \
-  --name "/mfh/dev/sqs/my_new_helper/queue-url" \
-  --value "$QUEUE_URL" \
-  --type String \
-  --overwrite
-```
-
-## Step 9: Deploy Worker Lambda
-
-```bash
-cd backend/golang/services/workers/my-new-helper-worker
-npx sls deploy --stage dev --region us-west-2
-```
-
-## Step 10: Test Helper
-
-Test the helper by creating an execution:
-
-```bash
-# Create a test helper in DynamoDB
-# Execute via API: POST /helpers/{helper_id}/execute
-# Check CloudWatch Logs for worker execution
-```
-
-## Step 11: Update CI/CD Pipeline
-
-Add the new worker to `.github/workflows/deploy-backend.yml`:
-
-```yaml
-# In the workers deployment section, add:
-- name: Deploy my-new-helper-worker
-  working-directory: backend/golang/services/workers/my-new-helper-worker
-  run: npx sls deploy --stage ${{ env.STAGE }} --region us-west-2
-```
+**Kebab conversion**: `my_new_helper` -> `my-new-helper` (replace `_` with `-`)
 
 ## Verification Checklist
 
 - [ ] Helper implementation created in `internal/helpers/{category}/`
+- [ ] Factory function `NewXxx()` exported
 - [ ] Helper registered in `init()` function
-- [ ] Worker service scaffolded in `services/workers/`
-- [ ] Handler created in `cmd/handlers/workers/`
-- [ ] SQS queue added to infrastructure
-- [ ] Queue deployed to us-west-2
-- [ ] SSM parameter created for queue URL
-- [ ] Worker Lambda deployed to us-west-2
-- [ ] Helper added to `helpers-inventory.json`
-- [ ] CI/CD pipeline updated
-- [ ] Helper tested successfully
-- [ ] CloudWatch logs show successful execution
+- [ ] Worker `main.go` created (registers one helper, calls shared handler)
+- [ ] Worker `serverless.yml` created (self-contained with queue + DLQ + Lambda)
+- [ ] `go build ./services/workers/my-new-helper-worker` compiles
+- [ ] `go build ./...` passes
+- [ ] Code committed and pushed to `dev` branch
+- [ ] CI/CD deployment succeeded
+- [ ] SQS queue created in us-west-2
+- [ ] Lambda function created and healthy
+- [ ] Helper tested via API execution
 
 ## Troubleshooting
 
-### Worker not receiving messages
+### Helper not found error
+1. Verify `helpers.Register()` is called in worker `main.go`
+2. Verify factory function name matches the import
+3. Check CI/CD deployed the worker successfully
 
-1. Check SSM parameter exists:
-   ```bash
-   aws ssm get-parameter --region us-west-2 --name "/mfh/dev/sqs/my_new_helper/queue-url"
-   ```
+### Messages not arriving at worker
+1. Check stream router logs -- is it routing to the correct queue URL?
+2. Verify queue name follows convention: `mfh-{stage}-{kebab}-executions.fifo`
+3. Check the stream router's fallback -- messages may be going to the old monolith queue
 
-2. Verify stream-router can access SSM:
-   ```bash
-   aws lambda get-function-configuration --region us-west-2 --function-name mfh-stream-router-dev-router
-   ```
-
-3. Check CloudWatch Logs for stream-router errors
-
-### Helper execution fails
-
-1. Check worker CloudWatch Logs:
-   ```bash
-   aws logs tail /aws/lambda/mfh-my-new-helper-worker-dev-worker --follow
-   ```
-
-2. Verify DynamoDB permissions in IAM role
-
-3. Check helper configuration schema validation
-
-### Messages going to DLQ
-
-1. Check DLQ:
-   ```bash
-   aws sqs get-queue-attributes \
-     --region us-west-2 \
-     --queue-url <DLQ-URL> \
-     --attribute-names ApproximateNumberOfMessages
-   ```
-
-2. Review error logs in CloudWatch
-
-3. Increase worker timeout if needed (max 900 seconds)
-
-## Architecture Notes
-
-- Each helper type has its own dedicated Lambda worker
-- Stream-router reads from DynamoDB Executions stream
-- Stream-router routes messages based on `helper_type` field
-- Workers are triggered by SQS events (batch size 10)
-- All infrastructure must be in **us-west-2** region
-- SSM parameters enable dynamic queue URL lookup
+### Worker Lambda errors
+1. Check CloudWatch logs for the specific worker Lambda
+2. Verify all environment variables are set (check serverless.yml)
+3. Verify IAM permissions include all required DynamoDB tables
 
 ## Related Documentation
 
-- [Helper Architecture & Migration Plan](https://teamwork.com/notebooks/417846) (Teamwork)
-- [Go Backend CLAUDE.md](../CLAUDE.md)
+- [Go Backend CLAUDE.md](../CLAUDE.md) -- full architecture reference
 - [Helpers Interface](../internal/helpers/interface.go)
+- [Helper Registry](../internal/helpers/registry.go)
+- [Shared Worker Handler](../internal/worker/handler.go)
+- [Reference Implementation](../services/workers/tag-it-worker/)
