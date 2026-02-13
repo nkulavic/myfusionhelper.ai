@@ -1,0 +1,48 @@
+service: mfh-get-the-first-worker
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 300
+  tracing:
+    lambda: true
+  environment:
+    STAGE: ${self:provider.stage}
+    HELPER_TYPE: get_the_first
+    EXECUTIONS_TABLE_NAME: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableName}
+    CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}
+
+functions:
+  worker:
+    handler: bootstrap
+    events:
+      - sqs:
+          arn: ${cf:mfh-infrastructure-sqs-data-helpers-${self:provider.stage}.GetTheFirstQueueArn}
+          batchSize: 1
+          functionResponseType: ReportBatchItemFailures
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    cmd: GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o bootstrap
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true

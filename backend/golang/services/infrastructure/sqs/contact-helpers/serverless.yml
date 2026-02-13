@@ -1,0 +1,503 @@
+service: mfh-sqs-contact-helpers
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+
+resources:
+  Resources:
+    # assign_it
+    AssignItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-assign-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt AssignItDLQ.Arn
+          maxReceiveCount: 3
+
+    AssignItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-assign-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # clear_it
+    ClearItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-clear-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ClearItDLQ.Arn
+          maxReceiveCount: 3
+
+    ClearItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-clear-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # combine_it
+    CombineItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-combine-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt CombineItDLQ.Arn
+          maxReceiveCount: 3
+
+    CombineItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-combine-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # company_link
+    CompanyLinkQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-company-link-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt CompanyLinkDLQ.Arn
+          maxReceiveCount: 3
+
+    CompanyLinkDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-company-link-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # contact_updater
+    ContactUpdaterQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-contact-updater-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ContactUpdaterDLQ.Arn
+          maxReceiveCount: 3
+
+    ContactUpdaterDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-contact-updater-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # copy_it
+    CopyItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-copy-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt CopyItDLQ.Arn
+          maxReceiveCount: 3
+
+    CopyItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-copy-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # default_to_field
+    DefaultToFieldQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-default-to-field-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt DefaultToFieldDLQ.Arn
+          maxReceiveCount: 3
+
+    DefaultToFieldDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-default-to-field-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # field_to_field
+    FieldToFieldQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-field-to-field-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt FieldToFieldDLQ.Arn
+          maxReceiveCount: 3
+
+    FieldToFieldDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-field-to-field-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # found_it
+    FoundItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-found-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt FoundItDLQ.Arn
+          maxReceiveCount: 3
+
+    FoundItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-found-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # merge_it
+    MergeItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-merge-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt MergeItDLQ.Arn
+          maxReceiveCount: 3
+
+    MergeItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-merge-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # move_it
+    MoveItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-move-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt MoveItDLQ.Arn
+          maxReceiveCount: 3
+
+    MoveItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-move-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # name_parse_it
+    NameParseItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-name-parse-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt NameParseItDLQ.Arn
+          maxReceiveCount: 3
+
+    NameParseItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-name-parse-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # note_it
+    NoteItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-note-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt NoteItDLQ.Arn
+          maxReceiveCount: 3
+
+    NoteItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-note-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # opt_in
+    OptInQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-opt-in-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt OptInDLQ.Arn
+          maxReceiveCount: 3
+
+    OptInDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-opt-in-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # opt_out
+    OptOutQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-opt-out-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt OptOutDLQ.Arn
+          maxReceiveCount: 3
+
+    OptOutDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-opt-out-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # own_it
+    OwnItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-own-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt OwnItDLQ.Arn
+          maxReceiveCount: 3
+
+    OwnItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-own-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # snapshot_it
+    SnapshotItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-snapshot-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt SnapshotItDLQ.Arn
+          maxReceiveCount: 3
+
+    SnapshotItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-snapshot-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+  Outputs:
+    AssignItQueueArn:
+      Value: !GetAtt AssignItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AssignItQueueArn
+    AssignItQueueUrl:
+      Value: !Ref AssignItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AssignItQueueUrl
+
+    ClearItQueueArn:
+      Value: !GetAtt ClearItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ClearItQueueArn
+    ClearItQueueUrl:
+      Value: !Ref ClearItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ClearItQueueUrl
+
+    CombineItQueueArn:
+      Value: !GetAtt CombineItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CombineItQueueArn
+    CombineItQueueUrl:
+      Value: !Ref CombineItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CombineItQueueUrl
+
+    CompanyLinkQueueArn:
+      Value: !GetAtt CompanyLinkQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CompanyLinkQueueArn
+    CompanyLinkQueueUrl:
+      Value: !Ref CompanyLinkQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CompanyLinkQueueUrl
+
+    ContactUpdaterQueueArn:
+      Value: !GetAtt ContactUpdaterQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ContactUpdaterQueueArn
+    ContactUpdaterQueueUrl:
+      Value: !Ref ContactUpdaterQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ContactUpdaterQueueUrl
+
+    CopyItQueueArn:
+      Value: !GetAtt CopyItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CopyItQueueArn
+    CopyItQueueUrl:
+      Value: !Ref CopyItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CopyItQueueUrl
+
+    DefaultToFieldQueueArn:
+      Value: !GetAtt DefaultToFieldQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DefaultToFieldQueueArn
+    DefaultToFieldQueueUrl:
+      Value: !Ref DefaultToFieldQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DefaultToFieldQueueUrl
+
+    FieldToFieldQueueArn:
+      Value: !GetAtt FieldToFieldQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-FieldToFieldQueueArn
+    FieldToFieldQueueUrl:
+      Value: !Ref FieldToFieldQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-FieldToFieldQueueUrl
+
+    FoundItQueueArn:
+      Value: !GetAtt FoundItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-FoundItQueueArn
+    FoundItQueueUrl:
+      Value: !Ref FoundItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-FoundItQueueUrl
+
+    MergeItQueueArn:
+      Value: !GetAtt MergeItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-MergeItQueueArn
+    MergeItQueueUrl:
+      Value: !Ref MergeItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-MergeItQueueUrl
+
+    MoveItQueueArn:
+      Value: !GetAtt MoveItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-MoveItQueueArn
+    MoveItQueueUrl:
+      Value: !Ref MoveItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-MoveItQueueUrl
+
+    NameParseItQueueArn:
+      Value: !GetAtt NameParseItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-NameParseItQueueArn
+    NameParseItQueueUrl:
+      Value: !Ref NameParseItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-NameParseItQueueUrl
+
+    NoteItQueueArn:
+      Value: !GetAtt NoteItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-NoteItQueueArn
+    NoteItQueueUrl:
+      Value: !Ref NoteItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-NoteItQueueUrl
+
+    OptInQueueArn:
+      Value: !GetAtt OptInQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OptInQueueArn
+    OptInQueueUrl:
+      Value: !Ref OptInQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OptInQueueUrl
+
+    OptOutQueueArn:
+      Value: !GetAtt OptOutQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OptOutQueueArn
+    OptOutQueueUrl:
+      Value: !Ref OptOutQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OptOutQueueUrl
+
+    OwnItQueueArn:
+      Value: !GetAtt OwnItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OwnItQueueArn
+    OwnItQueueUrl:
+      Value: !Ref OwnItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OwnItQueueUrl
+
+    SnapshotItQueueArn:
+      Value: !GetAtt SnapshotItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SnapshotItQueueArn
+    SnapshotItQueueUrl:
+      Value: !Ref SnapshotItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SnapshotItQueueUrl

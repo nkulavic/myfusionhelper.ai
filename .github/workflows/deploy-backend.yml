@@ -172,7 +172,66 @@ jobs:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
+  # 2a. Detect Changed Helper Workers (for intelligent deployment)
+  # ──────────────────────────────────────────────
+  detect-changed-helpers:
+    name: Detect Changed Helper Workers
+    needs: build-test
+    runs-on: ubuntu-latest
+    outputs:
+      helpers: ${{ steps.detect.outputs.helpers }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed helper workers
+        id: detect
+        run: |
+          # Detect which helper workers have changes since last commit
+          # Excludes: helper-worker, notification-worker, data-sync, executions-stream, scheduler, voice assistant workers
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger - deploy all helpers
+            echo "Manual trigger detected, will deploy all helper workers"
+            ALL_HELPERS=$(find backend/golang/services/workers -maxdepth 1 -type d -name "*-worker" \
+              ! -name "helper-worker" \
+              ! -name "notification-worker" \
+              ! -name "data-sync" \
+              ! -name "executions-stream" \
+              ! -name "scheduler" \
+              ! -name "sms-chat-webhook" \
+              ! -name "alexa-webhook" \
+              ! -name "google-assistant-webhook" \
+              ! -name "zoom-webhook" \
+              2>/dev/null | xargs -I {} basename {} | sed 's/-worker$//' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            echo "helpers=$ALL_HELPERS" >> $GITHUB_OUTPUT
+            if [ "$ALL_HELPERS" = "[]" ] || [ -z "$ALL_HELPERS" ]; then
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+            else
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Git-based detection for push events
+            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
+              | grep '^backend/golang/services/workers/' \
+              | grep -oP 'services/workers/\K[^/]+(?=-worker/)' \
+              | grep -v -E '^(helper|notification|data-sync|executions-stream|scheduler|sms-chat-webhook|alexa-webhook|google-assistant-webhook|zoom-webhook)$' \
+              | sort -u \
+              | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            echo "Changed helper workers: $CHANGED"
+            echo "helpers=$CHANGED" >> $GITHUB_OUTPUT
+            if [ "$CHANGED" = "[]" ] || [ -z "$CHANGED" ]; then
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+            else
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  # ──────────────────────────────────────────────
   # 2b. Deploy Pre-Gateway Services (needed by gateway + API services)
+  # Includes executions-stream (DynamoDB stream router to SQS)
   # ──────────────────────────────────────────────
   deploy-pre-gateway:
     name: "Deploy Pre-Gateway: ${{ matrix.service }}"
@@ -186,6 +245,8 @@ jobs:
             path: services/api/api-key-authorizer
           - service: scheduler
             path: services/workers/scheduler
+          - service: executions-stream
+            path: services/workers/executions-stream
     steps:
       - uses: actions/checkout@v4
 
@@ -357,7 +418,56 @@ jobs:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
-  # 5. Deploy Workers (parallel matrix)
+  # 5. Deploy Helper Workers (intelligent parallel deployment)
+  # Only deploys helper workers that have changed (detected by git diff)
+  # ──────────────────────────────────────────────
+  deploy-helpers:
+    name: "Deploy Helper: ${{ matrix.helper }}-worker"
+    needs:
+      - detect-changed-helpers
+      - deploy-pre-gateway
+    if: needs.detect-changed-helpers.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        helper: ${{ fromJson(needs.detect-changed-helpers.outputs.helpers) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend/golang/go.sum
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
+          aws-region: us-west-2
+
+      - name: Install Serverless Framework
+        run: npm install -g serverless
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+      - name: Install Go plugin
+        working-directory: backend/golang
+        run: npm install
+
+      - name: "Deploy ${{ matrix.helper }}-worker"
+        working-directory: backend/golang/services/workers/${{ matrix.helper }}-worker
+        run: npx sls deploy --stage ${{ env.DEPLOY_STAGE }} --region us-west-2
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+  # ──────────────────────────────────────────────
+  # 5b. Deploy Core Workers (non-helper workers)
+  # Excludes helper-specific workers (deployed by deploy-helpers job)
   # ──────────────────────────────────────────────
   deploy-workers:
     name: "Deploy Worker: ${{ matrix.service }}"
@@ -370,7 +480,7 @@ jobs:
           - helper-worker
           - notification-worker
           - data-sync
-          - executions-stream
+          # executions-stream moved to deploy-pre-gateway
           # Voice assistant workers not yet implemented (from Voice Assistants plan)
           # - sms-chat-webhook
           # - alexa-webhook
@@ -410,12 +520,15 @@ jobs:
 
   # ──────────────────────────────────────────────
   # 6. Post-Deploy (seed + verify)
+  # Waits for all deployments to complete (API + Workers + Helpers if any)
   # ──────────────────────────────────────────────
   post-deploy:
     name: Post-Deploy Verification
     needs:
       - deploy-api
       - deploy-workers
+      - detect-changed-helpers
+    if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
