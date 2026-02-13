@@ -33,7 +33,7 @@ functions:
     handler: bootstrap
     events:
       - sqs:
-          arn: ${cf:mfh-infrastructure-sqs-integration-helpers-${self:provider.stage}.ZoomWebinarAbsenteeQueueArn}
+          arn: ${cf:mfh-sqs-integration-helpers-${self:provider.stage}.ZoomWebinarAbsenteeQueueArn}
           batchSize: 1
           functionResponseType: ReportBatchItemFailures
 

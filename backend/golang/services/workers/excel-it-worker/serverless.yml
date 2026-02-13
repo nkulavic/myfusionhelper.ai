@@ -33,7 +33,7 @@ functions:
     handler: bootstrap
     events:
       - sqs:
-          arn: ${cf:mfh-infrastructure-sqs-integration-helpers-${self:provider.stage}.ExcelItQueueArn}
+          arn: ${cf:mfh-sqs-integration-helpers-${self:provider.stage}.ExcelItQueueArn}
           batchSize: 1
           functionResponseType: ReportBatchItemFailures
 

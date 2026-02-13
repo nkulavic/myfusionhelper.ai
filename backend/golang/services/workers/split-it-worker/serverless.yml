@@ -33,7 +33,7 @@ functions:
     handler: bootstrap
     events:
       - sqs:
-          arn: ${cf:mfh-infrastructure-sqs-data-helpers-${self:provider.stage}.SplitItQueueArn}
+          arn: ${cf:mfh-sqs-data-helpers-${self:provider.stage}.SplitItQueueArn}
           batchSize: 1
           functionResponseType: ReportBatchItemFailures
 

@@ -33,7 +33,7 @@ functions:
     handler: bootstrap
     events:
       - sqs:
-          arn: ${cf:mfh-infrastructure-sqs-tagging-helpers-${self:provider.stage}.ScoreItQueueArn}
+          arn: ${cf:mfh-sqs-tagging-helpers-${self:provider.stage}.ScoreItQueueArn}
           batchSize: 1
           functionResponseType: ReportBatchItemFailures
 

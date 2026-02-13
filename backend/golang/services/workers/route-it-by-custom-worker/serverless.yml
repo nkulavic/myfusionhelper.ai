@@ -33,7 +33,7 @@ functions:
     handler: bootstrap
     events:
       - sqs:
-          arn: ${cf:mfh-infrastructure-sqs-automation-helpers-${self:provider.stage}.RouteItByCustomQueueArn}
+          arn: ${cf:mfh-sqs-automation-helpers-${self:provider.stage}.RouteItByCustomQueueArn}
           batchSize: 1
           functionResponseType: ReportBatchItemFailures
 

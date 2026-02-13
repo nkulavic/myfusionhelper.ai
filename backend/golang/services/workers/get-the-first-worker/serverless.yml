@@ -33,7 +33,7 @@ functions:
     handler: bootstrap
     events:
       - sqs:
-          arn: ${cf:mfh-infrastructure-sqs-data-helpers-${self:provider.stage}.GetTheFirstQueueArn}
+          arn: ${cf:mfh-sqs-data-helpers-${self:provider.stage}.GetTheFirstQueueArn}
           batchSize: 1
           functionResponseType: ReportBatchItemFailures
 

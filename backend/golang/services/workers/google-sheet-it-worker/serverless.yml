@@ -33,7 +33,7 @@ functions:
     handler: bootstrap
     events:
       - sqs:
-          arn: ${cf:mfh-infrastructure-sqs-integration-helpers-${self:provider.stage}.GoogleSheetItQueueArn}
+          arn: ${cf:mfh-sqs-integration-helpers-${self:provider.stage}.GoogleSheetItQueueArn}
           batchSize: 1
           functionResponseType: ReportBatchItemFailures
 
