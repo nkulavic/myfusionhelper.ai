@@ -58,6 +58,6 @@ plugins:
 custom:
   go:
     baseDir: ../../..
-    cmd: GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o bootstrap
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
     supportedRuntimes: ["provided.al2023"]
     buildProvidedRuntimeAsBootstrap: true
