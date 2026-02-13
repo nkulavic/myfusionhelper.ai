@@ -2,6 +2,25 @@
 
 Serverless Go backend on AWS Lambda, deployed via Serverless Framework v4.
 
+## ⚠️ CRITICAL DEPLOYMENT POLICY
+
+**ALL DEPLOYMENTS MUST GO THROUGH CI/CD PIPELINE**
+
+- ✅ Push code to `dev` or `main` branch → GitHub Actions deploys automatically
+- ❌ NEVER run `npx sls deploy` manually (except for emergency debugging)
+- ❌ NEVER deploy to any region other than `us-west-2`
+
+**Region Lock**: ALL infrastructure and services are deployed ONLY to **us-west-2**. This is enforced in CI/CD and must be verified in all serverless.yml files.
+
+**Emergency Manual Deployment** (debugging only):
+```bash
+# ONLY for emergency debugging - normally use CI/CD
+cd backend/golang
+npm install
+cd services/api/auth
+npx sls deploy --stage dev --region us-west-2  # MUST be us-west-2
+```
+
 ## Quick Reference
 
 ```bash
@@ -13,15 +32,8 @@ CGO_ENABLED=1 go build ./...
 # Run tests
 CGO_ENABLED=1 go test ./...
 
-# Deploy a single service
-npm install                          # first time only (installs serverless-go-plugin)
-cd services/api/auth
-npx sls deploy --stage dev
-
-# Deploy DuckDB-dependent service (needs Docker for AL2023 glibc)
+# Build DuckDB-dependent service (needs Docker for AL2023 glibc)
 bash scripts/build-duckdb-handler.sh
-cd services/api/data-explorer
-npx sls deploy --stage dev
 ```
 
 ## Project Layout
@@ -328,6 +340,22 @@ func init() {
 
 ## Serverless Framework Conventions
 
+### Critical Requirements
+
+**EVERY serverless.yml file MUST include**:
+```yaml
+provider:
+  name: aws
+  region: us-west-2              # REQUIRED - NEVER change this
+  runtime: provided.al2023
+  architecture: arm64
+```
+
+**Region Lock**: ALL services deploy to `us-west-2` ONLY. This is non-negotiable and enforced in:
+- Every `serverless.yml` file
+- GitHub Actions CI/CD pipeline
+- Post-deployment verification scripts
+
 ### Plugin
 
 Uses `serverless-go-plugin` (installed via `npm install` in `backend/golang/`):
@@ -489,17 +517,60 @@ provider:
 - **Consistent Pattern:** Matches company architecture (listbackup-ai)
 - **Easy to Extend:** Add new secret categories without infrastructure changes
 
-## CI/CD
+## CI/CD - Automated Deployment Pipeline
+
+**🔒 DEPLOYMENT POLICY: CI/CD ONLY, us-west-2 ONLY**
+
+All deployments are managed through GitHub Actions. Manual deployments via `npx sls deploy` are NOT permitted except for emergency debugging.
+
+**Region Lock**: ALL services deploy exclusively to **us-west-2**. This is:
+- Hardcoded in `.github/workflows/deploy-backend.yml` (every deploy step uses `--region us-west-2`)
+- Set as default in all `services/*/serverless.yml` files (`region: us-west-2`)
+- Verified in post-deployment health checks
 
 GitHub Actions workflows:
 
 **`deploy-backend.yml`** -- main deploy pipeline:
-- Triggered on push to `main`/`dev` (paths: `backend/golang/**`)
-- OIDC authentication: `GitHubActions-Deploy-Dev` IAM role
-- Branch mapping: `dev` -> dev stage, `main` -> prod stage
-- API services deploy with `max-parallel: 3` to avoid CloudFormation throttling
-- Post-deploy: seeds platform data + runs health check verification
+- **Trigger**: Push to `main`/`dev` branches (paths: `backend/golang/**`)
+- **Authentication**: OIDC → `GitHubActions-Deploy-Dev` IAM role (AWS Account: 570331155915)
+- **Region**: us-west-2 ONLY (enforced on every deployment command)
+- **Branch mapping**: `dev` → dev stage, `main` → prod stage
+- **Deployment order**:
+  1. Infrastructure (cognito, dynamodb, s3, sqs, monitoring, acm) - parallel
+  2. Pre-gateway (api-key-authorizer, scheduler) - parallel
+  3. API Gateway (creates HttpApi + custom domain)
+  4. Route53 (DNS records)
+  5. API services (auth, accounts, helpers, platforms, billing, etc.) - parallel (max 3)
+  6. Workers (helper-worker, data-sync, notification-worker, etc.) - parallel
+  7. Post-deploy verification
+- **Safety**: API services deploy with `max-parallel: 3` to avoid CloudFormation throttling
+- **Post-deploy**: seeds platform data + runs health check verification
 
 **`sync-internal-secrets.yml`** -- manual secrets sync:
-- `workflow_dispatch` triggered, syncs GitHub secrets to AWS SSM Parameter Store
-- Writes Stripe keys per stage (`/{stage}/stripe/secret_key`, etc.)
+- **Trigger**: `workflow_dispatch` (manual)
+- **Region**: us-west-2 ONLY
+- **Purpose**: Syncs GitHub secrets to AWS SSM Parameter Store
+- **Writes**: Stripe keys, Groq API key, Twilio credentials per stage (`/myfusionhelper/{stage}/secrets`)
+
+**Deployment Workflow**:
+```bash
+# 1. Make code changes
+git add .
+git commit -m "feat: add new helper"
+
+# 2. Push to dev branch
+git push origin dev
+
+# 3. GitHub Actions automatically deploys to us-west-2
+# Monitor at: https://github.com/anthropics/myfusionhelper.ai/actions
+
+# 4. Verify deployment
+curl https://api-dev.myfusionhelper.ai/health
+```
+
+**Emergency Manual Deployment** (debugging only):
+Only use manual deployment for emergency debugging. Must always specify `--region us-west-2`:
+```bash
+cd backend/golang/services/api/auth
+npx sls deploy --stage dev --region us-west-2
+```
