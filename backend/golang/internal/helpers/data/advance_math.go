@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewAdvanceMath creates a new AdvanceMath helper instance
+func NewAdvanceMath() helpers.Helper { return &AdvanceMath{} }
+
 func init() {
 	helpers.Register("advance_math", func() helpers.Helper { return &AdvanceMath{} })
 }

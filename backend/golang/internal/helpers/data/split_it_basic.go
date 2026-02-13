@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewSplitItBasic creates a new SplitItBasic helper instance
+func NewSplitItBasic() helpers.Helper { return &SplitItBasic{} }
+
 func init() {
 	helpers.Register("split_it_basic", func() helpers.Helper { return &SplitItBasic{} })
 }

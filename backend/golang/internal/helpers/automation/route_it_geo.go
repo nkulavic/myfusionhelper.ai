@@ -11,6 +11,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewRouteItGeo creates a new RouteItGeo helper instance
+func NewRouteItGeo() helpers.Helper { return &RouteItGeo{} }
+
 func init() {
 	helpers.Register("route_it_geo", func() helpers.Helper { return &RouteItGeo{} })
 }

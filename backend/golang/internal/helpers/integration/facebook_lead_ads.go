@@ -13,6 +13,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewFacebookLeadAds creates a new FacebookLeadAds helper instance
+func NewFacebookLeadAds() helpers.Helper { return &FacebookLeadAds{} }
+
 func init() {
 	helpers.Register("facebook_lead_ads", func() helpers.Helper { return &FacebookLeadAds{} })
 }

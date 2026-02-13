@@ -12,6 +12,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewIPLocation creates a new IPLocation helper instance
+func NewIPLocation() helpers.Helper { return &IPLocation{} }
+
 func init() {
 	helpers.Register("ip_location", func() helpers.Helper { return &IPLocation{} })
 }

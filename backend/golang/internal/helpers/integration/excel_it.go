@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewExcelIt creates a new ExcelIt helper instance
+func NewExcelIt() helpers.Helper { return &ExcelIt{} }
+
 func init() {
 	helpers.Register("excel_it", func() helpers.Helper { return &ExcelIt{} })
 }

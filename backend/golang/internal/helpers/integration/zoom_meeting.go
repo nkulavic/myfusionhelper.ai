@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewZoomMeeting creates a new ZoomMeeting helper instance
+func NewZoomMeeting() helpers.Helper { return &ZoomMeeting{} }
+
 func init() {
 	helpers.Register("zoom_meeting", func() helpers.Helper { return &ZoomMeeting{} })
 }

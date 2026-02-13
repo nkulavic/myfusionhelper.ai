@@ -10,6 +10,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewRouteItByTime creates a new RouteItByTime helper instance
+func NewRouteItByTime() helpers.Helper { return &RouteItByTime{} }
+
 func init() {
 	helpers.Register("route_it_by_time", func() helpers.Helper { return &RouteItByTime{} })
 }

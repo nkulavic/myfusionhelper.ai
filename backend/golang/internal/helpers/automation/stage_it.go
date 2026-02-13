@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewStageIt creates a new StageIt helper instance
+func NewStageIt() helpers.Helper { return &StageIt{} }
+
 func init() {
 	helpers.Register("stage_it", func() helpers.Helper { return &StageIt{} })
 }

@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewFoundIt creates a new FoundIt helper instance
+func NewFoundIt() helpers.Helper { return &FoundIt{} }
+
 func init() {
 	helpers.Register("found_it", func() helpers.Helper { return &FoundIt{} })
 }

@@ -10,6 +10,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewIPRedirects creates a new IPRedirects helper instance
+func NewIPRedirects() helpers.Helper { return &IPRedirects{} }
+
 func init() {
 	helpers.Register("ip_redirects", func() helpers.Helper { return &IPRedirects{} })
 }

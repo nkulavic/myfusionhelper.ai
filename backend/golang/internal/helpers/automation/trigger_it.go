@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewTriggerIt creates a new TriggerIt helper instance
+func NewTriggerIt() helpers.Helper { return &TriggerIt{} }
+
 func init() {
 	helpers.Register("trigger_it", func() helpers.Helper { return &TriggerIt{} })
 }

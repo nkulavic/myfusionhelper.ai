@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewWordCountIt creates a new WordCountIt helper instance
+func NewWordCountIt() helpers.Helper { return &WordCountIt{} }
+
 func init() {
 	helpers.Register("word_count_it", func() helpers.Helper { return &WordCountIt{} })
 }

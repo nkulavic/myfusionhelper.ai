@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewVideoTriggerIt creates a new VideoTriggerIt helper instance
+func NewVideoTriggerIt() helpers.Helper { return &VideoTriggerIt{} }
+
 func init() {
 	helpers.Register("video_trigger_it", func() helpers.Helper { return &VideoTriggerIt{} })
 }

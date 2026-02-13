@@ -9,6 +9,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewFormatIt creates a new FormatIt helper instance
+func NewFormatIt() helpers.Helper { return &FormatIt{} }
+
 func init() {
 	helpers.Register("format_it", func() helpers.Helper { return &FormatIt{} })
 }

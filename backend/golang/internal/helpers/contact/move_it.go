@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewMoveIt creates a new MoveIt helper instance
+func NewMoveIt() helpers.Helper { return &MoveIt{} }
+
 func init() {
 	helpers.Register("move_it", func() helpers.Helper { return &MoveIt{} })
 }

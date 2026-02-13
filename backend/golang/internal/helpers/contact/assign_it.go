@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewAssignIt creates a new AssignIt helper instance
+func NewAssignIt() helpers.Helper { return &AssignIt{} }
+
 func init() {
 	helpers.Register("assign_it", func() helpers.Helper { return &AssignIt{} })
 }

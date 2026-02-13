@@ -22,6 +22,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewEmailValidateIt creates a new EmailValidateIt helper instance
+func NewEmailValidateIt() helpers.Helper { return &EmailValidateIt{} }
+
 func init() {
 	helpers.Register("email_validate_it", func() helpers.Helper { return &EmailValidateIt{} })
 }

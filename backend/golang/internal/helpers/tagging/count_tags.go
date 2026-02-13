@@ -11,6 +11,9 @@ func init() {
 	helpers.Register("count_tags", func() helpers.Helper { return &CountTags{} })
 }
 
+// NewCountTags creates a new CountTags helper instance
+func NewCountTags() helpers.Helper { return &CountTags{} }
+
 // CountTags counts the tags on a contact and stores the count
 type CountTags struct{}
 

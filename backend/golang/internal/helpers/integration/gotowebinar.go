@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewGoToWebinar creates a new GoToWebinar helper instance
+func NewGoToWebinar() helpers.Helper { return &GoToWebinar{} }
+
 func init() {
 	helpers.Register("gotowebinar", func() helpers.Helper { return &GoToWebinar{} })
 }

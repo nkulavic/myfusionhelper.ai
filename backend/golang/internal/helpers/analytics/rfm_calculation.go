@@ -9,6 +9,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewRFMCalculation creates a new RFMCalculation helper instance
+func NewRFMCalculation() helpers.Helper { return &RFMCalculation{} }
+
 func init() {
 	helpers.Register("rfm_calculation", func() helpers.Helper { return &RFMCalculation{} })
 }

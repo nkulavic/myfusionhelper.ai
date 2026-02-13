@@ -9,6 +9,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewMatchIt creates a new MatchIt helper instance
+func NewMatchIt() helpers.Helper { return &MatchIt{} }
+
 func init() {
 	helpers.Register("match_it", func() helpers.Helper { return &MatchIt{} })
 }

@@ -11,6 +11,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewEmailAttachIt creates a new EmailAttachIt helper instance
+func NewEmailAttachIt() helpers.Helper { return &EmailAttachIt{} }
+
 func init() {
 	helpers.Register("email_attach_it", func() helpers.Helper { return &EmailAttachIt{} })
 }

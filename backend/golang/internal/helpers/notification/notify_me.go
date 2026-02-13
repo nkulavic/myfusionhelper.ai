@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewNotifyMe creates a new NotifyMe helper instance
+func NewNotifyMe() helpers.Helper { return &NotifyMe{} }
+
 func init() {
 	helpers.Register("notify_me", func() helpers.Helper { return &NotifyMe{} })
 }

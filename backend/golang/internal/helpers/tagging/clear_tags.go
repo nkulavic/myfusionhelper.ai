@@ -11,6 +11,9 @@ func init() {
 	helpers.Register("clear_tags", func() helpers.Helper { return &ClearTags{} })
 }
 
+// NewClearTags creates a new ClearTags helper instance
+func NewClearTags() helpers.Helper { return &ClearTags{} }
+
 // ClearTags removes tags from a contact matching specified criteria
 type ClearTags struct{}
 

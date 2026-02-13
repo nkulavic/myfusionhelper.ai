@@ -11,6 +11,9 @@ func init() {
 	helpers.Register("score_it", func() helpers.Helper { return &ScoreIt{} })
 }
 
+// NewScoreIt creates a new ScoreIt helper instance
+func NewScoreIt() helpers.Helper { return &ScoreIt{} }
+
 // ScoreIt scores contacts based on tag criteria rules
 type ScoreIt struct{}
 

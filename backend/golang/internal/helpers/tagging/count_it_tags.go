@@ -12,6 +12,9 @@ func init() {
 	helpers.Register("count_it_tags", func() helpers.Helper { return &CountItTags{} })
 }
 
+// NewCountItTags creates a new CountItTags helper instance
+func NewCountItTags() helpers.Helper { return &CountItTags{} }
+
 // CountItTags counts the total number of contacts that have a specific tag applied,
 // and optionally applies threshold-based tags. Also determines the current contact's
 // position in the tag assignment list.

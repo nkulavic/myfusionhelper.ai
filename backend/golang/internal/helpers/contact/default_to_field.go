@@ -9,6 +9,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewDefaultToField creates a new DefaultToField helper instance
+func NewDefaultToField() helpers.Helper { return &DefaultToField{} }
+
 func init() {
 	helpers.Register("default_to_field", func() helpers.Helper { return &DefaultToField{} })
 }

@@ -17,6 +17,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewHookIt creates a new HookIt helper instance
+func NewHookIt() helpers.Helper { return &HookIt{} }
+
 func init() {
 	helpers.Register("hook_it", func() helpers.Helper { return &HookIt{} })
 }

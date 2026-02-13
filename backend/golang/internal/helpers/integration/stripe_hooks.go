@@ -10,6 +10,9 @@ import (
 // StripeHooks processes Stripe webhook events and triggers CRM actions
 type StripeHooks struct{}
 
+// NewStripeHooks creates a new StripeHooks helper instance
+func NewStripeHooks() helpers.Helper { return &StripeHooks{} }
+
 func init() {
 	helpers.Register("stripe_hooks", func() helpers.Helper {
 		return &StripeHooks{}

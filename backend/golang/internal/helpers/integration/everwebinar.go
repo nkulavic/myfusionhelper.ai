@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewEverWebinar creates a new EverWebinar helper instance
+func NewEverWebinar() helpers.Helper { return &EverWebinar{} }
+
 func init() {
 	helpers.Register("everwebinar", func() helpers.Helper { return &EverWebinar{} })
 }

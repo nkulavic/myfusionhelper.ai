@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewZoomWebinarAbsentee creates a new ZoomWebinarAbsentee helper instance
+func NewZoomWebinarAbsentee() helpers.Helper { return &ZoomWebinarAbsentee{} }
+
 func init() {
 	helpers.Register("zoom_webinar_absentee", func() helpers.Helper { return &ZoomWebinarAbsentee{} })
 }

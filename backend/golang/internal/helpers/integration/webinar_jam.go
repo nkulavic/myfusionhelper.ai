@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewWebinarJam creates a new WebinarJam helper instance
+func NewWebinarJam() helpers.Helper { return &WebinarJam{} }
+
 func init() {
 	helpers.Register("webinar_jam", func() helpers.Helper { return &WebinarJam{} })
 }

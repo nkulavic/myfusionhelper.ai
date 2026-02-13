@@ -10,6 +10,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewMathIt creates a new MathIt helper instance
+func NewMathIt() helpers.Helper { return &MathIt{} }
+
 func init() {
 	helpers.Register("math_it", func() helpers.Helper { return &MathIt{} })
 }

@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewActionIt creates a new ActionIt helper instance
+func NewActionIt() helpers.Helper { return &ActionIt{} }
+
 func init() {
 	helpers.Register("action_it", func() helpers.Helper { return &ActionIt{} })
 }

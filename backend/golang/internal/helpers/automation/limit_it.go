@@ -14,6 +14,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewLimitIt creates a new LimitIt helper instance
+func NewLimitIt() helpers.Helper { return &LimitIt{} }
+
 func init() {
 	helpers.Register("limit_it", func() helpers.Helper { return &LimitIt{} })
 }

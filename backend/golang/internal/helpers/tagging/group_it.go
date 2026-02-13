@@ -11,6 +11,9 @@ func init() {
 	helpers.Register("group_it", func() helpers.Helper { return &GroupIt{} })
 }
 
+// NewGroupIt creates a new GroupIt helper instance
+func NewGroupIt() helpers.Helper { return &GroupIt{} }
+
 // GroupIt creates and assigns tags based on a field value with a prefix
 type GroupIt struct{}
 

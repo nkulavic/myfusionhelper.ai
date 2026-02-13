@@ -13,6 +13,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewDropboxIt creates a new DropboxIt helper instance
+func NewDropboxIt() helpers.Helper { return &DropboxIt{} }
+
 func init() {
 	helpers.Register("dropbox_it", func() helpers.Helper { return &DropboxIt{} })
 }

@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewDripIt creates a new DripIt helper instance
+func NewDripIt() helpers.Helper { return &DripIt{} }
+
 func init() {
 	helpers.Register("drip_it", func() helpers.Helper { return &DripIt{} })
 }

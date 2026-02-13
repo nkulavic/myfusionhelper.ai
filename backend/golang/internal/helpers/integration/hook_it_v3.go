@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewHookItV3 creates a new HookItV3 helper instance
+func NewHookItV3() helpers.Helper { return &HookItV3{} }
+
 func init() {
 	helpers.Register("hook_it_v3", func() helpers.Helper { return &HookItV3{} })
 }

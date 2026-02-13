@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewTwilioSMS creates a new TwilioSMS helper instance
+func NewTwilioSMS() helpers.Helper { return &TwilioSMS{} }
+
 func init() {
 	helpers.Register("twilio_sms", func() helpers.Helper { return &TwilioSMS{} })
 }

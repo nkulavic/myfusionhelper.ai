@@ -9,6 +9,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewSearchIt creates a new SearchIt helper instance
+func NewSearchIt() helpers.Helper { return &SearchIt{} }
+
 func init() {
 	helpers.Register("search_it", func() helpers.Helper { return &SearchIt{} })
 }

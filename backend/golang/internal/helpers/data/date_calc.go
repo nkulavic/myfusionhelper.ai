@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewDateCalc creates a new DateCalc helper instance
+func NewDateCalc() helpers.Helper { return &DateCalc{} }
+
 func init() {
 	helpers.Register("date_calc", func() helpers.Helper { return &DateCalc{} })
 }

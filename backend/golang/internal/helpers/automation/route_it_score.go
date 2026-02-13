@@ -9,6 +9,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewRouteItScore creates a new RouteItScore helper instance
+func NewRouteItScore() helpers.Helper { return &RouteItScore{} }
+
 func init() {
 	helpers.Register("route_it_score", func() helpers.Helper { return &RouteItScore{} })
 }

@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewContactUpdater creates a new ContactUpdater helper instance
+func NewContactUpdater() helpers.Helper { return &ContactUpdater{} }
+
 func init() {
 	helpers.Register("contact_updater", func() helpers.Helper { return &ContactUpdater{} })
 }

@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewPhoneLookup creates a new PhoneLookup helper instance
+func NewPhoneLookup() helpers.Helper { return &PhoneLookup{} }
+
 func init() {
 	helpers.Register("phone_lookup", func() helpers.Helper { return &PhoneLookup{} })
 }

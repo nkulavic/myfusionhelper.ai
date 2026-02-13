@@ -12,6 +12,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewOrderIt creates a new OrderIt helper instance
+func NewOrderIt() helpers.Helper { return &OrderIt{} }
+
 func init() {
 	helpers.Register("order_it", func() helpers.Helper { return &OrderIt{} })
 }

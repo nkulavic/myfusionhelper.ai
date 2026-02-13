@@ -10,6 +10,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewSnapshotIt creates a new SnapshotIt helper instance
+func NewSnapshotIt() helpers.Helper { return &SnapshotIt{} }
+
 func init() {
 	helpers.Register("snapshot_it", func() helpers.Helper { return &SnapshotIt{} })
 }

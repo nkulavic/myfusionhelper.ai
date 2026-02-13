@@ -13,6 +13,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewUploadIt creates a new UploadIt helper instance
+func NewUploadIt() helpers.Helper { return &UploadIt{} }
+
 func init() {
 	helpers.Register("upload_it", func() helpers.Helper { return &UploadIt{} })
 }

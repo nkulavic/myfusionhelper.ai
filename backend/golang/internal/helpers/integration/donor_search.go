@@ -11,6 +11,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewDonorSearch creates a new DonorSearch helper instance
+func NewDonorSearch() helpers.Helper { return &DonorSearch{} }
+
 func init() {
 	helpers.Register("donor_search", func() helpers.Helper { return &DonorSearch{} })
 }

@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewZoomWebinar creates a new ZoomWebinar helper instance
+func NewZoomWebinar() helpers.Helper { return &ZoomWebinar{} }
+
 func init() {
 	helpers.Register("zoom_webinar", func() helpers.Helper { return &ZoomWebinar{} })
 }

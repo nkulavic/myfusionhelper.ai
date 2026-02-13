@@ -10,6 +10,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewIPNotifications creates a new IPNotifications helper instance
+func NewIPNotifications() helpers.Helper { return &IPNotifications{} }
+
 func init() {
 	helpers.Register("ip_notifications", func() helpers.Helper { return &IPNotifications{} })
 }

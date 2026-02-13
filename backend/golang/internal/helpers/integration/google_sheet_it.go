@@ -20,6 +20,9 @@ import (
 	"google.golang.org/api/sheets/v4"
 )
 
+// NewGoogleSheetIt creates a new GoogleSheetIt helper instance
+func NewGoogleSheetIt() helpers.Helper { return &GoogleSheetIt{} }
+
 func init() {
 	helpers.Register("google_sheet_it", func() helpers.Helper { return &GoogleSheetIt{} })
 }

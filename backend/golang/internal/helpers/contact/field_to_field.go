@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewFieldToField creates a new FieldToField helper instance
+func NewFieldToField() helpers.Helper { return &FieldToField{} }
+
 func init() {
 	helpers.Register("field_to_field", func() helpers.Helper { return &FieldToField{} })
 }

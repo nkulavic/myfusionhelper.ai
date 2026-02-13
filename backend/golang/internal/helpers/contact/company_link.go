@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewCompanyLink creates a new CompanyLink helper instance
+func NewCompanyLink() helpers.Helper { return &CompanyLink{} }
+
 func init() {
 	helpers.Register("company_link", func() helpers.Helper { return &CompanyLink{} })
 }

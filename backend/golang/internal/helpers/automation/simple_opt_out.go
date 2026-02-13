@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewSimpleOptOut creates a new SimpleOptOut helper instance
+func NewSimpleOptOut() helpers.Helper { return &SimpleOptOut{} }
+
 func init() {
 	helpers.Register("simple_opt_out", func() helpers.Helper { return &SimpleOptOut{} })
 }

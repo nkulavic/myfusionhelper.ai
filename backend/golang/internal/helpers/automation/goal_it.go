@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewGoalIt creates a new GoalIt helper instance
+func NewGoalIt() helpers.Helper { return &GoalIt{} }
+
 func init() {
 	helpers.Register("goal_it", func() helpers.Helper { return &GoalIt{} })
 }

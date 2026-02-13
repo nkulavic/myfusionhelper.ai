@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewNameParseIt creates a new NameParseIt helper instance
+func NewNameParseIt() helpers.Helper { return &NameParseIt{} }
+
 func init() {
 	helpers.Register("name_parse_it", func() helpers.Helper { return &NameParseIt{} })
 }

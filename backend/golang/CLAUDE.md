@@ -2,24 +2,15 @@
 
 Serverless Go backend on AWS Lambda, deployed via Serverless Framework v4.
 
-## ⚠️ CRITICAL DEPLOYMENT POLICY
+## CRITICAL DEPLOYMENT POLICY
 
 **ALL DEPLOYMENTS MUST GO THROUGH CI/CD PIPELINE**
 
-- ✅ Push code to `dev` or `main` branch → GitHub Actions deploys automatically
-- ❌ NEVER run `npx sls deploy` manually (except for emergency debugging)
-- ❌ NEVER deploy to any region other than `us-west-2`
+- Push code to `dev` or `main` branch -> GitHub Actions deploys automatically
+- NEVER run `npx sls deploy` manually (except for emergency debugging)
+- NEVER deploy to any region other than `us-west-2`
 
 **Region Lock**: ALL infrastructure and services are deployed ONLY to **us-west-2**. This is enforced in CI/CD and must be verified in all serverless.yml files.
-
-**Emergency Manual Deployment** (debugging only):
-```bash
-# ONLY for emergency debugging - normally use CI/CD
-cd backend/golang
-npm install
-cd services/api/auth
-npx sls deploy --stage dev --region us-west-2  # MUST be us-west-2
-```
 
 ## Quick Reference
 
@@ -27,115 +18,344 @@ npx sls deploy --stage dev --region us-west-2  # MUST be us-west-2
 cd backend/golang
 
 # Build all handlers
-CGO_ENABLED=1 go build ./...
+go build ./...
 
 # Run tests
-CGO_ENABLED=1 go test ./...
+go test ./...
 
 # Build DuckDB-dependent service (needs Docker for AL2023 glibc)
 bash scripts/build-duckdb-handler.sh
+```
+
+## Architecture Overview
+
+The backend uses two distinct patterns:
+
+1. **API Services** -- consolidated Lambda handlers that route HTTP requests (`cmd/handlers/`)
+2. **Helper Workers** -- self-contained microservices, one per helper type (`services/workers/*-worker/`)
+
+### Execution Flow
+
+```
+User triggers execution via API
+  -> Execution record written to DynamoDB (status: "pending")
+  -> DynamoDB Stream fires
+  -> Stream Router Lambda reads stream event
+  -> Stream Router constructs queue URL from helper_type using naming convention
+  -> SQS FIFO message sent to helper-specific queue
+  -> Helper Worker Lambda processes the job
+  -> Execution record updated with results
 ```
 
 ## Project Layout
 
 ```
 backend/golang/
-├── cmd/handlers/                  # Lambda entry points (one per service)
-│   ├── auth/
-│   │   ├── main.go                # Consolidated router for /auth/* paths
-│   │   └── clients/               # Individual endpoint handlers
-│   │       ├── login/main.go
-│   │       ├── register/main.go
-│   │       ├── refresh/main.go
-│   │       ├── status/main.go
-│   │       ├── logout/main.go
-│   │       ├── profile/main.go
-│   │       ├── forgot-password/main.go
-│   │       ├── reset-password/main.go
-│   │       └── health/main.go
+├── cmd/handlers/                  # API Lambda entry points (consolidated routers)
+│   ├── auth/                      # /auth/* endpoints
 │   ├── accounts/                  # /accounts/* endpoints
 │   ├── api-keys/                  # /api-keys/* endpoints
 │   ├── helpers/                   # /helpers/* + /executions/* endpoints
 │   ├── platforms/                 # /platforms/* + /platform-connections/*
 │   ├── billing/                   # /billing/* endpoints (Stripe integration)
-│   │   ├── main.go                # Consolidated router
-│   │   └── clients/
-│   │       ├── get-billing/main.go
-│   │       ├── checkout/main.go
-│   │       ├── portal-session/main.go
-│   │       ├── invoices/main.go
-│   │       └── webhook/main.go
 │   ├── data-explorer/             # /data/* endpoints (DuckDB + Parquet)
-│   ├── data-sync/                 # SQS worker: sync CRM data → S3/Parquet
-│   ├── data-sync-scheduler/       # EventBridge trigger for data-sync
-│   └── helper-worker/             # SQS worker: execute helpers async
+│   ├── data-sync/                 # SQS worker: sync CRM data -> S3/Parquet
+│   └── data-sync-scheduler/       # EventBridge trigger for data-sync
+│
 ├── internal/
+│   ├── worker/                    # Shared worker handler (used by ALL helper workers)
+│   │   └── handler.go             # HandleSQSEvent -- SQS message parsing, execution
 │   ├── connectors/                # CRM platform adapters
 │   │   ├── interface.go           # CRMConnector interface
-│   │   ├── keap.go
-│   │   ├── gohighlevel.go
-│   │   ├── activecampaign.go
-│   │   ├── ontraport.go
+│   │   ├── keap.go, gohighlevel.go, activecampaign.go, ontraport.go
 │   │   ├── models.go              # NormalizedContact, Tag, CustomField
 │   │   ├── registry.go            # Connector factory registry
 │   │   ├── loader/loader.go       # Load connector with credentials
 │   │   └── translate/             # Data normalization layer
 │   ├── database/                  # DynamoDB repositories
-│   │   ├── client.go              # NewDynamoDBClient, generic helpers
-│   │   ├── users_repository.go
-│   │   ├── accounts_repository.go
-│   │   ├── user_accounts_repository.go
-│   │   ├── connections_repository.go
-│   │   ├── connection_auths_repository.go
-│   │   ├── helpers_repository.go
-│   │   ├── executions_repository.go
-│   │   ├── platforms_repository.go
-│   │   ├── apikeys_repository.go
-│   │   └── oauth_states_repository.go
 │   ├── helpers/                   # Helper implementations
 │   │   ├── interface.go           # Helper interface
 │   │   ├── registry.go            # Helper factory registry
 │   │   ├── executor.go            # Execution orchestrator
-│   │   ├── contact/               # Contact helpers (tag_it, copy_it, etc.)
-│   │   ├── data/                  # Data helpers (format_it, math_it, etc.)
-│   │   ├── tagging/               # Tag helpers (score_it, group_it, etc.)
-│   │   ├── automation/            # Automation helpers (trigger_it, etc.)
-│   │   ├── integration/           # Integration helpers (slack, email, etc.)
-│   │   ├── notification/          # Notification helpers
-│   │   └── analytics/             # Analytics helpers (RFM, CLV)
+│   │   ├── contact/               # 17 helpers: tag_it, copy_it, merge_it, etc.
+│   │   ├── data/                  # 18 helpers: format_it, math_it, split_it, etc.
+│   │   ├── tagging/               # 6 helpers: tag_it, score_it, group_it, etc.
+│   │   ├── automation/            # 22 helpers: trigger_it, action_it, chain_it, etc.
+│   │   ├── integration/           # 29 helpers: hook_it, slack_it, zoom_webinar, etc.
+│   │   ├── notification/          # 2 helpers: notify_me, email_engagement
+│   │   ├── analytics/             # 2 helpers: rfm_calculation, customer_lifetime_value
+│   │   └── platform/              # 1 helper: keap_backup
 │   ├── middleware/auth/           # JWT auth middleware
-│   │   └── auth.go                # WithAuth wrapper, response helpers
+│   ├── config/                    # Secrets loading (SSM)
 │   ├── services/parquet/          # Parquet file writer for data sync
 │   └── types/types.go             # All shared Go types
-├── services/                      # Serverless Framework service configs
-│   ├── api/
-│   │   ├── gateway/serverless.yml # Shared API Gateway + Cognito authorizer
-│   │   ├── auth/serverless.yml
-│   │   ├── accounts/serverless.yml
-│   │   ├── api-keys/serverless.yml
-│   │   ├── helpers/serverless.yml
-│   │   ├── platforms/serverless.yml
-│   │   ├── billing/serverless.yml
-│   │   └── data-explorer/serverless.yml
-│   ├── infrastructure/
-│   │   ├── cognito/serverless.yml
-│   │   ├── dynamodb/core/serverless.yml
-│   │   ├── s3/serverless.yml
-│   │   └── sqs/serverless.yml
-│   └── workers/
-│       ├── data-sync/serverless.yml
-│       └── helper-worker/serverless.yml
-├── docker/
-│   └── Dockerfile.lambda-builder  # AL2023 container for DuckDB CGO builds
-├── scripts/
-│   ├── build-duckdb-handler.sh    # Build data-explorer in Docker
-│   └── verify-deploy.sh           # Post-deploy health checks
-├── go.mod
-├── go.sum
+│
+├── services/
+│   ├── api/                       # API Gateway + HTTP API services
+│   │   ├── gateway/               # Shared API Gateway + Cognito authorizer
+│   │   ├── auth/, accounts/, api-keys/, helpers/, platforms/, billing/
+│   │   └── data-explorer/
+│   ├── infrastructure/            # Core AWS resources
+│   │   ├── cognito/               # User pool
+│   │   ├── dynamodb/core/         # All DynamoDB tables
+│   │   ├── s3/                    # Data bucket
+│   │   ├── sqs/                   # Notification queue + fallback queue
+│   │   ├── ses/                   # Email sending
+│   │   ├── monitoring/            # CloudWatch alarms
+│   │   └── acm/                   # SSL certificates
+│   └── workers/                   # ALL worker services
+│       ├── stream-router/         # Routes DynamoDB stream events to SQS queues
+│       ├── tag-it-worker/         # REFERENCE IMPLEMENTATION for helper workers
+│       ├── copy-it-worker/        # Each helper has its own self-contained worker
+│       ├── score-it-worker/
+│       ├── ... (97 total helper workers)
+│       ├── data-sync/             # Non-helper: CRM data sync
+│       ├── notification-worker/   # Non-helper: send notifications
+│       └── helper-worker/         # DEPRECATED: old monolith (fallback only)
+│
+├── go.mod, go.sum
 └── package.json                   # serverless-go-plugin dependency
 ```
 
-## Handler Pattern
+---
+
+## Helper Worker Architecture (Self-Contained Microservices)
+
+Every helper type runs as its own self-contained Serverless Framework service. Each service creates its own SQS FIFO queue, DLQ, and Lambda function in a single `serverless.yml`.
+
+### Reference Implementation: tag-it-worker
+
+**ALL helper workers MUST follow this exact pattern.**
+
+#### Directory Structure
+```
+services/workers/tag-it-worker/
+├── main.go           # Registers ONE helper, starts SQS handler
+└── serverless.yml    # Self-contained: queue + DLQ + Lambda + IAM
+```
+
+#### main.go Pattern
+```go
+package main
+
+import (
+    "github.com/aws/aws-lambda-go/lambda"
+    "github.com/myfusionhelper/api/internal/helpers"
+    "github.com/myfusionhelper/api/internal/helpers/tagging"
+    "github.com/myfusionhelper/api/internal/worker"
+
+    // Register all connectors via init()
+    _ "github.com/myfusionhelper/api/internal/connectors"
+)
+
+func main() {
+    helpers.Register("tag_it", tagging.NewTagIt)
+    lambda.Start(worker.HandleSQSEvent)
+}
+```
+
+Key points:
+- Import `internal/worker` for the shared `HandleSQSEvent` handler
+- Import the specific helper package (e.g., `tagging`, `contact`, `data`, `automation`, `integration`)
+- Import `_ "github.com/myfusionhelper/api/internal/connectors"` for CRM connector registration
+- Call `helpers.Register()` with the helper_type string and the exported factory function
+- Call `lambda.Start(worker.HandleSQSEvent)` -- the shared handler does all the work
+
+#### Factory Function Pattern
+
+Each helper file exports a factory function used by its worker:
+
+```go
+// In internal/helpers/tagging/tag_it.go
+func NewTagIt() helpers.Helper { return &TagIt{} }
+
+func init() {
+    helpers.Register("tag_it", func() helpers.Helper { return &TagIt{} })
+}
+```
+
+The `NewXxx()` factory is used by individual workers. The `init()` registration is kept for backward compatibility with the monolith.
+
+#### serverless.yml Pattern
+
+```yaml
+service: mfh-tag-it-worker
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 300
+  tracing:
+    lambda: true
+  environment:
+    STAGE: ${self:provider.stage}
+    HELPER_TYPE: tag_it
+    COGNITO_REGION: ${self:provider.region}
+    EXECUTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableName}
+    HELPERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableName}
+    CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
+    PLATFORMS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableName}
+    PLATFORM_CONNECTION_AUTHS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableName}
+    ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
+    NOTIFICATION_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueUrl}
+    INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+            - dynamodb:BatchGetItem
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableArn}/index/*"
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource:
+            - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueArn}
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+          Resource:
+            - "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
+
+functions:
+  worker:
+    handler: services/workers/tag-it-worker/main.go
+    description: "Process tag_it helper execution jobs"
+    events:
+      - sqs:
+          arn: !GetAtt HelperQueue.Arn
+          batchSize: 1
+          functionResponseType: ReportBatchItemFailures
+
+resources:
+  Resources:
+    HelperQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-tag-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt HelperDLQ.Arn
+          maxReceiveCount: 3
+
+    HelperDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-tag-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        MessageRetentionPeriod: 1209600
+
+  Outputs:
+    HelperQueueArn:
+      Value: !GetAtt HelperQueue.Arn
+    HelperQueueUrl:
+      Value: !Ref HelperQueue
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+```
+
+### CRITICAL: serverless-go-plugin Configuration
+
+These settings are learned from deployment failures and MUST NOT be changed:
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| `cmd` | `'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'` | Must NOT include `-o bootstrap` (plugin handles output naming) |
+| `handler` | `services/workers/tag-it-worker/main.go` | Must be Go source path relative to baseDir, NOT `bootstrap` |
+| `baseDir` | `../../..` | Points to `backend/golang/` from `services/workers/xxx-worker/` |
+| `buildProvidedRuntimeAsBootstrap` | `true` | Plugin builds output as `bootstrap` automatically |
+
+### Naming Conventions
+
+| Item | Convention | Example |
+|------|-----------|---------|
+| Worker directory | `{kebab-name}-worker/` | `tag-it-worker/` |
+| Serverless service | `mfh-{kebab-name}-worker` | `mfh-tag-it-worker` |
+| SQS queue | `mfh-{stage}-{kebab-name}-executions.fifo` | `mfh-dev-tag-it-executions.fifo` |
+| SQS DLQ | `mfh-{stage}-{kebab-name}-dlq.fifo` | `mfh-dev-tag-it-dlq.fifo` |
+| Lambda function | `mfh-{kebab-name}-worker-{stage}-worker` | `mfh-tag-it-worker-dev-worker` |
+| HELPER_TYPE env | `{snake_case}` | `tag_it` |
+| Factory function | `New{PascalCase}()` | `NewTagIt()` |
+
+**Kebab conversion**: helper_type `tag_it` -> kebab name `tag-it` (replace `_` with `-`)
+
+### Stream Router (Convention-Based URL Discovery)
+
+The stream router (`services/workers/stream-router/`) reads DynamoDB Stream events from the Executions table and routes them to individual helper SQS queues.
+
+**Queue URL construction** (no SSM parameters needed):
+```go
+func buildQueueURL(helperType string) string {
+    queueName := strings.ReplaceAll(helperType, "_", "-")
+    return fmt.Sprintf("https://sqs.%s.amazonaws.com/%s/mfh-%s-%s-executions.fifo",
+        region, accountID, stage, queueName)
+}
+```
+
+The stream router has a **fallback queue** for helpers that don't have individual workers yet. Once all helpers are deployed, this fallback will be removed.
+
+### How to Add a New Helper Worker
+
+1. Create the helper implementation in `internal/helpers/{category}/my_helper.go`
+2. Add the factory function: `func NewMyHelper() helpers.Helper { return &MyHelper{} }`
+3. Add the `init()` registration: `helpers.Register("my_helper", func() helpers.Helper { return &MyHelper{} })`
+4. Create `services/workers/my-helper-worker/main.go` (copy tag-it-worker pattern, change import + Register call)
+5. Create `services/workers/my-helper-worker/serverless.yml` (copy tag-it-worker, change 6 values: service, HELPER_TYPE, handler, description, QueueName x2)
+6. Push to `dev` -- CI/CD auto-detects the new worker directory and deploys it
+
+### Complete Helper Inventory (97 helpers)
+
+**Tagging** (6): tag_it, clear_tags, count_it_tags, count_tags, group_it, score_it
+
+**Contact** (17): assign_it, clear_it, combine_it, company_link, contact_updater, copy_it, default_to_field, field_to_field, found_it, merge_it, move_it, name_parse_it, note_it, opt_in, opt_out, own_it, snapshot_it
+
+**Data** (18): advance_math, date_calc, format_it, get_the_first, get_the_last, ip_location, last_click_it, last_open_it, last_send_it, math_it, password_it, phone_lookup, quote_it, split_it, split_it_basic, text_it, when_is_it, word_count_it
+
+**Automation** (22): action_it, chain_it, countdown_timer, drip_it, goal_it, ip_notifications, ip_redirects, limit_it, match_it, route_it, route_it_by_custom, route_it_by_day, route_it_by_time, route_it_geo, route_it_score, route_it_source, simple_opt_in, simple_opt_out, stage_it, timezone_triggers, trigger_it, video_trigger_it
+
+**Integration** (29): calendly_it, donor_search, dropbox_it, email_attach_it, email_validate_it, everwebinar, excel_it, facebook_lead_ads, google_sheet_it, gotowebinar, hook_it, hook_it_by_tag, hook_it_v2, hook_it_v3, hook_it_v4, mail_it, order_it, query_it_basic, search_it, slack_it, stripe_hooks, trello_it, twilio_sms, upload_it, webinar_jam, zoom_meeting, zoom_webinar, zoom_webinar_absentee, zoom_webinar_participant
+
+**Notification** (2): email_engagement, notify_me
+
+**Analytics** (2): customer_lifetime_value, rfm_calculation
+
+**Platform** (1): keap_backup
+
+---
+
+## API Handler Pattern
 
 Each API service uses a **consolidated handler** pattern: one Lambda binary routes to multiple endpoint handlers based on path.
 
@@ -147,35 +367,12 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
         return loginClient.Handle(ctx, event)
     case "/auth/status":
         return routeToProtectedHandler(ctx, event, statusClient.HandleWithAuth)
-    // ...
     }
 }
 ```
 
 **Public endpoints**: Use `Handle(ctx, event)` signature directly.
-
-**Protected endpoints**: Use `HandleWithAuth(ctx, event, authCtx)` signature, wrapped by `routeToProtectedHandler` which runs the auth middleware.
-
-### Client Handler Pattern
-
-Each endpoint handler lives in `cmd/handlers/{service}/clients/{endpoint}/main.go`:
-
-```go
-package login
-
-func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-    // Parse request, validate, execute, return response
-}
-```
-
-For protected endpoints:
-```go
-package status
-
-func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCtx *types.AuthContext) (events.APIGatewayV2HTTPResponse, error) {
-    // authCtx contains UserID, AccountID, Email, Role, Permissions
-}
-```
+**Protected endpoints**: Use `HandleWithAuth(ctx, event, authCtx)` signature, wrapped by `routeToProtectedHandler`.
 
 ## Auth Middleware (`internal/middleware/auth/auth.go`)
 
@@ -190,33 +387,11 @@ The `WithAuth` wrapper:
 
 ## Response Helpers
 
-All responses use standardized helpers from the auth middleware package:
-
 ```go
 import authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 
-// Success
 return authMiddleware.CreateSuccessResponse(200, "OK", data), nil
-
-// Error
 return authMiddleware.CreateErrorResponse(400, "Bad request"), nil
-```
-
-Response format:
-```json
-{
-  "success": true,
-  "message": "OK",
-  "data": { ... }
-}
-```
-
-Error format:
-```json
-{
-  "success": false,
-  "error": "Error message"
-}
 ```
 
 All responses include CORS headers (`Access-Control-Allow-Origin: *`).
@@ -224,8 +399,6 @@ All responses include CORS headers (`Access-Control-Allow-Origin: *`).
 ## DynamoDB Conventions
 
 ### Table Names
-
-Table names come from environment variables, set via CloudFormation exports:
 
 | Env Var | Table | Partition Key | Sort Key |
 |---------|-------|--------------|----------|
@@ -242,7 +415,7 @@ Table names come from environment variables, set via CloudFormation exports:
 
 ### GSI Patterns
 
-Most tables have an `AccountIdIndex` GSI for querying by account. Other notable GSIs:
+Most tables have an `AccountIdIndex` GSI. Other notable GSIs:
 - Users: `EmailIndex`, `CognitoUserIdIndex`
 - Accounts: `OwnerUserIdIndex`
 - API Keys: `KeyHashIndex`
@@ -252,15 +425,7 @@ Most tables have an `AccountIdIndex` GSI for querying by account. Other notable 
 
 ### Database Client (`internal/database/client.go`)
 
-Generic helpers for DynamoDB operations:
-- `getItem[T]()` -- fetch + unmarshal single item
-- `putItem()` -- marshal + write item
-- `putItemWithCondition()` -- conditional write
-- `queryIndex[T]()` -- query GSI + unmarshal results
-- `querySingleItem[T]()` -- query + return first result
-- `stringKey()`, `stringVal()`, `numVal()` -- key/value builders
-
-Each entity has its own repository file (e.g., `users_repository.go`) that uses these generic helpers.
+Generic helpers: `getItem[T]()`, `putItem()`, `putItemWithCondition()`, `queryIndex[T]()`, `querySingleItem[T]()`, `stringKey()`, `stringVal()`, `numVal()`.
 
 ## Go Types (`internal/types/types.go`)
 
@@ -270,73 +435,9 @@ Key types: `User`, `Account`, `UserAccount`, `Permissions`, `AuthContext`, `Plat
 
 ## CRM Connector System (`internal/connectors/`)
 
-### Interface
+Implements `CRMConnector` interface for: Keap, GoHighLevel, ActiveCampaign, Ontraport, HubSpot.
 
-```go
-type CRMConnector interface {
-    GetContacts(ctx, opts) (*ContactList, error)
-    GetContact(ctx, contactID) (*NormalizedContact, error)
-    CreateContact(ctx, input) (*NormalizedContact, error)
-    UpdateContact(ctx, contactID, updates) (*NormalizedContact, error)
-    DeleteContact(ctx, contactID) error
-    GetTags(ctx) ([]Tag, error)
-    ApplyTag(ctx, contactID, tagID) error
-    RemoveTag(ctx, contactID, tagID) error
-    GetCustomFields(ctx) ([]CustomField, error)
-    GetContactFieldValue(ctx, contactID, fieldKey) (interface{}, error)
-    SetContactFieldValue(ctx, contactID, fieldKey, value) error
-    TriggerAutomation(ctx, contactID, automationID) error
-    AchieveGoal(ctx, contactID, goalName, integration) error
-    TestConnection(ctx) error
-    GetMetadata() ConnectorMetadata
-    GetCapabilities() []Capability
-}
-```
-
-### Implementations
-
-Each CRM has its own file: `keap.go`, `gohighlevel.go`, `activecampaign.go`, `ontraport.go`. They translate platform-specific APIs into the normalized `CRMConnector` interface.
-
-The `translate/` directory handles cross-platform data normalization (field mapping, custom field resolution, tag resolution).
-
-## Helper System (`internal/helpers/`)
-
-### Interface
-
-```go
-type Helper interface {
-    GetName() string
-    GetType() string
-    GetCategory() string
-    GetDescription() string
-    GetConfigSchema() map[string]interface{}
-    Execute(ctx, input HelperInput) (*HelperOutput, error)
-    ValidateConfig(config map[string]interface{}) error
-    RequiresCRM() bool
-    SupportedCRMs() []string
-}
-```
-
-### Registry
-
-Helpers self-register via `init()` functions:
-```go
-func init() {
-    helpers.Register("tag_it", func() helpers.Helper { return &TagIt{} })
-}
-```
-
-### Categories and Examples
-
-| Category | Helpers |
-|----------|---------|
-| contact | tag_it, copy_it, merge_it, move_it, name_parse_it, note_it, assign_it, clear_it, combine_it, found_it, opt_in, opt_out, own_it, snapshot_it, field_to_field, default_to_field, company_link |
-| data | format_it, math_it, split_it, text_it, date_calc, when_is_it, word_count_it, password_it, phone_lookup, ip_location, get_the_first, get_the_last, last_click_it, last_open_it, last_send_it |
-| tagging | score_it, group_it, count_tags, count_it_tags, clear_tags |
-| automation | trigger_it, action_it, chain_it, drip_it, goal_it, stage_it, timezone_triggers |
-| integration | hook_it, mail_it, slack_it, twilio_sms, zoom_webinar, calendly_it, email_validate_it, excel_it, google_sheet_it |
-| notification | notify_me, email_engagement |
-| analytics | rfm_calculation, customer_lifetime_value |
+Connectors register via `init()` and are loaded dynamically based on platform type. The `translate/` directory handles cross-platform data normalization.
 
 ## Serverless Framework Conventions
 
@@ -346,19 +447,13 @@ func init() {
 ```yaml
 provider:
   name: aws
-  region: us-west-2              # REQUIRED - NEVER change this
+  region: us-west-2
   runtime: provided.al2023
   architecture: arm64
 ```
 
-**Region Lock**: ALL services deploy to `us-west-2` ONLY. This is non-negotiable and enforced in:
-- Every `serverless.yml` file
-- GitHub Actions CI/CD pipeline
-- Post-deployment verification scripts
+### Plugin Configuration (serverless-go-plugin)
 
-### Plugin
-
-Uses `serverless-go-plugin` (installed via `npm install` in `backend/golang/`):
 ```yaml
 plugins:
   - serverless-go-plugin
@@ -366,211 +461,83 @@ plugins:
 custom:
   go:
     baseDir: ../../..
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
     supportedRuntimes: ["provided.al2023"]
     buildProvidedRuntimeAsBootstrap: true
-    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
 ```
+
+**CRITICAL**: `cmd` must NOT include `-o bootstrap`. The plugin handles output naming. The `handler` must be the Go source file path relative to baseDir (e.g., `services/workers/tag-it-worker/main.go`), NOT `bootstrap`.
 
 ### Service Naming
 
-All services use the `mfh-` prefix:
-- Infrastructure: `mfh-infrastructure-cognito`, `mfh-infrastructure-dynamodb-core`, `mfh-infrastructure-s3`, `mfh-infrastructure-sqs`
+- Infrastructure: `mfh-infrastructure-{name}` (cognito, dynamodb-core, s3, sqs, ses, monitoring, acm)
 - API Gateway: `mfh-api-gateway`
-- API services: `mfh-auth`, `mfh-accounts`, `mfh-api-keys`, `mfh-helpers`, `mfh-platforms`, `mfh-data-explorer`, `mfh-billing`
-- Workers: `mfh-helper-worker`, `mfh-data-sync`
+- API services: `mfh-{name}` (auth, accounts, api-keys, helpers, platforms, data-explorer, billing)
+- Helper workers: `mfh-{kebab-name}-worker` (tag-it-worker, copy-it-worker, etc.)
+- Other workers: `mfh-stream-router`, `mfh-data-sync`, `mfh-notification-worker`
 
 ### Cross-Stack References
 
-Services reference each other's CloudFormation exports:
 ```yaml
-# Reference API Gateway ID from gateway service
 httpApi:
   id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
-
-# Reference DynamoDB table from infrastructure
 USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
-
-# Reference Cognito from infrastructure
 COGNITO_USER_POOL_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
 ```
 
-### Lambda Configuration
-
-- Runtime: `provided.al2023`
-- Architecture: `arm64` (Graviton)
-- Default memory: 512 MB (health checks: 128 MB, auth: 256 MB)
-- Default timeout: 29 seconds
-- X-Ray tracing enabled
-
-### DuckDB / CGO Services
-
-The data-explorer service uses DuckDB (CGO) and must be built in an AL2023 Docker container for glibc compatibility:
-```bash
-docker build -t mfh-lambda-builder -f docker/Dockerfile.lambda-builder .
-bash scripts/build-duckdb-handler.sh
-```
-
-## Environment Variables
-
-Common env vars set by Serverless on all Lambda functions:
-- `STAGE` -- deployment stage (dev/prod)
-- `COGNITO_USER_POOL_ID`, `COGNITO_CLIENT_ID`, `COGNITO_REGION`
-- `USERS_TABLE`, `ACCOUNTS_TABLE`, `USER_ACCOUNTS_TABLE`
-- Service-specific tables as needed
-- Billing service: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_START`, `STRIPE_PRICE_GROW`, `STRIPE_PRICE_DELIVER`, `APP_URL` (from SSM)
-
 ## Unified Secrets Architecture
 
-Following the listbackup-ai pattern, all internal secrets are stored in ONE SSM parameter containing JSON.
-
-### SSM Parameter
-
-**Parameter:** `/myfusionhelper/${STAGE}/secrets` (SecureString, Advanced tier)
-
-**JSON Structure:**
-```json
-{
-  "stripe": {
-    "secret_key": "sk_...",
-    "publishable_key": "pk_...",
-    "webhook_secret": "whsec_...",
-    "price_start": "price_...",
-    "price_grow": "price_...",
-    "price_deliver": "price_..."
-  },
-  "groq": {
-    "api_key": "gsk_..."
-  },
-  "twilio": {
-    "account_sid": "AC...",
-    "auth_token": "...",
-    "from_number": "+1...",
-    "messaging_sid": "MG..."
-  }
-}
-```
-
-### Loading Secrets in Lambda
+All internal secrets stored in ONE SSM parameter: `/myfusionhelper/${STAGE}/secrets` (SecureString).
 
 ```go
-import "github.com/myfusionhelper/api/internal/config"
-
-func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCtx *types.AuthContext) (events.APIGatewayV2HTTPResponse, error) {
-    // Load secrets (cached after first call via singleton pattern)
-    secrets, err := config.LoadSecrets(ctx)
-    if err != nil {
-        log.Printf("Failed to load secrets: %v", err)
-        return authMiddleware.CreateErrorResponse(500, "Config error"), nil
-    }
-
-    // Use secrets
-    stripeKey := secrets.Stripe.SecretKey
-    webhookSecret := secrets.Stripe.WebhookSecret
-
-    // ... handler logic
-}
+secrets, err := config.LoadSecrets(ctx) // Cached after first call
+stripeKey := secrets.Stripe.SecretKey
 ```
 
-### GitHub Secrets Sync
-
-Secrets are synced from GitHub Secrets to SSM via the `sync-internal-secrets` workflow:
-
-```bash
-# Manually trigger (requires GitHub Secrets to be set)
-gh workflow run sync-internal-secrets.yml --field stage=dev
-```
-
-**GitHub Secrets Required (per stage):**
-- `{STAGE}_INTERNAL_STRIPE_SECRET_KEY`
-- `{STAGE}_INTERNAL_STRIPE_PUBLISHABLE_KEY`
-- `{STAGE}_INTERNAL_STRIPE_WEBHOOK_SECRET`
-- `{STAGE}_INTERNAL_STRIPE_PRICE_START`
-- `{STAGE}_INTERNAL_STRIPE_PRICE_GROW`
-- `{STAGE}_INTERNAL_STRIPE_PRICE_DELIVER`
-
-Optional (for voice assistants):
-- `{STAGE}_INTERNAL_GROQ_API_KEY`
-- `{STAGE}_INTERNAL_TWILIO_*`
-
-### Serverless Configuration
-
-Services that need secrets add:
-
+Services that need secrets add to serverless.yml:
 ```yaml
-provider:
-  environment:
-    INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
-  iam:
-    role:
-      statements:
-        - Effect: Allow
-          Action:
-            - ssm:GetParameter
-          Resource:
-            - "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
+environment:
+  INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
+iam:
+  role:
+    statements:
+      - Effect: Allow
+        Action: [ssm:GetParameter]
+        Resource: "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
 ```
 
-### Benefits
+## CI/CD Pipeline
 
-- **Single SSM Call:** LoadSecrets() called once per Lambda cold start, cached thereafter
-- **No Package-Time Resolution:** Secrets loaded at runtime, not during Serverless package
-- **Consistent Pattern:** Matches company architecture (listbackup-ai)
-- **Easy to Extend:** Add new secret categories without infrastructure changes
+**Trigger**: Push to `main`/`dev` branches (paths: `backend/golang/**`)
+**Auth**: OIDC -> `GitHubActions-Deploy-Dev` IAM role (AWS Account: 570331155915)
 
-## CI/CD - Automated Deployment Pipeline
+### Deployment Order
 
-**🔒 DEPLOYMENT POLICY: CI/CD ONLY, us-west-2 ONLY**
+1. **Infrastructure** (parallel): cognito, dynamodb, s3, sqs, monitoring, acm
+2. **Pre-gateway** (parallel): api-key-authorizer, scheduler, stream-router
+3. **API Gateway** (creates HttpApi + custom domain)
+4. **Route53** (DNS records)
+5. **API services** (parallel, max 3): auth, accounts, helpers, platforms, billing, etc.
+6. **Helper workers** (parallel): auto-detected from changed `services/workers/*-worker/` directories
+7. **Post-deploy**: seed platform data + health check verification
 
-All deployments are managed through GitHub Actions. Manual deployments via `npx sls deploy` are NOT permitted except for emergency debugging.
+### Helper Worker Auto-Detection
 
-**Region Lock**: ALL services deploy exclusively to **us-west-2**. This is:
-- Hardcoded in `.github/workflows/deploy-backend.yml` (every deploy step uses `--region us-west-2`)
-- Set as default in all `services/*/serverless.yml` files (`region: us-west-2`)
-- Verified in post-deployment health checks
+The CI pipeline uses `git diff` to detect which worker directories changed and deploys only those. On manual trigger, ALL workers are deployed.
 
-GitHub Actions workflows:
+### Deployment Workflow
 
-**`deploy-backend.yml`** -- main deploy pipeline:
-- **Trigger**: Push to `main`/`dev` branches (paths: `backend/golang/**`)
-- **Authentication**: OIDC → `GitHubActions-Deploy-Dev` IAM role (AWS Account: 570331155915)
-- **Region**: us-west-2 ONLY (enforced on every deployment command)
-- **Branch mapping**: `dev` → dev stage, `main` → prod stage
-- **Deployment order**:
-  1. Infrastructure (cognito, dynamodb, s3, sqs, monitoring, acm) - parallel
-  2. Pre-gateway (api-key-authorizer, scheduler) - parallel
-  3. API Gateway (creates HttpApi + custom domain)
-  4. Route53 (DNS records)
-  5. API services (auth, accounts, helpers, platforms, billing, etc.) - parallel (max 3)
-  6. Workers (helper-worker, data-sync, notification-worker, etc.) - parallel
-  7. Post-deploy verification
-- **Safety**: API services deploy with `max-parallel: 3` to avoid CloudFormation throttling
-- **Post-deploy**: seeds platform data + runs health check verification
-
-**`sync-internal-secrets.yml`** -- manual secrets sync:
-- **Trigger**: `workflow_dispatch` (manual)
-- **Region**: us-west-2 ONLY
-- **Purpose**: Syncs GitHub secrets to AWS SSM Parameter Store
-- **Writes**: Stripe keys, Groq API key, Twilio credentials per stage (`/myfusionhelper/{stage}/secrets`)
-
-**Deployment Workflow**:
 ```bash
-# 1. Make code changes
 git add .
 git commit -m "feat: add new helper"
-
-# 2. Push to dev branch
 git push origin dev
-
-# 3. GitHub Actions automatically deploys to us-west-2
-# Monitor at: https://github.com/anthropics/myfusionhelper.ai/actions
-
-# 4. Verify deployment
-curl https://api-dev.myfusionhelper.ai/health
+# GitHub Actions deploys automatically to us-west-2
 ```
 
-**Emergency Manual Deployment** (debugging only):
-Only use manual deployment for emergency debugging. Must always specify `--region us-west-2`:
-```bash
-cd backend/golang/services/api/auth
-npx sls deploy --stage dev --region us-west-2
-```
+## Known Cleanup Items
+
+- `_archive/` directory (empty, can be deleted)
+- `integration/countdown_timer.go` -- duplicate of `automation/countdown_timer.go` (canonical is automation)
+- `analytics/last_click_it.go` -- duplicate of `data/last_click_it.go` (canonical is data)
+- Old category SQS infrastructure stacks (e.g., `mfh-sqs-contact-helpers-dev`) need deletion before deploying workers that create same-named queues
+- `services/workers/helper-worker/` -- deprecated monolith, kept as fallback until all workers verified

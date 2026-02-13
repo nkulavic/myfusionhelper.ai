@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewSimpleOptIn creates a new SimpleOptIn helper instance
+func NewSimpleOptIn() helpers.Helper { return &SimpleOptIn{} }
+
 func init() {
 	helpers.Register("simple_opt_in", func() helpers.Helper { return &SimpleOptIn{} })
 }

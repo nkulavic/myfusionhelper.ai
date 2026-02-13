@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewQueryItBasic creates a new QueryItBasic helper instance
+func NewQueryItBasic() helpers.Helper { return &QueryItBasic{} }
+
 func init() {
 	helpers.Register("query_it_basic", func() helpers.Helper { return &QueryItBasic{} })
 }

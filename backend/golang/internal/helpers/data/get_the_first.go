@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewGetTheFirst creates a new GetTheFirst helper instance
+func NewGetTheFirst() helpers.Helper { return &GetTheFirst{} }
+
 func init() {
 	helpers.Register("get_the_first", func() helpers.Helper { return &GetTheFirst{} })
 }

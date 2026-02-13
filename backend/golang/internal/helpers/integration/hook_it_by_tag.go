@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewHookItByTag creates a new HookItByTag helper instance
+func NewHookItByTag() helpers.Helper { return &HookItByTag{} }
+
 func init() {
 	helpers.Register("hook_it_by_tag", func() helpers.Helper { return &HookItByTag{} })
 }

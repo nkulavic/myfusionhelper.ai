@@ -12,6 +12,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewTrelloIt creates a new TrelloIt helper instance
+func NewTrelloIt() helpers.Helper { return &TrelloIt{} }
+
 func init() {
 	helpers.Register("trello_it", func() helpers.Helper { return &TrelloIt{} })
 }

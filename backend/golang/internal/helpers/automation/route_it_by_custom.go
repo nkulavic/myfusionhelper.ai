@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewRouteItByCustom creates a new RouteItByCustom helper instance
+func NewRouteItByCustom() helpers.Helper { return &RouteItByCustom{} }
+
 func init() {
 	helpers.Register("route_it_by_custom", func() helpers.Helper { return &RouteItByCustom{} })
 }

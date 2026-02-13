@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewRouteItByDay creates a new RouteItByDay helper instance
+func NewRouteItByDay() helpers.Helper { return &RouteItByDay{} }
+
 func init() {
 	helpers.Register("route_it_by_day", func() helpers.Helper { return &RouteItByDay{} })
 }

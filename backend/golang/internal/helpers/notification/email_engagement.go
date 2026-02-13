@@ -9,6 +9,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewEmailEngagement creates a new EmailEngagement helper instance
+func NewEmailEngagement() helpers.Helper { return &EmailEngagement{} }
+
 func init() {
 	helpers.Register("email_engagement", func() helpers.Helper { return &EmailEngagement{} })
 }

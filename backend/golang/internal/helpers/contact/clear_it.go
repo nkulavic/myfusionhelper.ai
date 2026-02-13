@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewClearIt creates a new ClearIt helper instance
+func NewClearIt() helpers.Helper { return &ClearIt{} }
+
 func init() {
 	helpers.Register("clear_it", func() helpers.Helper { return &ClearIt{} })
 }

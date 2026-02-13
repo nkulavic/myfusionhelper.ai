@@ -355,6 +355,9 @@ func (h *KeapBackup) getStringArray(config map[string]interface{}, key string) [
 	return []string{}
 }
 
+// NewKeapBackup creates a new KeapBackup helper instance
+func NewKeapBackup() helpers.Helper { return &KeapBackup{} }
+
 // Register the helper
 func init() {
 	helpers.Register("keap_backup", func() helpers.Helper {

@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewQuoteIt creates a new QuoteIt helper instance
+func NewQuoteIt() helpers.Helper { return &QuoteIt{} }
+
 func init() {
 	helpers.Register("quote_it", func() helpers.Helper { return &QuoteIt{} })
 }

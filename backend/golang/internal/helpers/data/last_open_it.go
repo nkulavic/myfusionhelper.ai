@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewLastOpenIt creates a new LastOpenIt helper instance
+func NewLastOpenIt() helpers.Helper { return &LastOpenIt{} }
+
 func init() {
 	helpers.Register("last_open_it", func() helpers.Helper { return &LastOpenIt{} })
 }

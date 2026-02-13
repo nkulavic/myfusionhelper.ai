@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewMailIt creates a new MailIt helper instance
+func NewMailIt() helpers.Helper { return &MailIt{} }
+
 func init() {
 	helpers.Register("mail_it", func() helpers.Helper { return &MailIt{} })
 }

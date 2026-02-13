@@ -9,6 +9,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewPasswordIt creates a new PasswordIt helper instance
+func NewPasswordIt() helpers.Helper { return &PasswordIt{} }
+
 func init() {
 	helpers.Register("password_it", func() helpers.Helper { return &PasswordIt{} })
 }

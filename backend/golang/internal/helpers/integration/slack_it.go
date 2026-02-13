@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewSlackIt creates a new SlackIt helper instance
+func NewSlackIt() helpers.Helper { return &SlackIt{} }
+
 func init() {
 	helpers.Register("slack_it", func() helpers.Helper { return &SlackIt{} })
 }

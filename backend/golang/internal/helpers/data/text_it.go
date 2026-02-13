@@ -9,6 +9,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewTextIt creates a new TextIt helper instance
+func NewTextIt() helpers.Helper { return &TextIt{} }
+
 func init() {
 	helpers.Register("text_it", func() helpers.Helper { return &TextIt{} })
 }

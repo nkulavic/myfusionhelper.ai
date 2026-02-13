@@ -13,6 +13,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewSplitIt creates a new SplitIt helper instance
+func NewSplitIt() helpers.Helper { return &SplitIt{} }
+
 func init() {
 	helpers.Register("split_it", func() helpers.Helper { return &SplitIt{} })
 }

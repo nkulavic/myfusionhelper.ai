@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewLastClickIt creates a new LastClickIt helper instance
+func NewLastClickIt() helpers.Helper { return &LastClickIt{} }
+
 func init() {
 	helpers.Register("last_click_it", func() helpers.Helper { return &LastClickIt{} })
 }

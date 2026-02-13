@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewTimezoneTriggers creates a new TimezoneTriggers helper instance
+func NewTimezoneTriggers() helpers.Helper { return &TimezoneTriggers{} }
+
 func init() {
 	helpers.Register("timezone_triggers", func() helpers.Helper { return &TimezoneTriggers{} })
 }

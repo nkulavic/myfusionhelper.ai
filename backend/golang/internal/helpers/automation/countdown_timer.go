@@ -17,6 +17,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewCountdownTimer creates a new CountdownTimer helper instance
+func NewCountdownTimer() helpers.Helper { return &CountdownTimer{} }
+
 func init() {
 	helpers.Register("countdown_timer", func() helpers.Helper { return &CountdownTimer{} })
 }

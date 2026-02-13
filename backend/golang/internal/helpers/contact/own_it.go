@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewOwnIt creates a new OwnIt helper instance
+func NewOwnIt() helpers.Helper { return &OwnIt{} }
+
 func init() {
 	helpers.Register("own_it", func() helpers.Helper { return &OwnIt{} })
 }

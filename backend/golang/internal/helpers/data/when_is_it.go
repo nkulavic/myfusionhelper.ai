@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewWhenIsIt creates a new WhenIsIt helper instance
+func NewWhenIsIt() helpers.Helper { return &WhenIsIt{} }
+
 func init() {
 	helpers.Register("when_is_it", func() helpers.Helper { return &WhenIsIt{} })
 }

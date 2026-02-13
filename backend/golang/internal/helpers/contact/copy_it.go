@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewCopyIt creates a new CopyIt helper instance
+func NewCopyIt() helpers.Helper { return &CopyIt{} }
+
 func init() {
 	helpers.Register("copy_it", func() helpers.Helper { return &CopyIt{} })
 }

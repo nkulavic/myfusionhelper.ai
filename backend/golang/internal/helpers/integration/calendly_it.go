@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewCalendlyIt creates a new CalendlyIt helper instance
+func NewCalendlyIt() helpers.Helper { return &CalendlyIt{} }
+
 func init() {
 	helpers.Register("calendly_it", func() helpers.Helper { return &CalendlyIt{} })
 }

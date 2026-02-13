@@ -7,6 +7,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewLastSendIt creates a new LastSendIt helper instance
+func NewLastSendIt() helpers.Helper { return &LastSendIt{} }
+
 func init() {
 	helpers.Register("last_send_it", func() helpers.Helper { return &LastSendIt{} })
 }

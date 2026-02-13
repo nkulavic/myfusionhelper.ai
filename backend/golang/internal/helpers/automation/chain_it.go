@@ -15,6 +15,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewChainIt creates a new ChainIt helper instance
+func NewChainIt() helpers.Helper { return &ChainIt{} }
+
 func init() {
 	helpers.Register("chain_it", func() helpers.Helper { return &ChainIt{} })
 }

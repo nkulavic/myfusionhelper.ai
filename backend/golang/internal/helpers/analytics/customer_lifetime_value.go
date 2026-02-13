@@ -8,6 +8,9 @@ import (
 	"github.com/myfusionhelper/api/internal/helpers"
 )
 
+// NewCustomerLifetimeValue creates a new CustomerLifetimeValue helper instance
+func NewCustomerLifetimeValue() helpers.Helper { return &CustomerLifetimeValue{} }
+
 func init() {
 	helpers.Register("customer_lifetime_value", func() helpers.Helper { return &CustomerLifetimeValue{} })
 }
