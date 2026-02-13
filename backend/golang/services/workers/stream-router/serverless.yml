@@ -40,7 +40,7 @@ provider:
 
 functions:
   router:
-    handler: bootstrap
+    handler: services/workers/stream-router/main.go
     description: "Route DynamoDB execution stream events to individual helper SQS queues"
     events:
       - stream:

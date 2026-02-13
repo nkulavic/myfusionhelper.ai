@@ -59,7 +59,7 @@ provider:
 
 functions:
   worker:
-    handler: bootstrap
+    handler: services/workers/tag-it-worker/main.go
     description: "Process tag_it helper execution jobs"
     events:
       - sqs:
