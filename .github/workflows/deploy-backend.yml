@@ -247,6 +247,8 @@ jobs:
             path: services/workers/scheduler
           - service: executions-stream
             path: services/workers/executions-stream
+          - service: stream-router
+            path: services/workers/stream-router
     steps:
       - uses: actions/checkout@v4
 
