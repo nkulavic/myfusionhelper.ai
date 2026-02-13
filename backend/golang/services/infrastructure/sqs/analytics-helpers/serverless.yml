@@ -1,0 +1,155 @@
+service: mfh-sqs-analytics-helpers
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+
+resources:
+  Resources:
+    # customer_lifetime_value (analytics)
+    CustomerLifetimeValueQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-customer-lifetime-value-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt CustomerLifetimeValueDLQ.Arn
+          maxReceiveCount: 3
+
+    CustomerLifetimeValueDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-customer-lifetime-value-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # rfm_calculation (analytics)
+    RfmCalculationQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-rfm-calculation-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt RfmCalculationDLQ.Arn
+          maxReceiveCount: 3
+
+    RfmCalculationDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-rfm-calculation-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # email_engagement (notification)
+    EmailEngagementQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-email-engagement-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt EmailEngagementDLQ.Arn
+          maxReceiveCount: 3
+
+    EmailEngagementDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-email-engagement-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # notify_me (notification)
+    NotifyMeQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-notify-me-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt NotifyMeDLQ.Arn
+          maxReceiveCount: 3
+
+    NotifyMeDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-notify-me-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # keap_backup (platform)
+    KeapBackupQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-keap-backup-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt KeapBackupDLQ.Arn
+          maxReceiveCount: 3
+
+    KeapBackupDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-keap-backup-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+  Outputs:
+    CustomerLifetimeValueQueueArn:
+      Value: !GetAtt CustomerLifetimeValueQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CustomerLifetimeValueQueueArn
+    CustomerLifetimeValueQueueUrl:
+      Value: !Ref CustomerLifetimeValueQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CustomerLifetimeValueQueueUrl
+
+    RfmCalculationQueueArn:
+      Value: !GetAtt RfmCalculationQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-RfmCalculationQueueArn
+    RfmCalculationQueueUrl:
+      Value: !Ref RfmCalculationQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-RfmCalculationQueueUrl
+
+    EmailEngagementQueueArn:
+      Value: !GetAtt EmailEngagementQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailEngagementQueueArn
+    EmailEngagementQueueUrl:
+      Value: !Ref EmailEngagementQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailEngagementQueueUrl
+
+    NotifyMeQueueArn:
+      Value: !GetAtt NotifyMeQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-NotifyMeQueueArn
+    NotifyMeQueueUrl:
+      Value: !Ref NotifyMeQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-NotifyMeQueueUrl
+
+    KeapBackupQueueArn:
+      Value: !GetAtt KeapBackupQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-KeapBackupQueueArn
+    KeapBackupQueueUrl:
+      Value: !Ref KeapBackupQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-KeapBackupQueueUrl

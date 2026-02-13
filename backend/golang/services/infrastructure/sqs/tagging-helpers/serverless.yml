@@ -1,0 +1,184 @@
+service: mfh-sqs-tagging-helpers
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+
+resources:
+  Resources:
+    # clear_tags
+    ClearTagsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-clear-tags-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ClearTagsDLQ.Arn
+          maxReceiveCount: 3
+
+    ClearTagsDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-clear-tags-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # count_it_tags
+    CountItTagsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-count-it-tags-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt CountItTagsDLQ.Arn
+          maxReceiveCount: 3
+
+    CountItTagsDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-count-it-tags-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # count_tags
+    CountTagsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-count-tags-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt CountTagsDLQ.Arn
+          maxReceiveCount: 3
+
+    CountTagsDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-count-tags-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # group_it
+    GroupItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-group-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt GroupItDLQ.Arn
+          maxReceiveCount: 3
+
+    GroupItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-group-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # score_it
+    ScoreItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-score-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ScoreItDLQ.Arn
+          maxReceiveCount: 3
+
+    ScoreItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-score-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # tag_it
+    TagItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-tag-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt TagItDLQ.Arn
+          maxReceiveCount: 3
+
+    TagItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-tag-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+  Outputs:
+    ClearTagsQueueArn:
+      Value: !GetAtt ClearTagsQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ClearTagsQueueArn
+    ClearTagsQueueUrl:
+      Value: !Ref ClearTagsQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ClearTagsQueueUrl
+
+    CountItTagsQueueArn:
+      Value: !GetAtt CountItTagsQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CountItTagsQueueArn
+    CountItTagsQueueUrl:
+      Value: !Ref CountItTagsQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CountItTagsQueueUrl
+
+    CountTagsQueueArn:
+      Value: !GetAtt CountTagsQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CountTagsQueueArn
+    CountTagsQueueUrl:
+      Value: !Ref CountTagsQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CountTagsQueueUrl
+
+    GroupItQueueArn:
+      Value: !GetAtt GroupItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-GroupItQueueArn
+    GroupItQueueUrl:
+      Value: !Ref GroupItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-GroupItQueueUrl
+
+    ScoreItQueueArn:
+      Value: !GetAtt ScoreItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ScoreItQueueArn
+    ScoreItQueueUrl:
+      Value: !Ref ScoreItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ScoreItQueueUrl
+
+    TagItQueueArn:
+      Value: !GetAtt TagItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TagItQueueArn
+    TagItQueueUrl:
+      Value: !Ref TagItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TagItQueueUrl

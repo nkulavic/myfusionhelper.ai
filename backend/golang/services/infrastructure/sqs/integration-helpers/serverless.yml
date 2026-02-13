@@ -1,0 +1,851 @@
+service: mfh-sqs-integration-helpers
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+
+resources:
+  Resources:
+    # calendly_it
+    CalendlyItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-calendly-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt CalendlyItDLQ.Arn
+          maxReceiveCount: 3
+
+    CalendlyItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-calendly-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # donor_search
+    DonorSearchQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-donor-search-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt DonorSearchDLQ.Arn
+          maxReceiveCount: 3
+
+    DonorSearchDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-donor-search-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # dropbox_it
+    DropboxItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-dropbox-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt DropboxItDLQ.Arn
+          maxReceiveCount: 3
+
+    DropboxItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-dropbox-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # email_attach_it
+    EmailAttachItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-email-attach-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt EmailAttachItDLQ.Arn
+          maxReceiveCount: 3
+
+    EmailAttachItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-email-attach-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # email_validate_it
+    EmailValidateItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-email-validate-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt EmailValidateItDLQ.Arn
+          maxReceiveCount: 3
+
+    EmailValidateItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-email-validate-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # everwebinar
+    EverwebinarQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-everwebinar-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt EverwebinarDLQ.Arn
+          maxReceiveCount: 3
+
+    EverwebinarDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-everwebinar-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # excel_it
+    ExcelItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-excel-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ExcelItDLQ.Arn
+          maxReceiveCount: 3
+
+    ExcelItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-excel-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # facebook_lead_ads
+    FacebookLeadAdsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-facebook-lead-ads-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt FacebookLeadAdsDLQ.Arn
+          maxReceiveCount: 3
+
+    FacebookLeadAdsDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-facebook-lead-ads-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # google_sheet_it
+    GoogleSheetItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-google-sheet-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt GoogleSheetItDLQ.Arn
+          maxReceiveCount: 3
+
+    GoogleSheetItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-google-sheet-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # gotowebinar
+    GotowebinarQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-gotowebinar-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt GotowebinarDLQ.Arn
+          maxReceiveCount: 3
+
+    GotowebinarDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-gotowebinar-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # hook_it
+    HookItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-hook-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt HookItDLQ.Arn
+          maxReceiveCount: 3
+
+    HookItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-hook-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # hook_it_by_tag
+    HookItByTagQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-hook-it-by-tag-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt HookItByTagDLQ.Arn
+          maxReceiveCount: 3
+
+    HookItByTagDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-hook-it-by-tag-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # hook_it_v2
+    HookItV2Queue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-hook-it-v2-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt HookItV2DLQ.Arn
+          maxReceiveCount: 3
+
+    HookItV2DLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-hook-it-v2-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # hook_it_v3
+    HookItV3Queue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-hook-it-v3-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt HookItV3DLQ.Arn
+          maxReceiveCount: 3
+
+    HookItV3DLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-hook-it-v3-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # hook_it_v4
+    HookItV4Queue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-hook-it-v4-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt HookItV4DLQ.Arn
+          maxReceiveCount: 3
+
+    HookItV4DLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-hook-it-v4-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # mail_it
+    MailItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-mail-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt MailItDLQ.Arn
+          maxReceiveCount: 3
+
+    MailItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-mail-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # order_it
+    OrderItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-order-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt OrderItDLQ.Arn
+          maxReceiveCount: 3
+
+    OrderItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-order-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # query_it_basic
+    QueryItBasicQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-query-it-basic-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt QueryItBasicDLQ.Arn
+          maxReceiveCount: 3
+
+    QueryItBasicDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-query-it-basic-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # search_it
+    SearchItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-search-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt SearchItDLQ.Arn
+          maxReceiveCount: 3
+
+    SearchItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-search-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # slack_it
+    SlackItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-slack-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt SlackItDLQ.Arn
+          maxReceiveCount: 3
+
+    SlackItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-slack-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # stripe_hooks
+    StripeHooksQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-stripe-hooks-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt StripeHooksDLQ.Arn
+          maxReceiveCount: 3
+
+    StripeHooksDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-stripe-hooks-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # trello_it
+    TrelloItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-trello-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt TrelloItDLQ.Arn
+          maxReceiveCount: 3
+
+    TrelloItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-trello-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # twilio_sms
+    TwilioSmsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-twilio-sms-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt TwilioSmsDLQ.Arn
+          maxReceiveCount: 3
+
+    TwilioSmsDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-twilio-sms-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # upload_it
+    UploadItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-upload-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt UploadItDLQ.Arn
+          maxReceiveCount: 3
+
+    UploadItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-upload-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # webinar_jam
+    WebinarJamQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-webinar-jam-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt WebinarJamDLQ.Arn
+          maxReceiveCount: 3
+
+    WebinarJamDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-webinar-jam-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # zoom_meeting
+    ZoomMeetingQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-zoom-meeting-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ZoomMeetingDLQ.Arn
+          maxReceiveCount: 3
+
+    ZoomMeetingDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-zoom-meeting-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # zoom_webinar
+    ZoomWebinarQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-zoom-webinar-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ZoomWebinarDLQ.Arn
+          maxReceiveCount: 3
+
+    ZoomWebinarDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-zoom-webinar-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # zoom_webinar_absentee
+    ZoomWebinarAbsenteeQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-zoom-webinar-absentee-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ZoomWebinarAbsenteeDLQ.Arn
+          maxReceiveCount: 3
+
+    ZoomWebinarAbsenteeDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-zoom-webinar-absentee-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # zoom_webinar_participant
+    ZoomWebinarParticipantQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-zoom-webinar-participant-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt ZoomWebinarParticipantDLQ.Arn
+          maxReceiveCount: 3
+
+    ZoomWebinarParticipantDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-zoom-webinar-participant-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+  Outputs:
+    CalendlyItQueueArn:
+      Value: !GetAtt CalendlyItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CalendlyItQueueArn
+    CalendlyItQueueUrl:
+      Value: !Ref CalendlyItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CalendlyItQueueUrl
+
+    DonorSearchQueueArn:
+      Value: !GetAtt DonorSearchQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DonorSearchQueueArn
+    DonorSearchQueueUrl:
+      Value: !Ref DonorSearchQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DonorSearchQueueUrl
+
+    DropboxItQueueArn:
+      Value: !GetAtt DropboxItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DropboxItQueueArn
+    DropboxItQueueUrl:
+      Value: !Ref DropboxItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DropboxItQueueUrl
+
+    EmailAttachItQueueArn:
+      Value: !GetAtt EmailAttachItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailAttachItQueueArn
+    EmailAttachItQueueUrl:
+      Value: !Ref EmailAttachItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailAttachItQueueUrl
+
+    EmailValidateItQueueArn:
+      Value: !GetAtt EmailValidateItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailValidateItQueueArn
+    EmailValidateItQueueUrl:
+      Value: !Ref EmailValidateItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailValidateItQueueUrl
+
+    EverwebinarQueueArn:
+      Value: !GetAtt EverwebinarQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EverwebinarQueueArn
+    EverwebinarQueueUrl:
+      Value: !Ref EverwebinarQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EverwebinarQueueUrl
+
+    ExcelItQueueArn:
+      Value: !GetAtt ExcelItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ExcelItQueueArn
+    ExcelItQueueUrl:
+      Value: !Ref ExcelItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ExcelItQueueUrl
+
+    FacebookLeadAdsQueueArn:
+      Value: !GetAtt FacebookLeadAdsQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-FacebookLeadAdsQueueArn
+    FacebookLeadAdsQueueUrl:
+      Value: !Ref FacebookLeadAdsQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-FacebookLeadAdsQueueUrl
+
+    GoogleSheetItQueueArn:
+      Value: !GetAtt GoogleSheetItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-GoogleSheetItQueueArn
+    GoogleSheetItQueueUrl:
+      Value: !Ref GoogleSheetItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-GoogleSheetItQueueUrl
+
+    GotowebinarQueueArn:
+      Value: !GetAtt GotowebinarQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-GotowebinarQueueArn
+    GotowebinarQueueUrl:
+      Value: !Ref GotowebinarQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-GotowebinarQueueUrl
+
+    HookItQueueArn:
+      Value: !GetAtt HookItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HookItQueueArn
+    HookItQueueUrl:
+      Value: !Ref HookItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HookItQueueUrl
+
+    HookItByTagQueueArn:
+      Value: !GetAtt HookItByTagQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HookItByTagQueueArn
+    HookItByTagQueueUrl:
+      Value: !Ref HookItByTagQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HookItByTagQueueUrl
+
+    HookItV2QueueArn:
+      Value: !GetAtt HookItV2Queue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HookItV2QueueArn
+    HookItV2QueueUrl:
+      Value: !Ref HookItV2Queue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HookItV2QueueUrl
+
+    HookItV3QueueArn:
+      Value: !GetAtt HookItV3Queue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HookItV3QueueArn
+    HookItV3QueueUrl:
+      Value: !Ref HookItV3Queue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HookItV3QueueUrl
+
+    HookItV4QueueArn:
+      Value: !GetAtt HookItV4Queue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HookItV4QueueArn
+    HookItV4QueueUrl:
+      Value: !Ref HookItV4Queue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HookItV4QueueUrl
+
+    MailItQueueArn:
+      Value: !GetAtt MailItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-MailItQueueArn
+    MailItQueueUrl:
+      Value: !Ref MailItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-MailItQueueUrl
+
+    OrderItQueueArn:
+      Value: !GetAtt OrderItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OrderItQueueArn
+    OrderItQueueUrl:
+      Value: !Ref OrderItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-OrderItQueueUrl
+
+    QueryItBasicQueueArn:
+      Value: !GetAtt QueryItBasicQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-QueryItBasicQueueArn
+    QueryItBasicQueueUrl:
+      Value: !Ref QueryItBasicQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-QueryItBasicQueueUrl
+
+    SearchItQueueArn:
+      Value: !GetAtt SearchItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SearchItQueueArn
+    SearchItQueueUrl:
+      Value: !Ref SearchItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SearchItQueueUrl
+
+    SlackItQueueArn:
+      Value: !GetAtt SlackItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SlackItQueueArn
+    SlackItQueueUrl:
+      Value: !Ref SlackItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SlackItQueueUrl
+
+    StripeHooksQueueArn:
+      Value: !GetAtt StripeHooksQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-StripeHooksQueueArn
+    StripeHooksQueueUrl:
+      Value: !Ref StripeHooksQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-StripeHooksQueueUrl
+
+    TrelloItQueueArn:
+      Value: !GetAtt TrelloItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TrelloItQueueArn
+    TrelloItQueueUrl:
+      Value: !Ref TrelloItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TrelloItQueueUrl
+
+    TwilioSmsQueueArn:
+      Value: !GetAtt TwilioSmsQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TwilioSmsQueueArn
+    TwilioSmsQueueUrl:
+      Value: !Ref TwilioSmsQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TwilioSmsQueueUrl
+
+    UploadItQueueArn:
+      Value: !GetAtt UploadItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UploadItQueueArn
+    UploadItQueueUrl:
+      Value: !Ref UploadItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-UploadItQueueUrl
+
+    WebinarJamQueueArn:
+      Value: !GetAtt WebinarJamQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WebinarJamQueueArn
+    WebinarJamQueueUrl:
+      Value: !Ref WebinarJamQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WebinarJamQueueUrl
+
+    ZoomMeetingQueueArn:
+      Value: !GetAtt ZoomMeetingQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ZoomMeetingQueueArn
+    ZoomMeetingQueueUrl:
+      Value: !Ref ZoomMeetingQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ZoomMeetingQueueUrl
+
+    ZoomWebinarQueueArn:
+      Value: !GetAtt ZoomWebinarQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ZoomWebinarQueueArn
+    ZoomWebinarQueueUrl:
+      Value: !Ref ZoomWebinarQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ZoomWebinarQueueUrl
+
+    ZoomWebinarAbsenteeQueueArn:
+      Value: !GetAtt ZoomWebinarAbsenteeQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ZoomWebinarAbsenteeQueueArn
+    ZoomWebinarAbsenteeQueueUrl:
+      Value: !Ref ZoomWebinarAbsenteeQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ZoomWebinarAbsenteeQueueUrl
+
+    ZoomWebinarParticipantQueueArn:
+      Value: !GetAtt ZoomWebinarParticipantQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ZoomWebinarParticipantQueueArn
+    ZoomWebinarParticipantQueueUrl:
+      Value: !Ref ZoomWebinarParticipantQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ZoomWebinarParticipantQueueUrl
