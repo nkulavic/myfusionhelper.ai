@@ -309,6 +309,7 @@ functions:
           method: post
           authorizer:
             id: ${cf:mfh-api-gateway-${self:provider.stage}.ApiKeyAuthorizerId}
+            type: request
 
   helper-execute-path-post:
     handler: cmd/handlers/helpers/main.go
@@ -324,6 +325,7 @@ functions:
           method: post
           authorizer:
             id: ${cf:mfh-api-gateway-${self:provider.stage}.ApiKeyAuthorizerId}
+            type: request
 
   helper-execute-path-get:
     handler: cmd/handlers/helpers/main.go
@@ -339,4 +341,5 @@ functions:
           method: get
           authorizer:
             id: ${cf:mfh-api-gateway-${self:provider.stage}.ApiKeyAuthorizerId}
+            type: request
 
