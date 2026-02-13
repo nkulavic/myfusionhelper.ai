@@ -10,7 +10,20 @@ Serverless Go backend on AWS Lambda, deployed via Serverless Framework v4.
 - NEVER run `npx sls deploy` manually (except for emergency debugging)
 - NEVER deploy to any region other than `us-west-2`
 
-**Region Lock**: ALL infrastructure and services are deployed ONLY to **us-west-2**. This is enforced in CI/CD and must be verified in all serverless.yml files.
+**Region Lock**: ALL infrastructure and services are deployed ONLY to **us-west-2**. This is enforced at three levels:
+1. **IAM Policy**: Claude Code's `mfh-claude` profile has an explicit Deny on all regional services outside us-west-2
+2. **CI/CD**: GitHub Actions passes `--region us-west-2` on every command
+3. **serverless.yml**: Every service specifies `region: us-west-2`
+
+## AWS CLI Profile
+
+**CRITICAL**: Always use the `mfh-claude` profile for ALL AWS commands. This is the only profile Claude Code is authorized to use. There is no default profile.
+
+```bash
+export AWS_PROFILE=mfh-claude
+```
+
+This profile is hard-locked to **us-west-2 only** via IAM policy. See root `CLAUDE.md` for full details.
 
 ## Quick Reference
 
@@ -485,16 +498,35 @@ USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersT
 COGNITO_USER_POOL_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
 ```
 
-## Unified Secrets Architecture
+## Secrets Architecture
 
-All internal secrets stored in ONE SSM parameter: `/myfusionhelper/${STAGE}/secrets` (SecureString).
+Two categories of secrets exist:
 
-```go
-secrets, err := config.LoadSecrets(ctx) // Cached after first call
-stripeKey := secrets.Stripe.SecretKey
+### 1. Unified Secrets (Internal API Keys)
+
+All internal API secrets consolidated into ONE SSM parameter per stage:
+
+**Parameter**: `/myfusionhelper/{stage}/secrets` (SecureString, KMS-encrypted)
+**Source**: GitHub Secrets → `sync-internal-secrets.yml` workflow → `scripts/build-internal-secrets.sh`
+
+**JSON structure**:
+```json
+{
+  "stripe": { "secret_key", "publishable_key", "webhook_secret", "price_start", "price_grow", "price_deliver" },
+  "groq": { "api_key" },
+  "twilio": { "account_sid", "auth_token", "from_number", "messaging_sid" }
+}
 ```
 
-Services that need secrets add to serverless.yml:
+**Go code** (`internal/config/secrets.go`):
+```go
+secrets, err := config.LoadSecrets(ctx) // Singleton, cached after first call
+stripeKey := secrets.Stripe.SecretKey
+groqKey := secrets.Groq.APIKey
+twilioSID := secrets.Twilio.AccountSID
+```
+
+**serverless.yml** (required for any service using secrets):
 ```yaml
 environment:
   INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
@@ -506,24 +538,61 @@ iam:
         Resource: "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
 ```
 
+**To sync secrets**: Run `sync-internal-secrets.yml` workflow manually in GitHub Actions, selecting the target stage.
+
+### 2. OAuth Credentials (Platform Connections)
+
+Platform OAuth credentials (for CRM connections like Keap) are stored as **separate SSM parameters**:
+
+**Pattern**:
+```
+/{stage}/platforms/{platform_slug}/oauth/client_id     (SecureString)
+/{stage}/platforms/{platform_slug}/oauth/client_secret  (SecureString)
+```
+
+**Loaded by**: `loadOAuthCredentials()` in `cmd/handlers/platforms/clients/connections/main.go`
+
+**OAuth flow** (Keap example):
+1. `POST /platforms/{id}/oauth/start` → generates state token, stores in `mfh-{stage}-oauth-states` table (TTL: 15 min), returns authorization URL
+2. User authorizes at Keap → redirected to `GET /platforms/oauth/callback?code=...&state=...`
+3. Backend validates state (one-time use), exchanges code for tokens
+4. Stores connection in `connections` table + auth record in `platform-connection-auths` table
+5. User redirected to success URL with `connection_id`
+
+**Key DynamoDB tables for OAuth**:
+- `mfh-{stage}-oauth-states` -- temporary state tokens (DynamoDB TTL auto-cleanup)
+- `mfh-{stage}-connections` -- platform connections (connection_id, account_id, platform_id, auth_type)
+- `mfh-{stage}-platform-connection-auths` -- OAuth tokens (access_token, refresh_token, expires_at)
+
+### Legacy SSM Parameters (Cleanup Needed)
+
+These old parameters still exist but are **no longer used** by current code:
+- `/dev/stripe/price_*` -- superseded by unified JSON
+- `/mfh/dev/sqs/*/queue-url` -- superseded by convention-based queue URL construction
+
 ## CI/CD Pipeline
 
-**Trigger**: Push to `main`/`dev` branches (paths: `backend/golang/**`)
-**Auth**: OIDC -> `GitHubActions-Deploy-Dev` IAM role (AWS Account: 570331155915)
+See root `CLAUDE.md` for full CI/CD documentation with all 3 workflows, GitHub secrets inventory, and job dependency graph.
+
+**Quick reference**:
+- **Trigger**: Push to `main`/`dev` branches (paths: `backend/golang/**`)
+- **Auth**: OIDC → `GitHubActions-Deploy-Dev` IAM role (account 570331155915)
+- **Region**: `us-west-2` hardcoded in workflow
 
 ### Deployment Order
 
-1. **Infrastructure** (parallel): cognito, dynamodb, s3, sqs, monitoring, acm
-2. **Pre-gateway** (parallel): api-key-authorizer, scheduler, stream-router
-3. **API Gateway** (creates HttpApi + custom domain)
-4. **Route53** (DNS records)
-5. **API services** (parallel, max 3): auth, accounts, helpers, platforms, billing, etc.
-6. **Helper workers** (parallel): auto-detected from changed `services/workers/*-worker/` directories
-7. **Post-deploy**: seed platform data + health check verification
+1. **Build & test** (Go 1.23, `CGO_ENABLED=1 go build ./...`)
+2. **Infrastructure** (parallel): cognito, dynamodb-core, s3, sqs, ses, monitoring, acm
+3. **Pre-gateway** (parallel): api-key-authorizer, scheduler, executions-stream, stream-router
+4. **API Gateway** (creates HttpApi + Cognito authorizer + custom domain)
+5. **API services** (parallel, max 3): auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat, emails
+6. **Helper workers** (parallel, max 10): auto-detected from changed `services/workers/*-worker/` directories
+7. **Non-helper workers** (parallel): helper-worker (monolith), notification-worker, data-sync
+8. **Post-deploy**: `verify-deploy.sh` health check
 
 ### Helper Worker Auto-Detection
 
-The CI pipeline uses `git diff` to detect which worker directories changed and deploys only those. On manual trigger, ALL workers are deployed.
+The CI pipeline uses `git diff` to detect which worker directories changed and deploys only those. On manual trigger, ALL helpers are deployed. Excludes: helper-worker, notification-worker, data-sync, executions-stream, scheduler, voice assistant webhooks.
 
 ### Deployment Workflow
 
@@ -539,5 +608,5 @@ git push origin dev
 - `_archive/` directory (empty, can be deleted)
 - `integration/countdown_timer.go` -- duplicate of `automation/countdown_timer.go` (canonical is automation)
 - `analytics/last_click_it.go` -- duplicate of `data/last_click_it.go` (canonical is data)
-- Old category SQS infrastructure stacks (e.g., `mfh-sqs-contact-helpers-dev`) need deletion before deploying workers that create same-named queues
 - `services/workers/helper-worker/` -- deprecated monolith, kept as fallback until all workers verified
+- Old category SQS infrastructure stacks have been **deleted** (mfh-sqs-contact-helpers-dev, mfh-sqs-data-helpers-dev, mfh-sqs-automation-helpers-dev, mfh-sqs-integration-helpers-dev, mfh-sqs-analytics-helpers-dev, mfh-sqs-tagging-helpers-dev) -- queues are now self-contained in each worker's serverless.yml

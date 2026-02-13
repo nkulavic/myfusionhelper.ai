@@ -47,7 +47,38 @@ myfusionhelper.ai/
 - **Cognito User Pool**: `us-west-2_1E74cZW97`
 - **DynamoDB table prefix**: `mfh-{stage}-` (e.g., `mfh-dev-users`)
 - **S3 data bucket**: `mfh-{stage}-data`
-- **Stripe SSM params**: `/{stage}/stripe/secret_key`, `/{stage}/stripe/webhook_secret`, `/{stage}/stripe/price_start`, `/{stage}/stripe/price_grow`, `/{stage}/stripe/price_deliver`
+- **Unified Secrets SSM**: `/myfusionhelper/{stage}/secrets` (single SecureString JSON -- see Secrets section below)
+
+## AWS CLI Profile for Claude Code
+
+**CRITICAL**: Claude Code MUST always use the `mfh-claude` AWS profile. This is the ONLY profile Claude Code is authorized to use.
+
+```bash
+# ALWAYS prefix AWS commands with this:
+AWS_PROFILE=mfh-claude aws <command>
+
+# Or set it for the session:
+export AWS_PROFILE=mfh-claude
+```
+
+**There is no default AWS profile configured.** Any `aws` command without `AWS_PROFILE=mfh-claude` will fail.
+
+### IAM User & Permissions
+
+- **IAM User**: `myfusion-helper-ai-claude-code`
+- **Policy**: `mfh-claude-code-us-west-2-only`
+- **Region**: Hard-locked to **us-west-2 only**
+
+### What's Allowed
+
+- **All AWS services in us-west-2**: Lambda, DynamoDB, SQS, S3, CloudFormation, CloudWatch, SSM, API Gateway, SES, IAM, etc.
+- **Global services**: IAM, STS, Route53, CloudFront, ACM (these don't have regional endpoints)
+
+### What's Denied
+
+- **All regional services in ANY region other than us-west-2** -- enforced with an explicit `Deny` + `StringNotEquals` on `aws:RequestedRegion`, which cannot be overridden by any other policy
+- Do NOT attempt to use any other AWS profile
+- Do NOT attempt to access resources in other regions
 
 ## Development Setup
 
@@ -119,16 +150,17 @@ Copy `apps/web/.env.example` to `apps/web/.env.local` and fill in:
 
 ## Backend Deploy Order (CI/CD Automated)
 
-Infrastructure must deploy before API services. The CI pipeline enforces this order:
+Infrastructure must deploy before API services. The CI pipeline (`deploy-backend.yml`) enforces this order:
 
-1. **Build & test** Go code
-2. **Infrastructure** (parallel): cognito, dynamodb-core, s3, sqs, ses, monitoring, acm (ACM certificate for custom domain)
-3. **Pre-gateway services**: api-key-authorizer, scheduler
+1. **Build & test** Go code (Go 1.23, `CGO_ENABLED=1 go build ./...`)
+2. **Infrastructure** (parallel): cognito, dynamodb-core, s3, sqs, ses, monitoring, acm
+3. **Pre-gateway** (parallel): api-key-authorizer, scheduler, executions-stream, stream-router
 4. **API Gateway** (creates HttpApi + Cognito authorizer + custom domain mapping)
-5. **Route53** (creates DNS records pointing to API Gateway)
-6. **API services** (parallel, max 3): auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat
-7. **Workers** (parallel): helper-worker, notification-worker, data-sync, executions-stream, sms-chat-webhook, alexa-webhook, google-assistant-webhook
-8. **Post-deploy**: seed platform data + health check verification
+5. ~~Route53~~ (currently disabled -- custom domain DNS not critical for P0)
+6. **API services** (parallel, max 3): auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat, emails
+7. **Helper workers** (parallel, max 10): 97 individual self-contained workers, auto-detected from changed `services/workers/*-worker/` directories
+8. **Non-helper workers** (parallel): helper-worker (deprecated monolith), notification-worker, data-sync
+9. **Post-deploy**: `verify-deploy.sh` health check
 
 **All deployments target us-west-2 region exclusively.**
 
@@ -142,6 +174,147 @@ npm install                                           # installs serverless-go-p
 cd services/api/auth
 npx sls deploy --stage dev --region us-west-2        # MUST specify us-west-2
 ```
+
+## CI/CD Pipeline Detail
+
+Three GitHub Actions workflows in `.github/workflows/`:
+
+### 1. `deploy-backend.yml` -- Main Deployment
+
+**Triggers**: Push to `dev`/`main` (paths: `backend/golang/**`), or manual dispatch
+**Auth**: GitHub OIDC token → assumes `GitHubActions-Deploy-Dev` IAM role (account 570331155915)
+**Region**: `us-west-2` hardcoded in workflow env
+
+**Job dependency graph**:
+```
+build-test
+  ├── deploy-infra (parallel: cognito, dynamodb-core, s3, sqs, ses, monitoring, acm)
+  │     ├── deploy-pre-gateway (parallel: api-key-authorizer, scheduler, executions-stream, stream-router)
+  │     │     ├── deploy-gateway (API Gateway + Cognito authorizer + custom domain)
+  │     │     │     └── deploy-api (parallel max 3: auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat, emails)
+  │     │     └── deploy-helpers (parallel max 10: auto-detected changed *-worker/ directories)
+  │     └── deploy-workers (parallel: helper-worker [monolith], notification-worker, data-sync)
+  └── detect-changed-helpers (git diff to find changed worker dirs)
+        └── post-deploy (verify-deploy.sh health check)
+```
+
+**Helper auto-detection**: On push, uses `git diff` to detect changed `services/workers/*-worker/` directories. On manual dispatch, deploys ALL helpers. Excludes: helper-worker, notification-worker, data-sync, executions-stream, scheduler, voice assistant webhooks.
+
+**Route53**: Currently disabled (commented out) -- custom domain DNS not critical for P0 testing.
+
+### 2. `sync-internal-secrets.yml` -- Secrets Sync to SSM
+
+**Trigger**: Manual dispatch only (choose stage: dev, staging, prod)
+**Auth**: Same OIDC → `GitHubActions-Deploy-Dev` role
+
+Reads stage-prefixed GitHub secrets, builds unified JSON via `scripts/build-internal-secrets.sh`, uploads to SSM as a single SecureString parameter. See **Secrets Architecture** section below for full detail.
+
+### 3. `seed-platforms.yml` -- Platform Data Seeding
+
+**Triggers**: Push to `dev`/`main` (paths: `platforms/ci_cd/seed/**`), or manual dispatch
+**Purpose**: Seeds CRM platform configuration data into the Platforms DynamoDB table
+**Platforms**: keap, gohighlevel, activecampaign, ontraport, hubspot, stripe, zoom, trello, google_sheets, etc.
+**Detection**: Auto-detects changed `platform.json` files via git diff; manual can seed all or specific platform
+
+### GitHub Secrets Required
+
+| Secret | Used By | Purpose |
+|--------|---------|---------|
+| `SERVERLESS_ACCESS_KEY` | All 3 workflows | Serverless Framework registry auth |
+| `DEV_INTERNAL_STRIPE_SECRET_KEY` | sync-internal-secrets | Stripe API secret key (dev) |
+| `DEV_INTERNAL_STRIPE_PUBLISHABLE_KEY` | sync-internal-secrets | Stripe publishable key (dev) |
+| `DEV_INTERNAL_STRIPE_WEBHOOK_SECRET` | sync-internal-secrets | Stripe webhook signing secret (dev) |
+| `DEV_INTERNAL_STRIPE_PRICE_START` | sync-internal-secrets | Stripe price ID for Start plan (dev) |
+| `DEV_INTERNAL_STRIPE_PRICE_GROW` | sync-internal-secrets | Stripe price ID for Grow plan (dev) |
+| `DEV_INTERNAL_STRIPE_PRICE_DELIVER` | sync-internal-secrets | Stripe price ID for Deliver plan (dev) |
+| `DEV_INTERNAL_GROQ_API_KEY` | sync-internal-secrets | Groq API key for voice assistants (dev, optional) |
+| `DEV_INTERNAL_TWILIO_ACCOUNT_SID` | sync-internal-secrets | Twilio account SID (dev, optional) |
+| `DEV_INTERNAL_TWILIO_AUTH_TOKEN` | sync-internal-secrets | Twilio auth token (dev, optional) |
+| `DEV_INTERNAL_TWILIO_FROM_NUMBER` | sync-internal-secrets | Twilio phone number (dev, optional) |
+| `DEV_INTERNAL_TWILIO_MESSAGING_SID` | sync-internal-secrets | Twilio messaging service SID (dev, optional) |
+
+Same pattern for `STAGING_INTERNAL_*` and `PROD_INTERNAL_*` (36 stage-scoped + 1 global = **37 total GitHub secrets**).
+
+## Secrets Architecture
+
+### Unified Secrets (SSM Parameter Store)
+
+All internal API secrets are consolidated into ONE SSM parameter per stage:
+
+**Parameter**: `/myfusionhelper/{stage}/secrets` (SecureString, KMS-encrypted, Advanced tier)
+
+**JSON structure**:
+```json
+{
+  "stripe": {
+    "secret_key": "sk_...",
+    "publishable_key": "pk_...",
+    "webhook_secret": "whsec_...",
+    "price_start": "price_...",
+    "price_grow": "price_...",
+    "price_deliver": "price_..."
+  },
+  "groq": {
+    "api_key": "gsk_..."
+  },
+  "twilio": {
+    "account_sid": "AC...",
+    "auth_token": "...",
+    "from_number": "+1...",
+    "messaging_sid": "MG..."
+  }
+}
+```
+
+### Secrets Flow
+
+```
+GitHub Secrets (master source, AES-256)
+     ↓  (manual trigger: sync-internal-secrets.yml)
+scripts/build-internal-secrets.sh
+     ↓  (builds JSON, uploads via aws ssm put-parameter)
+SSM Parameter Store: /myfusionhelper/{stage}/secrets (SecureString)
+     ↓  (Lambda reads at runtime via INTERNAL_SECRETS_PARAM env var)
+Go: config.LoadSecrets(ctx) → SecretsConfig struct (singleton, cached)
+```
+
+### How Lambda Functions Access Secrets
+
+Every service that needs secrets adds to its `serverless.yml`:
+```yaml
+environment:
+  INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
+iam:
+  role:
+    statements:
+      - Effect: Allow
+        Action: [ssm:GetParameter]
+        Resource: "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
+```
+
+Go code: `secrets, err := config.LoadSecrets(ctx)` then `secrets.Stripe.SecretKey`, etc.
+
+### OAuth Credentials (Platform Connections)
+
+OAuth credentials for CRM platform connections (e.g., Keap OAuth 2.0) are stored as **separate SSM parameters** (not in the unified JSON):
+
+**Pattern**: `/{stage}/platforms/{platform_slug}/oauth/client_id` and `/{stage}/platforms/{platform_slug}/oauth/client_secret`
+
+These are loaded by `loadOAuthCredentials()` in the platforms connection handler. Currently only Keap uses OAuth 2.0; other platforms use API keys entered directly by the user.
+
+**OAuth flow** (Keap example):
+1. Frontend calls `POST /platforms/{id}/oauth/start` (JWT-protected)
+2. Backend generates state token, stores in `mfh-{stage}-oauth-states` DynamoDB table (TTL: 15 min)
+3. Backend returns authorization URL → user redirected to Keap consent screen
+4. Keap redirects to `GET /platforms/oauth/callback?code=...&state=...` (public endpoint)
+5. Backend validates state, exchanges code for tokens, stores connection + auth records in DynamoDB
+6. User redirected to success URL with `connection_id`
+
+### Legacy SSM Parameters (Cleanup Needed)
+
+These old SSM parameters still exist but are **no longer used**:
+- `/dev/stripe/price_*` -- superseded by unified `/myfusionhelper/dev/secrets`
+- `/mfh/dev/sqs/*/queue-url` -- superseded by convention-based queue URL construction in stream router
 
 ## Supported CRM Platforms
 
