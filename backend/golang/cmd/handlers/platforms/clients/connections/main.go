@@ -20,6 +20,7 @@ import (
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/google/uuid"
+	mfhconfig "github.com/myfusionhelper/api/internal/config"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	apitypes "github.com/myfusionhelper/api/internal/types"
 )
@@ -618,7 +619,6 @@ func oauthStart(ctx context.Context, event events.APIGatewayV2HTTPRequest, authC
 		return authMiddleware.CreateErrorResponse(500, "Internal server error"), nil
 	}
 	db := dynamodb.NewFromConfig(cfg)
-	ssmClient := ssm.NewFromConfig(cfg)
 
 	// Resolve platform
 	platformID, err := resolvePlatformID(ctx, db, platformIDOrSlug)
@@ -646,16 +646,14 @@ func oauthStart(ctx context.Context, event events.APIGatewayV2HTTPRequest, authC
 		return authMiddleware.CreateErrorResponse(400, "Platform does not support OAuth"), nil
 	}
 
-	// Load OAuth credentials from SSM
-	stage := os.Getenv("STAGE")
-	if stage == "" {
-		stage = "dev"
-	}
-	clientID, clientSecret, err := loadOAuthCredentials(ctx, ssmClient, stage, platform.Slug)
+	// Load OAuth credentials from unified SSM parameter
+	oauthConfig, err := mfhconfig.GetPlatformOAuth(ctx, platform.Slug)
 	if err != nil {
 		log.Printf("Failed to load OAuth credentials for %s: %v", platform.Slug, err)
 		return authMiddleware.CreateErrorResponse(500, "OAuth not configured for this platform"), nil
 	}
+	clientID := oauthConfig.ClientID
+	clientSecret := oauthConfig.ClientSecret
 
 	// Parse redirect URLs from request body
 	successRedirect := ""
@@ -709,6 +707,10 @@ func oauthStart(ctx context.Context, event events.APIGatewayV2HTTPRequest, authC
 	}
 
 	// Build authorization URL
+	stage := os.Getenv("STAGE")
+	if stage == "" {
+		stage = "dev"
+	}
 	redirectURI := os.Getenv("OAUTH_REDIRECT_URI")
 	if redirectURI == "" {
 		redirectURI = fmt.Sprintf("https://%s.api.myfusionhelper.ai/platforms/oauth/callback", stage)
@@ -772,7 +774,6 @@ func oauthCallback(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 		return redirectWithError("Internal server error", ""), nil
 	}
 	db := dynamodb.NewFromConfig(cfg)
-	ssmClient := ssm.NewFromConfig(cfg)
 
 	// Retrieve and validate state
 	stateResult, err := db.GetItem(ctx, &dynamodb.GetItemInput{
@@ -813,17 +814,19 @@ func oauthCallback(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 		return redirectWithError("Failed to parse platform", failureRedirect), nil
 	}
 
-	// Load OAuth credentials from SSM
+	// Load OAuth credentials from unified SSM parameter
+	oauthConfig, err := mfhconfig.GetPlatformOAuth(ctx, platform.Slug)
+	if err != nil {
+		return redirectWithError("OAuth configuration error", failureRedirect), nil
+	}
+	clientID := oauthConfig.ClientID
+	clientSecret := oauthConfig.ClientSecret
+
+	// Exchange code for tokens
 	stage := os.Getenv("STAGE")
 	if stage == "" {
 		stage = "dev"
 	}
-	clientID, clientSecret, err := loadOAuthCredentials(ctx, ssmClient, stage, platform.Slug)
-	if err != nil {
-		return redirectWithError("OAuth configuration error", failureRedirect), nil
-	}
-
-	// Exchange code for tokens
 	redirectURI := os.Getenv("OAUTH_REDIRECT_URI")
 	if redirectURI == "" {
 		redirectURI = fmt.Sprintf("https://%s.api.myfusionhelper.ai/platforms/oauth/callback", stage)
@@ -1103,27 +1106,14 @@ func fetchUserInfo(ctx context.Context, userInfoURL, accessToken string) (*OAuth
 	return userInfo, nil
 }
 
+// loadOAuthCredentials is deprecated. Use config.GetPlatformOAuth() instead.
+// Kept as fallback for backward compatibility.
 func loadOAuthCredentials(ctx context.Context, ssmClient *ssm.Client, stage, slug string) (clientID, clientSecret string, err error) {
-	clientIDParam := fmt.Sprintf("/%s/platforms/%s/oauth/client_id", stage, slug)
-	clientSecretParam := fmt.Sprintf("/%s/platforms/%s/oauth/client_secret", stage, slug)
-
-	clientIDResult, err := ssmClient.GetParameter(ctx, &ssm.GetParameterInput{
-		Name:           aws.String(clientIDParam),
-		WithDecryption: aws.Bool(true),
-	})
+	oauthConfig, err := mfhconfig.GetPlatformOAuth(ctx, slug)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get client_id: %w", err)
+		return "", "", err
 	}
-
-	clientSecretResult, err := ssmClient.GetParameter(ctx, &ssm.GetParameterInput{
-		Name:           aws.String(clientSecretParam),
-		WithDecryption: aws.Bool(true),
-	})
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get client_secret: %w", err)
-	}
-
-	return *clientIDResult.Parameter.Value, *clientSecretResult.Parameter.Value, nil
+	return oauthConfig.ClientID, oauthConfig.ClientSecret, nil
 }
 
 func findExistingConnection(ctx context.Context, db *dynamodb.Client, accountID, platformID, externalUserID string) (*apitypes.PlatformConnection, error) {

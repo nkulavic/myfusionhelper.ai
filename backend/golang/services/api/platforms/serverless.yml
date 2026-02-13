@@ -41,6 +41,7 @@ provider:
     CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
     PLATFORM_CONNECTION_AUTHS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableName}
     OAUTH_STATES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.OAuthStatesTableName}
+    OAUTH_CREDENTIALS_PARAM: /myfusionhelper/${self:provider.stage}/platforms/oauth/credentials
     OAUTH_REDIRECT_URI: https://${self:provider.stage}.api.myfusionhelper.ai/platforms/oauth/callback
     FRONTEND_SUCCESS_URL: https://app.myfusionhelper.ai/connections?oauth=success
     FRONTEND_ERROR_URL: https://app.myfusionhelper.ai/connections?oauth=error
@@ -81,6 +82,7 @@ provider:
             - ssm:PutParameter
             - ssm:DeleteParameter
           Resource:
+            - "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/platforms/oauth/credentials"
             - "arn:aws:ssm:${self:provider.region}:*:parameter/${self:provider.stage}/platforms/*"
             - "arn:aws:ssm:${self:provider.region}:*:parameter/${self:provider.stage}/connections/*"
         - Effect: Allow

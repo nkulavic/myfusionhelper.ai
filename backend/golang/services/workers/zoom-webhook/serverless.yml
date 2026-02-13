@@ -26,7 +26,7 @@ provider:
     SERVICE_VERSION: "2025.02.08.0001"
     STAGE: ${self:provider.stage}
     COGNITO_REGION: ${self:provider.region}
-    ZOOM_WEBHOOK_SECRET: '{{resolve:ssm:/${self:provider.stage}/zoom/webhook_secret}}'
+    ZOOM_WEBHOOK_SECRET: "" # TODO: Add to unified secrets when Zoom webhooks are configured
     HELPER_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperQueueUrl}
     CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
   httpApi:

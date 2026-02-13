@@ -30,7 +30,7 @@ provider:
     STAGE: ${self:provider.stage}
     DEFAULT_FROM_EMAIL: noreply@myfusionhelper.ai
     DEFAULT_FROM_NAME: MyFusion Helper
-    APP_URL: '{{resolve:ssm:/mfh/${self:provider.stage}/app-url}}'
+    APP_URL: https://app.myfusionhelper.ai
     EMAIL_LOGS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailLogsTableName}
     EMAIL_TEMPLATES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailTemplatesTableName}
     EMAIL_VERIFICATIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableName}
@@ -77,12 +77,6 @@ provider:
             - xray:PutTraceSegments
             - xray:PutTelemetryRecords
           Resource: "*"
-        # SSM for app URL
-        - Effect: Allow
-          Action:
-            - ssm:GetParameter
-          Resource:
-            - "arn:aws:ssm:${self:provider.region}:*:parameter/mfh/${self:provider.stage}/app-url"
 
 functions:
   # Health check (internal monitoring)
