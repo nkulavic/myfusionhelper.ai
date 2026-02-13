@@ -11,7 +11,6 @@ import (
 )
 
 func main() {
-	// Register ONLY tag_it helper
 	helpers.Register("tag_it", tagging.NewTagIt)
 	lambda.Start(worker.HandleSQSEvent)
 }
