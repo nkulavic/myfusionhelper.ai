@@ -1,5 +1,7 @@
 service: mfh-stream-router
 
+frameworkVersion: '4'
+
 provider:
   name: aws
   runtime: provided.al2023
@@ -12,26 +14,20 @@ provider:
     lambda: true
   environment:
     STAGE: ${self:provider.stage}
-    # Fallback queue for passthrough mode during migration
+    AWS_ACCOUNT_ID: ${aws:accountId}
+    # Fallback queue for helpers that don't have individual workers yet
     FALLBACK_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperExecutionQueueUrl}
 
   iam:
     role:
       statements:
-        # Allow sending messages to all SQS queues
+        # Allow sending messages to all helper SQS queues (convention-based naming)
         - Effect: Allow
           Action:
             - sqs:SendMessage
           Resource:
             - arn:aws:sqs:${aws:region}:${aws:accountId}:mfh-${self:provider.stage}-*-executions.fifo
             - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperExecutionQueueArn}
-        # Allow reading from SSM Parameter Store for queue URL lookup
-        - Effect: Allow
-          Action:
-            - ssm:GetParameter
-            - ssm:GetParameters
-          Resource:
-            - arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/mfh/${self:provider.stage}/sqs/*
         # Allow reading from DynamoDB Stream
         - Effect: Allow
           Action:
@@ -45,6 +41,7 @@ provider:
 functions:
   router:
     handler: bootstrap
+    description: "Route DynamoDB execution stream events to individual helper SQS queues"
     events:
       - stream:
           type: dynamodb
@@ -55,15 +52,12 @@ functions:
           bisectBatchOnFunctionError: true
           functionResponseType: ReportBatchItemFailures
 
-# Build manually with: cd ../../.. && GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o services/workers/stream-router/bootstrap ./services/workers/stream-router
+plugins:
+  - serverless-go-plugin
 
-# plugins:
-#   - serverless-go-plugin
-
-# custom:
-#   go:
-#     baseDir: ../../..
-#     cmd: GOOS=linux GOARCH=arm64 go build -ldflags="-s -w"
-#     supportedRuntimes: ["provided.al2023"]
-#     buildProvidedRuntimeAsBootstrap: true
-#     monorepo: false
+custom:
+  go:
+    baseDir: ../../..
+    cmd: GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o bootstrap
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true

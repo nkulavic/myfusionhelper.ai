@@ -11,6 +11,9 @@ func init() {
 	helpers.Register("tag_it", func() helpers.Helper { return &TagIt{} })
 }
 
+// NewTagIt creates a new TagIt helper instance
+func NewTagIt() helpers.Helper { return &TagIt{} }
+
 // TagIt applies or removes tags from a contact based on configuration
 type TagIt struct{}
 

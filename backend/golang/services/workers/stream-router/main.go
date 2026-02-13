@@ -6,22 +6,19 @@ import (
 	"log"
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
 var (
-	sqsClient    *sqs.Client
-	ssmClient    *ssm.Client
-	queueCache   = make(map[string]string)
-	cacheMutex   sync.RWMutex
-	stage        string
+	sqsClient *sqs.Client
+	stage     string
+	region    string
+	accountID string
 )
 
 func init() {
@@ -30,11 +27,16 @@ func init() {
 		log.Fatalf("Failed to load AWS config: %v", err)
 	}
 	sqsClient = sqs.NewFromConfig(cfg)
-	ssmClient = ssm.NewFromConfig(cfg)
+
 	stage = os.Getenv("STAGE")
 	if stage == "" {
 		stage = "dev"
 	}
+	region = os.Getenv("AWS_REGION")
+	if region == "" {
+		region = "us-west-2"
+	}
+	accountID = os.Getenv("AWS_ACCOUNT_ID")
 }
 
 func Handle(ctx context.Context, event events.DynamoDBEvent) error {
@@ -53,13 +55,13 @@ func Handle(ctx context.Context, event events.DynamoDBEvent) error {
 			continue
 		}
 
-		// Get queue URL for this helper type
-		queueURL := getQueueForHelper(helperType)
+		// Construct queue URL using naming convention
+		queueURL := buildQueueURL(helperType)
 
 		if queueURL == "" {
-			// Passthrough mode: use fallback queue during migration
+			// Fallback to old monolith queue during migration
 			queueURL = os.Getenv("FALLBACK_QUEUE_URL")
-			log.Printf("No queue found for helper_type=%s, using fallback queue", helperType)
+			log.Printf("Cannot construct queue URL for helper_type=%s (missing account ID), using fallback", helperType)
 		}
 
 		if queueURL == "" {
@@ -67,12 +69,19 @@ func Handle(ctx context.Context, event events.DynamoDBEvent) error {
 			return fmt.Errorf("no queue available for helper_type: %s", helperType)
 		}
 
-		// Send message to SQS queue
+		// Build the SQS message body as the full execution job JSON from DynamoDB record
+		messageBody := executionID
+
+		// Use first 8 chars of execution_id as MessageGroupId for FIFO queue ordering
+		groupID := executionID
+		if len(groupID) > 8 {
+			groupID = groupID[:8]
+		}
+
 		_, err := sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
-			QueueUrl:    aws.String(queueURL),
-			MessageBody: aws.String(executionID),
-			// Use first 8 chars of execution_id as MessageGroupId for FIFO queue ordering
-			MessageGroupId: aws.String(executionID[:8]),
+			QueueUrl:       aws.String(queueURL),
+			MessageBody:    aws.String(messageBody),
+			MessageGroupId: aws.String(groupID),
 		})
 
 		if err != nil {
@@ -86,46 +95,19 @@ func Handle(ctx context.Context, event events.DynamoDBEvent) error {
 	return nil
 }
 
-func getQueueForHelper(helperType string) string {
-	// Check cache first
-	cacheMutex.RLock()
-	if url, ok := queueCache[helperType]; ok {
-		cacheMutex.RUnlock()
-		return url
-	}
-	cacheMutex.RUnlock()
-
-	// Try environment variable first (for initial deployment compatibility)
-	envVar := strings.ToUpper(helperType) + "_QUEUE_URL"
-	if url := os.Getenv(envVar); url != "" {
-		cacheMutex.Lock()
-		queueCache[helperType] = url
-		cacheMutex.Unlock()
-		return url
-	}
-
-	// Fetch from SSM Parameter Store
-	// Parameter naming convention: /mfh/{stage}/sqs/{helper_type}/queue-url
-	paramName := fmt.Sprintf("/mfh/%s/sqs/%s/queue-url", stage, helperType)
-
-	ctx := context.Background()
-	result, err := ssmClient.GetParameter(ctx, &ssm.GetParameterInput{
-		Name: aws.String(paramName),
-	})
-
-	if err != nil {
-		log.Printf("Failed to fetch queue URL from SSM for %s: %v", helperType, err)
+// buildQueueURL constructs an SQS queue URL from the helper type using a naming convention.
+// helper_type "tag_it" → queue name "mfh-{stage}-tag-it-executions.fifo"
+// → URL "https://sqs.{region}.amazonaws.com/{account}/mfh-{stage}-tag-it-executions.fifo"
+func buildQueueURL(helperType string) string {
+	if accountID == "" {
 		return ""
 	}
 
-	url := *result.Parameter.Value
+	// Convert helper_type from snake_case to kebab-case: "tag_it" → "tag-it"
+	queueName := strings.ReplaceAll(helperType, "_", "-")
 
-	// Cache the result
-	cacheMutex.Lock()
-	queueCache[helperType] = url
-	cacheMutex.Unlock()
-
-	return url
+	return fmt.Sprintf("https://sqs.%s.amazonaws.com/%s/mfh-%s-%s-executions.fifo",
+		region, accountID, stage, queueName)
 }
 
 func main() {
