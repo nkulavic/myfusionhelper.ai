@@ -107,9 +107,19 @@ Copy `apps/web/.env.example` to `apps/web/.env.local` and fill in:
 - `staging` -- QA
 - `dev` -- development (default working branch)
 
-## Backend Deploy Order
+## ⚠️ CRITICAL: Deployment Policy
 
-Infrastructure must deploy before API services. The CI pipeline enforces this:
+**ALL DEPLOYMENTS MUST GO THROUGH CI/CD PIPELINE**
+
+- ✅ Push code to `dev` or `main` branch → GitHub Actions deploys automatically to **us-west-2**
+- ❌ NEVER run `npx sls deploy` manually (except for emergency debugging)
+- ❌ NEVER deploy to any region other than **us-west-2**
+
+**Region Lock**: ALL infrastructure and services are deployed ONLY to **us-west-2**. This is enforced in CI/CD (`--region us-west-2` on every command) and must be set in all `serverless.yml` files (`region: us-west-2`).
+
+## Backend Deploy Order (CI/CD Automated)
+
+Infrastructure must deploy before API services. The CI pipeline enforces this order:
 
 1. **Build & test** Go code
 2. **Infrastructure** (parallel): cognito, dynamodb-core, s3, sqs, ses, monitoring, acm (ACM certificate for custom domain)
@@ -120,13 +130,17 @@ Infrastructure must deploy before API services. The CI pipeline enforces this:
 7. **Workers** (parallel): helper-worker, notification-worker, data-sync, executions-stream, sms-chat-webhook, alexa-webhook, google-assistant-webhook
 8. **Post-deploy**: seed platform data + health check verification
 
-### Local Backend Deploy
+**All deployments target us-west-2 region exclusively.**
+
+### Emergency Manual Deploy (Debugging Only)
+
+Manual deployment should ONLY be used for emergency debugging. Always specify `--region us-west-2`:
 
 ```bash
 cd backend/golang
-npm install                    # installs serverless-go-plugin + glob
+npm install                                           # installs serverless-go-plugin + glob
 cd services/api/auth
-npx sls deploy --stage dev     # deploys single service
+npx sls deploy --stage dev --region us-west-2        # MUST specify us-west-2
 ```
 
 ## Supported CRM Platforms
