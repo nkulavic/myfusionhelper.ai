@@ -139,8 +139,6 @@ jobs:
             path: services/infrastructure/sqs
           - service: ses
             path: services/infrastructure/ses
-          - service: monitoring
-            path: services/infrastructure/monitoring
           - service: acm
             path: services/infrastructure/acm
     steps:
@@ -420,6 +418,36 @@ jobs:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
+  # 4b. Deploy Monitoring (after gateway + infra, needs both DynamoDB and API Gateway outputs)
+  # ──────────────────────────────────────────────
+  deploy-monitoring:
+    name: Deploy Monitoring
+    needs: deploy-gateway
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
+          aws-region: us-west-2
+
+      - name: Install Serverless Framework
+        run: npm install -g serverless
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+      - name: Deploy monitoring
+        working-directory: backend/golang/services/infrastructure/monitoring
+        run: npx sls deploy --stage ${{ env.DEPLOY_STAGE }} --region us-west-2
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+
+  # ──────────────────────────────────────────────
   # 5. Deploy Helper Workers (intelligent parallel deployment)
   # Only deploys helper workers that have changed (detected by git diff)
   # ──────────────────────────────────────────────
@@ -529,6 +557,7 @@ jobs:
     needs:
       - deploy-api
       - deploy-workers
+      - deploy-monitoring
       - detect-changed-helpers
     if: always() && !cancelled()
     runs-on: ubuntu-latest
