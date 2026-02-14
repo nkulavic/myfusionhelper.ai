@@ -6,7 +6,7 @@ custom:
   customDomain:
     dev: api-dev.myfusionhelper.ai
     staging: api-staging.myfusionhelper.ai
-    prod: api.myfusionhelper.ai
+    main: api.myfusionhelper.ai
 
 provider:
   name: aws

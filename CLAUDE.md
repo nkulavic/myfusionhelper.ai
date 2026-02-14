@@ -41,7 +41,7 @@ myfusionhelper.ai/
 - **API Gateway**:
   - Default endpoint: `https://a95gb181u4.execute-api.us-west-2.amazonaws.com`
   - Custom domain (dev): `https://api-dev.myfusionhelper.ai`
-  - Custom domain (prod): `https://api.myfusionhelper.ai`
+  - Custom domain (main): `https://api.myfusionhelper.ai`
 - **Route53 Hosted Zone**: `myfusionhelper.ai` (ID: Z071462818IPQJBH38AMK)
 - **ACM Certificate**: Managed via `services/infrastructure/acm` (DNS validation)
 - **Cognito User Pool**: `us-west-2_1E74cZW97`
@@ -204,7 +204,7 @@ build-test
 
 ### 2. `sync-internal-secrets.yml` -- Secrets Sync to SSM
 
-**Trigger**: Manual dispatch only (choose stage: dev, staging, prod)
+**Trigger**: Manual dispatch only (choose stage: dev, staging, main)
 **Auth**: Same OIDC → `GitHubActions-Deploy-Dev` role
 
 Reads stage-prefixed GitHub secrets, builds unified JSON via `scripts/build-internal-secrets.sh`, uploads to SSM as a single SecureString parameter. See **Secrets Architecture** section below for full detail.
@@ -233,7 +233,7 @@ Reads stage-prefixed GitHub secrets, builds unified JSON via `scripts/build-inte
 | `DEV_INTERNAL_TWILIO_FROM_NUMBER` | sync-internal-secrets | Twilio phone number (dev, optional) |
 | `DEV_INTERNAL_TWILIO_MESSAGING_SID` | sync-internal-secrets | Twilio messaging service SID (dev, optional) |
 
-Same pattern for `STAGING_INTERNAL_*` and `PROD_INTERNAL_*` (36 stage-scoped + 1 global = **37 total GitHub secrets**).
+Same pattern for `STAGING_INTERNAL_*` and `MAIN_INTERNAL_*` (36 stage-scoped + 1 global = **37 total GitHub secrets**).
 
 ## Secrets Architecture
 

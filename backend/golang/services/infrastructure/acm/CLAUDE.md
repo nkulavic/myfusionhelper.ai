@@ -47,7 +47,7 @@ npx sls deploy --stage dev
 
 - **Renewal**: ACM automatically renews certificates before expiration (60 days before)
 - **Validation**: DNS validation records persist in Route53, allowing automatic renewal
-- **Stages**: Each stage (dev, staging, prod) has its own certificate stack
+- **Stages**: Each stage (dev, staging, main) has its own certificate stack
 
 ## Verification
 

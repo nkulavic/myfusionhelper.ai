@@ -6,6 +6,10 @@ plugins:
   - serverless-go-plugin
 
 custom:
+  apiDomain:
+    dev: api-dev.myfusionhelper.ai
+    staging: api-staging.myfusionhelper.ai
+    main: api.myfusionhelper.ai
   go:
     baseDir: ../../..
     supportedRuntimes: ["provided.al2023"]
@@ -42,7 +46,7 @@ provider:
     PLATFORM_CONNECTION_AUTHS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableName}
     OAUTH_STATES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.OAuthStatesTableName}
     OAUTH_CREDENTIALS_PARAM: /myfusionhelper/${self:provider.stage}/platforms/oauth/credentials
-    OAUTH_REDIRECT_URI: https://${self:provider.stage}.api.myfusionhelper.ai/platforms/oauth/callback
+    OAUTH_REDIRECT_URI: https://${self:custom.apiDomain.${self:provider.stage}}/platforms/oauth/callback
     FRONTEND_SUCCESS_URL: https://app.myfusionhelper.ai/connections?oauth=success
     FRONTEND_ERROR_URL: https://app.myfusionhelper.ai/connections?oauth=error
     API_VERSION: v1
