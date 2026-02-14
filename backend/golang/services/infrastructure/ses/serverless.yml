@@ -16,12 +16,21 @@ functions: {}
 resources:
   Description: "SES email infrastructure for MyFusionHelper.ai - transactional email sending, SMS, and event tracking"
 
+  Conditions:
+    # SES email identity is a global AWS resource (one per domain per account).
+    # Only create it in the main (production) stack to avoid conflicts across stages.
+    IsMain:
+      Fn::Equals:
+        - ${self:provider.stage}
+        - main
+
   Resources:
     # SES Email Identity for the domain
-    # NOTE: Domain verification (DNS records) must be done manually in the AWS console
-    # after this stack is deployed. SES will provide DKIM/SPF records to add to DNS.
+    # NOTE: Only created in main stage (global resource, shared across stages).
+    # Domain verification (DNS records) must be done manually in the AWS console.
     SESEmailIdentity:
       Type: AWS::SES::EmailIdentity
+      Condition: IsMain
       Properties:
         EmailIdentity: myfusionhelper.ai
         DkimAttributes:
