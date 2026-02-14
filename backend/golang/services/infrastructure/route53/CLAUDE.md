@@ -11,7 +11,7 @@ This service manages DNS records that point custom domains to the API Gateway re
 **Hosted Zone**: `myfusionhelper.ai` (ID: Z071462818IPQJBH38AMK)
 
 **Records Created**:
-- **Production**: `api.myfusionhelper.ai` → API Gateway (when stage=prod)
+- **Production**: `api.myfusionhelper.ai` → API Gateway (when stage=main)
 - **Dev**: `api-dev.myfusionhelper.ai` → API Gateway (when stage=dev)
 - **Staging**: `api-staging.myfusionhelper.ai` → API Gateway (when stage=staging)
 
@@ -37,7 +37,7 @@ Alias records are preferred over CNAME records because:
 
 The service uses CloudFormation conditions to create different records per stage:
 
-- **Production** (`prod`): Creates `api.myfusionhelper.ai`
+- **Production** (`main`): Creates `api.myfusionhelper.ai`
 - **Non-production** (`dev`, `staging`): Creates `api-{stage}.myfusionhelper.ai`
 
 This allows each environment to have its own subdomain while production uses the clean `api.` subdomain.

@@ -18,8 +18,8 @@ on:
 
 env:
   AWS_REGION: us-west-2
-  # Map branch to stage: dev→dev, main→prod. Manual dispatch uses input.
-  DEPLOY_STAGE: ${{ github.event.inputs.stage || (github.ref_name == 'main' && 'prod' || 'dev') }}
+  # Map branch to stage: dev→dev, main→main. Manual dispatch uses input.
+  DEPLOY_STAGE: ${{ github.event.inputs.stage || github.ref_name }}
 
 # OIDC token permissions for AWS
 permissions:

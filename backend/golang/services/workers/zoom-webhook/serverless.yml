@@ -27,7 +27,7 @@ provider:
     STAGE: ${self:provider.stage}
     COGNITO_REGION: ${self:provider.region}
     ZOOM_WEBHOOK_SECRET: "" # TODO: Add to unified secrets when Zoom webhooks are configured
-    HELPER_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperQueueUrl}
+    HELPER_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperExecutionQueueUrl}
     CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
   httpApi:
     id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
@@ -44,7 +44,7 @@ provider:
           Action:
             - sqs:SendMessage
           Resource:
-            - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperQueueArn}
+            - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperExecutionQueueArn}
         - Effect: Allow
           Action:
             - logs:CreateLogGroup

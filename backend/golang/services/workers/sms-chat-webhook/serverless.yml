@@ -29,7 +29,7 @@ provider:
   environment:
     STAGE: ${self:provider.stage}
     # Unified secrets (Groq + Twilio)
-    INTERNAL_SECRETS: '{{resolve:ssm-secure:/${self:provider.stage}/myfusionhelper/secrets}}'
+    INTERNAL_SECRETS: '{{resolve:ssm-secure:/myfusionhelper/${self:provider.stage}/secrets}}'
     # DynamoDB tables
     PHONE_MAPPINGS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PhoneMappingsTableName}
     RATE_LIMITS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.RateLimitsTableName}
@@ -46,12 +46,12 @@ custom:
     baseDir: ../../..
     supportedRuntimes: ["provided.al2023"]
     buildProvidedRuntimeAsBootstrap: true
-    cmd: 'GOARCH=arm64 GOOS=linux CGO_ENABLED=0 go build -ldflags="-s -w" -o bootstrap'
+    cmd: 'GOARCH=arm64 GOOS=linux CGO_ENABLED=0 go build -ldflags="-s -w"'
     monorepo: false
 
 functions:
   sms-webhook:
-    handler: cmd/handlers/sms-chat-webhook
+    handler: cmd/handlers/sms-chat-webhook/main.go
     events:
       - httpApi:
           method: POST

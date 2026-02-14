@@ -14,13 +14,13 @@
 - Added Groq secrets environment variables (lines 61-63):
   - `DEV_INTERNAL_GROQ_API_KEY`
   - `STAGING_INTERNAL_GROQ_API_KEY`
-  - `PROD_INTERNAL_GROQ_API_KEY`
+  - `MAIN_INTERNAL_GROQ_API_KEY`
 - Added Twilio secrets environment variables (lines 65-76):
   - `DEV_INTERNAL_TWILIO_ACCOUNT_SID`
   - `DEV_INTERNAL_TWILIO_AUTH_TOKEN`
   - `DEV_INTERNAL_TWILIO_FROM_NUMBER`
   - `DEV_INTERNAL_TWILIO_MESSAGING_SID`
-  - (Same for STAGING_ and PROD_ prefixes)
+  - (Same for STAGING_ and MAIN_ prefixes)
 - Updated verification step to check unified JSON at `/myfusionhelper/${STAGE}/secrets`
 - Verification now validates JSON structure (stripe, groq, twilio sections)
 
@@ -116,7 +116,7 @@ You must add the following secrets via GitHub UI (Settings → Secrets → Actio
 ```
 DEV_INTERNAL_GROQ_API_KEY=gsk_...
 STAGING_INTERNAL_GROQ_API_KEY=gsk_...
-PROD_INTERNAL_GROQ_API_KEY=gsk_...
+MAIN_INTERNAL_GROQ_API_KEY=gsk_...
 ```
 
 **Twilio Secrets** (get from https://console.twilio.com):
@@ -131,10 +131,10 @@ STAGING_INTERNAL_TWILIO_AUTH_TOKEN=...
 STAGING_INTERNAL_TWILIO_FROM_NUMBER=+1...
 STAGING_INTERNAL_TWILIO_MESSAGING_SID=MG... (optional)
 
-PROD_INTERNAL_TWILIO_ACCOUNT_SID=AC...
-PROD_INTERNAL_TWILIO_AUTH_TOKEN=...
-PROD_INTERNAL_TWILIO_FROM_NUMBER=+1...
-PROD_INTERNAL_TWILIO_MESSAGING_SID=MG... (optional)
+MAIN_INTERNAL_TWILIO_ACCOUNT_SID=AC...
+MAIN_INTERNAL_TWILIO_AUTH_TOKEN=...
+MAIN_INTERNAL_TWILIO_FROM_NUMBER=+1...
+MAIN_INTERNAL_TWILIO_MESSAGING_SID=MG... (optional)
 ```
 
 **Note**: Twilio secrets are optional. If not provided, SMS features will be disabled but deployment will succeed.
