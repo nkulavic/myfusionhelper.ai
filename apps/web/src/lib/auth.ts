@@ -1,23 +1,8 @@
-import { betterAuth } from 'better-auth'
-import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-import { db } from './db'
+// Auth configuration
+// Authentication is handled entirely by the Go backend which talks to Cognito.
+// The frontend just calls backend auth endpoints and manages tokens client-side.
 
-export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    provider: 'pg', // Vercel Postgres
-  }),
-  emailAndPassword: {
-    enabled: true,
-    autoSignIn: true,
-  },
-  socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    },
-  },
-  session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // 1 day
-  },
-})
+export const AUTH_CONFIG = {
+  tokenKey: 'mfh_access_token',
+  refreshTokenKey: 'mfh_refresh_token',
+}

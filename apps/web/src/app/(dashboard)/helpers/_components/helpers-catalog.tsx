@@ -1,0 +1,411 @@
+'use client'
+
+import { useState, useMemo } from 'react'
+import { Search, Plus, Filter, Sparkles, Loader2, ArrowUpDown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { cn } from '@/lib/utils'
+import type { HelperTypeDefinition } from '@myfusionhelper/types'
+import {
+  helpersCatalog,
+  categoryInfo,
+  getCategoryCounts,
+  type HelperDefinition,
+} from '@/lib/helpers-catalog'
+import { useHelperTypes } from '@/lib/hooks/use-helpers'
+import { usePlatforms } from '@/lib/hooks/use-connections'
+import { CRMBadges } from '@/components/crm-badges'
+
+/** Merged view: backend type data + static catalog metadata (icon, popular, status) */
+interface CatalogItem {
+  id: string
+  name: string
+  description: string
+  category: string
+  requiresCRM: boolean
+  supportedCRMs: string[]
+  configSchema?: Record<string, unknown>
+  // From static catalog (enrichment)
+  icon?: HelperDefinition['icon']
+  popular: boolean
+  status: 'available' | 'coming_soon' | 'beta'
+}
+
+function mergeBackendWithCatalog(
+  backendTypes: HelperTypeDefinition[],
+  staticCatalog: HelperDefinition[]
+): CatalogItem[] {
+  const staticMap = new Map(staticCatalog.map((h) => [h.id, h]))
+  const seen = new Set<string>()
+  const merged: CatalogItem[] = []
+
+  // Backend types take priority
+  for (const bt of backendTypes) {
+    seen.add(bt.type)
+    const staticEntry = staticMap.get(bt.type)
+    merged.push({
+      id: bt.type,
+      name: bt.name,
+      description: bt.description,
+      category: bt.category,
+      requiresCRM: bt.requiresCrm,
+      supportedCRMs: bt.supportedCrms ?? [],
+      configSchema: bt.configSchema,
+      icon: staticEntry?.icon,
+      popular: staticEntry?.popular ?? false,
+      status: staticEntry?.status ?? 'available',
+    })
+  }
+
+  // Add any static-only entries not in backend (e.g. coming_soon)
+  for (const entry of staticCatalog) {
+    if (!seen.has(entry.id)) {
+      merged.push({
+        id: entry.id,
+        name: entry.name,
+        description: entry.description,
+        category: entry.category,
+        requiresCRM: entry.requiresCRM,
+        supportedCRMs: entry.supportedCRMs,
+        icon: entry.icon,
+        popular: entry.popular,
+        status: entry.status,
+      })
+    }
+  }
+
+  return merged
+}
+
+interface HelpersCatalogProps {
+  onSelectHelper: (id: string) => void
+  onNewHelper: () => void
+  crmFilter?: string
+}
+
+export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: HelpersCatalogProps) {
+  const { data: backendData, isLoading: typesLoading } = useHelperTypes()
+  const { data: platforms } = usePlatforms()
+  const [selectedCategory, setSelectedCategory] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showAvailableOnly, setShowAvailableOnly] = useState(false)
+  const [selectedCRM, setSelectedCRM] = useState(crmFilter ?? 'all')
+  const [sortBy, setSortBy] = useState<'name-asc' | 'name-desc' | 'category' | 'popular'>('name-asc')
+
+  // Merge backend types with static catalog for icons/popularity metadata
+  const catalogItems = useMemo(() => {
+    if (backendData?.types && backendData.types.length > 0) {
+      return mergeBackendWithCatalog(backendData.types, helpersCatalog)
+    }
+    // Fallback to static catalog if backend hasn't loaded
+    return helpersCatalog.map((h) => ({
+      id: h.id,
+      name: h.name,
+      description: h.description,
+      category: h.category,
+      requiresCRM: h.requiresCRM,
+      supportedCRMs: h.supportedCRMs,
+      icon: h.icon,
+      popular: h.popular,
+      status: h.status,
+    }))
+  }, [backendData])
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: catalogItems.length }
+    for (const item of catalogItems) {
+      counts[item.category] = (counts[item.category] || 0) + 1
+    }
+    return counts
+  }, [catalogItems])
+
+  const filteredHelpers = useMemo(() => {
+    const filtered = catalogItems.filter((helper) => {
+      const matchesCategory =
+        selectedCategory === 'all' || helper.category === selectedCategory
+      const matchesSearch =
+        searchQuery === '' ||
+        helper.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        helper.description.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesAvailability = !showAvailableOnly || helper.status === 'available'
+      const matchesCRM =
+        selectedCRM === 'all' ||
+        helper.supportedCRMs.length === 0 ||
+        helper.supportedCRMs.includes(selectedCRM)
+      return matchesCategory && matchesSearch && matchesAvailability && matchesCRM
+    })
+
+    // Sort the filtered results
+    return filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'name-asc':
+          return a.name.localeCompare(b.name)
+        case 'name-desc':
+          return b.name.localeCompare(a.name)
+        case 'category':
+          return a.category === b.category
+            ? a.name.localeCompare(b.name)
+            : a.category.localeCompare(b.category)
+        case 'popular':
+          // Popular first, then by name
+          if (a.popular === b.popular) {
+            return a.name.localeCompare(b.name)
+          }
+          return a.popular ? -1 : 1
+        default:
+          return 0
+      }
+    })
+  }, [catalogItems, selectedCategory, searchQuery, showAvailableOnly, selectedCRM, sortBy])
+
+  const availableCount = filteredHelpers.filter((h) => h.status === 'available').length
+  const comingSoonCount = filteredHelpers.filter((h) => h.status === 'coming_soon').length
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Helper Catalog</h1>
+          <p className="text-muted-foreground">
+            {catalogItems.length} automation helpers across{' '}
+            {Object.keys(categoryCounts).length - 1} categories
+            {typesLoading && (
+              <span className="ml-2 inline-flex items-center gap-1 text-xs">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Syncing...
+              </span>
+            )}
+          </p>
+        </div>
+        <Button onClick={onNewHelper}>
+          <Plus className="h-4 w-4" />
+          New Helper
+        </Button>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search helpers by name or description..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <select
+          value={selectedCRM}
+          onChange={(e) => setSelectedCRM(e.target.value)}
+          className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="all">All Platforms</option>
+          {platforms?.map((p) => (
+            <option key={p.slug} value={p.slug}>{p.name}</option>
+          ))}
+        </select>
+        <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
+          <SelectTrigger className="w-[180px]">
+            <ArrowUpDown className="mr-2 h-4 w-4" />
+            <SelectValue placeholder="Sort by..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name-asc">Name (A-Z)</SelectItem>
+            <SelectItem value="name-desc">Name (Z-A)</SelectItem>
+            <SelectItem value="category">Category</SelectItem>
+            <SelectItem value="popular">Popular First</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          variant={showAvailableOnly ? 'default' : 'outline'}
+          onClick={() => setShowAvailableOnly(!showAvailableOnly)}
+          className={cn(
+            showAvailableOnly && 'bg-primary/10 text-primary border-primary hover:bg-primary/20 hover:text-primary'
+          )}
+        >
+          <Filter className="h-4 w-4" />
+          Available Only
+        </Button>
+      </div>
+
+      {/* Category Tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {categoryInfo.map((category) => {
+          const count = categoryCounts[category.id] || 0
+          return (
+            <button
+              key={category.id}
+              onClick={() => setSelectedCategory(category.id)}
+              className={cn(
+                'inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors',
+                selectedCategory === category.id
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              )}
+            >
+              {category.name}
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-xs',
+                  selectedCategory === category.id
+                    ? 'bg-primary-foreground/20'
+                    : 'bg-background'
+                )}
+              >
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Results Summary */}
+      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <span>
+          Showing {filteredHelpers.length} helper
+          {filteredHelpers.length !== 1 ? 's' : ''}
+        </span>
+        <span className="text-border">|</span>
+        <span className="text-success">{availableCount} available</span>
+        {comingSoonCount > 0 && (
+          <>
+            <span className="text-border">|</span>
+            <span className="text-warning">{comingSoonCount} coming soon</span>
+          </>
+        )}
+      </div>
+
+      {/* Helpers Grid */}
+      <div className="animate-stagger-in grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {filteredHelpers.map((helper) => (
+          <CatalogCard
+            key={helper.id}
+            item={helper}
+            onSelect={onSelectHelper}
+          />
+        ))}
+      </div>
+
+      {filteredHelpers.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Search className="mb-4 h-12 w-12 text-muted-foreground/50" />
+          <h3 className="mb-1 font-semibold">No helpers found</h3>
+          <p className="text-sm text-muted-foreground">
+            Try adjusting your search or filter criteria
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CatalogCard({
+  item,
+  onSelect,
+}: {
+  item: CatalogItem
+  onSelect: (id: string) => void
+}) {
+  const isAvailable = item.status === 'available'
+
+  // Determine accent color from first supported CRM, or use primary
+  const { data: allPlatforms } = usePlatforms()
+  const accentPlatform =
+    item.supportedCRMs.length > 0
+      ? allPlatforms?.find((p) => p.slug === item.supportedCRMs[0] || p.platformId === item.supportedCRMs[0])
+      : null
+
+  // Fallback icon from static catalog
+  const IconComponent = item.icon
+
+  return (
+    <button
+      onClick={() => isAvailable && onSelect(item.id)}
+      className={cn(
+        'group relative flex flex-col overflow-hidden rounded-lg border bg-card p-5 text-left transition-all',
+        isAvailable
+          ? 'hover:-translate-y-1 hover:shadow-md cursor-pointer active:scale-[0.98]'
+          : 'opacity-60 cursor-default'
+      )}
+    >
+      {/* Bottom accent stripe */}
+      <div
+        className="absolute inset-x-0 bottom-0 h-[3px]"
+        style={{
+          background: accentPlatform
+            ? `linear-gradient(to right, ${accentPlatform.displayConfig?.color}, hsl(var(--primary)))`
+            : 'linear-gradient(to right, hsl(var(--success)), hsl(var(--primary)))',
+          opacity: isAvailable ? 1 : 0.4,
+        }}
+      />
+
+      {/* Badges */}
+      <div className="absolute right-3 top-3 flex gap-1.5">
+        {item.popular && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+            <Sparkles className="h-3 w-3" />
+            Popular
+          </span>
+        )}
+        {item.status === 'coming_soon' && (
+          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+            Soon
+          </span>
+        )}
+        {item.status === 'beta' && (
+          <span className="rounded-full bg-info/10 px-2 py-0.5 text-xs font-medium text-info">
+            Beta
+          </span>
+        )}
+      </div>
+
+      {/* Icon */}
+      <div
+        className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg"
+        style={{
+          backgroundColor: accentPlatform
+            ? `${accentPlatform.displayConfig?.color}18`
+            : 'hsl(var(--primary) / 0.1)',
+        }}
+      >
+        {IconComponent ? (
+          <IconComponent
+            className="h-5 w-5"
+            style={{
+              color: accentPlatform ? accentPlatform.displayConfig?.color : 'hsl(var(--primary))',
+            }}
+          />
+        ) : (
+          <Sparkles
+            className="h-5 w-5"
+            style={{
+              color: accentPlatform ? accentPlatform.displayConfig?.color : 'hsl(var(--primary))',
+            }}
+          />
+        )}
+      </div>
+
+      {/* Content */}
+      <h3 className="mb-1 text-sm font-semibold group-hover:text-primary">
+        {item.name}
+      </h3>
+      <p className="flex-1 text-xs text-muted-foreground leading-relaxed">
+        {item.description}
+      </p>
+
+      {/* CRM Badges */}
+      <div className="mt-auto pt-3 border-t border-border/50">
+        <CRMBadges crmIds={item.supportedCRMs} />
+      </div>
+    </button>
+  )
+}

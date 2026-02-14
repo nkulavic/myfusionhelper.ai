@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // Routes that don't require authentication
-const publicRoutes = ['/', '/login', '/register', '/api/auth']
+const publicRoutes = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/terms', '/privacy', '/eula']
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -17,11 +17,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Check for session cookie (Better Auth uses 'better-auth.session_token')
-  const sessionToken = request.cookies.get('better-auth.session_token')
+  // Check for auth indicator cookie (set by auth-client when tokens are stored)
+  const isAuthenticated = request.cookies.has('mfh_authenticated')
 
-  // If no session and trying to access protected route, redirect to login
-  if (!sessionToken) {
+  // If not authenticated and trying to access protected route, redirect to login
+  if (!isAuthenticated) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)

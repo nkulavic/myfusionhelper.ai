@@ -1,0 +1,229 @@
+service: mfh-infrastructure-s3
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  deploymentBucket:
+    blockPublicAccess: true
+
+# No functions - this is infrastructure only
+functions: {}
+
+resources:
+  Description: "S3 bucket infrastructure for MyFusionHelper.ai - data storage and file uploads"
+
+  Resources:
+    # Primary data storage bucket (helper execution results, uploads, exports)
+    DataBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: mfh-data-${self:provider.stage}
+        VersioningConfiguration:
+          Status: Enabled
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        LifecycleConfiguration:
+          Rules:
+            - Id: TransitionToIA
+              Status: Enabled
+              Transitions:
+                - TransitionInDays: 30
+                  StorageClass: STANDARD_IA
+                - TransitionInDays: 90
+                  StorageClass: GLACIER
+              NoncurrentVersionTransitions:
+                - TransitionInDays: 30
+                  StorageClass: STANDARD_IA
+              NoncurrentVersionExpirationInDays: 365
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: Purpose
+            Value: Primary data storage
+          - Key: DataClassification
+            Value: Customer-Data
+
+    # S3 bucket policy for secure access
+    DataBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: {"Ref": "DataBucket"}
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            # Deny insecure connections
+            - Sid: DenyInsecureConnections
+              Effect: Deny
+              Principal: "*"
+              Action: "s3:*"
+              Resource:
+                - {"Fn::Sub": "arn:aws:s3:::${DataBucket}/*"}
+                - {"Fn::Sub": "arn:aws:s3:::${DataBucket}"}
+              Condition:
+                Bool:
+                  "aws:SecureTransport": "false"
+
+    # Public assets bucket (helper icons, branding, documentation images)
+    PublicAssetsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: mfh-public-assets-${self:provider.stage}
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - "*"
+              AllowedMethods:
+                - GET
+                - HEAD
+              AllowedOrigins:
+                - "*"
+              MaxAge: 3600
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: Purpose
+            Value: Public static assets
+          - Key: DataClassification
+            Value: Public
+
+    # Analytics bucket (parquet files for data explorer queries)
+    AnalyticsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: mfh-analytics-${self:provider.stage}
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        LifecycleConfiguration:
+          Rules:
+            - Id: CleanupIncomplete
+              Status: Enabled
+              AbortIncompleteMultipartUpload:
+                DaysAfterInitiation: 1
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: Purpose
+            Value: Analytics parquet storage
+          - Key: DataClassification
+            Value: Customer-Data
+
+    AnalyticsBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: {"Ref": "AnalyticsBucket"}
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Sid: DenyInsecureConnections
+              Effect: Deny
+              Principal: "*"
+              Action: "s3:*"
+              Resource:
+                - {"Fn::Sub": "arn:aws:s3:::${AnalyticsBucket}/*"}
+                - {"Fn::Sub": "arn:aws:s3:::${AnalyticsBucket}"}
+              Condition:
+                Bool:
+                  "aws:SecureTransport": "false"
+
+    # CloudWatch log group for S3 access logging
+    S3AccessLogGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: {"Fn::Sub": "/aws/s3/${AWS::StackName}"}
+        RetentionInDays: 30
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+
+  # CloudFormation Outputs
+  Outputs:
+    DataBucketName:
+      Description: Primary data storage bucket name
+      Value: {"Ref": "DataBucket"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DataBucketName
+
+    DataBucketArn:
+      Description: Primary data storage bucket ARN
+      Value: {"Fn::GetAtt": ["DataBucket", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DataBucketArn
+
+    DataBucketDomainName:
+      Description: Primary data storage bucket domain name
+      Value: {"Fn::GetAtt": ["DataBucket", "DomainName"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DataBucketDomainName
+
+    S3AccessLogGroupName:
+      Description: S3 access log group name
+      Value: {"Ref": "S3AccessLogGroup"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-S3AccessLogGroupName
+
+    S3AccessLogGroupArn:
+      Description: S3 access log group ARN
+      Value: {"Fn::GetAtt": ["S3AccessLogGroup", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-S3AccessLogGroupArn
+
+    PublicAssetsBucketName:
+      Description: Public assets bucket name
+      Value: {"Ref": "PublicAssetsBucket"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PublicAssetsBucketName
+
+    PublicAssetsBucketArn:
+      Description: Public assets bucket ARN
+      Value: {"Fn::GetAtt": ["PublicAssetsBucket", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PublicAssetsBucketArn
+
+    PublicAssetsBucketUrl:
+      Description: Public assets bucket URL
+      Value: {"Fn::Sub": "https://${PublicAssetsBucket}.s3.${AWS::Region}.amazonaws.com"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PublicAssetsBucketUrl
+
+    AnalyticsBucketName:
+      Description: Analytics parquet storage bucket name
+      Value: {"Ref": "AnalyticsBucket"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AnalyticsBucketName
+
+    AnalyticsBucketArn:
+      Description: Analytics parquet storage bucket ARN
+      Value: {"Fn::GetAtt": ["AnalyticsBucket", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AnalyticsBucketArn

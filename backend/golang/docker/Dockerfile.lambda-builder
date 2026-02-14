@@ -1,0 +1,33 @@
+# Lambda x86_64 Builder for CGO (DuckDB)
+# Uses Amazon Linux 2023 to ensure glibc compatibility with Lambda runtime
+#
+# Build: docker build -t mfh-lambda-builder -f docker/Dockerfile.lambda-builder .
+# Usage: docker run --rm -v $(pwd):/workspace mfh-lambda-builder bash scripts/build-duckdb-handler.sh
+
+FROM public.ecr.aws/amazonlinux/amazonlinux:2023
+
+# Install build essentials (gcc-c++ needed for DuckDB)
+RUN dnf update -y && \
+    dnf install -y \
+        gcc \
+        gcc-c++ \
+        make \
+        git \
+        tar \
+        gzip \
+        zip \
+        && dnf clean all
+
+# Install Go 1.23 for amd64
+ARG GO_VERSION=1.23.4
+RUN curl -LO https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
+    rm go${GO_VERSION}.linux-amd64.tar.gz
+
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOPATH="/go"
+ENV GOCACHE="/go/cache"
+
+WORKDIR /workspace
+
+CMD ["bash"]

@@ -1,0 +1,84 @@
+service: mfh-notification-worker
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 60  # 1 minute - matches SQS visibility timeout
+  tracing:
+    lambda: true
+  environment:
+    SERVICE_VERSION: "2025.02.05.0001"
+    STAGE: ${self:provider.stage}
+    COGNITO_REGION: ${self:provider.region}
+    USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
+    DEFAULT_FROM_EMAIL: noreply@myfusionhelper.ai
+    DEFAULT_FROM_NAME: MyFusion Helper
+    SES_CONFIGURATION_SET: mfh-${self:provider.stage}-transactional
+    APP_URL: ${self:custom.appUrl.${self:provider.stage}, 'http://localhost:3001'}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}
+        - Effect: Allow
+          Action:
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource:
+            - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueArn}
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - ses:SendTemplatedEmail
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+  appUrl:
+    dev: http://localhost:3001
+    prod: https://app.myfusionhelper.ai
+
+functions:
+  notification-worker:
+    handler: cmd/handlers/notification-worker/main.go
+    description: "Process notification messages from SQS queue (emails, alerts)"
+    reservedConcurrency: 5
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: notification-worker
+    events:
+      - sqs:
+          arn: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueArn}
+          batchSize: 5  # Process up to 5 notifications at a time
+          # Note: maximumBatchingWindow not supported for FIFO queues
+          functionResponseType: ReportBatchItemFailures

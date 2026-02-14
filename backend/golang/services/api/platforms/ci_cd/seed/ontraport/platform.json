@@ -1,0 +1,52 @@
+{
+  "platform_id": "platform:ontraport",
+  "slug": "ontraport",
+  "name": "Ontraport",
+  "category": "crm",
+  "types": ["crm"],
+  "description": "Business automation software for entrepreneurs and small businesses",
+  "status": "active",
+  "version": "v1",
+  "logo_url": "/images/platforms/ontraport.png",
+  "documentation_url": "https://api.ontraport.com/doc/",
+  "api_config": {
+    "base_url": "https://api.ontraport.com/1",
+    "auth_type": "api_key",
+    "test_endpoint": "https://api.ontraport.com/1/objects?objectID=0&range=1",
+    "rate_limits": {
+      "requests_per_second": 2,
+      "requests_per_minute": 120,
+      "requests_per_hour": 0,
+      "burst_limit": 5
+    },
+    "required_headers": {
+      "Api-Appid": "{app_id}",
+      "Api-Key": "{api_key}"
+    },
+    "version": "v1"
+  },
+  "display_config": {
+    "color": "#6C4DC4",
+    "accent": "#f0ebfa",
+    "initial": "O"
+  },
+  "credential_fields": [
+    {
+      "key": "app_id",
+      "label": "App ID",
+      "placeholder": "Your Ontraport App ID",
+      "hint": "Found in your Ontraport account under Administration \u2192 Integrations \u2192 API",
+      "input_type": "text",
+      "required": true
+    },
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "placeholder": "Enter your Ontraport API key",
+      "hint": "Your API key is encrypted and stored securely",
+      "input_type": "password",
+      "required": true
+    }
+  ],
+  "capabilities": ["contacts", "tags", "custom_fields", "automations", "deals"]
+}

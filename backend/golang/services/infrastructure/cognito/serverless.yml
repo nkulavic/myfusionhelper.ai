@@ -1,0 +1,204 @@
+service: mfh-infrastructure-cognito
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+
+resources:
+  Resources:
+    # IAM Role for Cognito to send SMS messages via SNS
+    CognitoSmsRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: mfh-${self:provider.stage}-cognito-sms-role
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: cognito-idp.amazonaws.com
+              Action: sts:AssumeRole
+              Condition:
+                StringEquals:
+                  sts:ExternalId: mfh-sms-mfa
+        Policies:
+          - PolicyName: CognitoSmsPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action: sns:Publish
+                  Resource: "*"
+
+    # Cognito User Pool
+    CognitoUserPool:
+      Type: AWS::Cognito::UserPool
+      DependsOn: CognitoSmsRole
+      DeletionPolicy: Retain
+      Properties:
+        UserPoolName: mfh-${self:provider.stage}-user-pool
+        DeletionProtection: ACTIVE
+        UsernameAttributes:
+          - email
+        AutoVerifiedAttributes:
+          - email
+        Schema:
+          - Name: email
+            Required: true
+            Mutable: true
+          - Name: name
+            Required: false
+            Mutable: true
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+            RequireUppercase: true
+            RequireLowercase: true
+            RequireNumbers: true
+            RequireSymbols: false
+        MfaConfiguration: "OPTIONAL"
+        EnabledMfas:
+          - SMS_MFA
+          - SOFTWARE_TOKEN_MFA
+        SmsConfiguration:
+          SnsCallerArn: !GetAtt CognitoSmsRole.Arn
+          ExternalId: mfh-sms-mfa
+        AccountRecoverySetting:
+          RecoveryMechanisms:
+            - Name: verified_email
+              Priority: 1
+        EmailConfiguration:
+          EmailSendingAccount: COGNITO_DEFAULT
+        UserPoolAddOns:
+          AdvancedSecurityMode: "OFF"
+
+    # Cognito User Pool Client
+    CognitoUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: mfh-${self:provider.stage}-web-client
+        UserPoolId: !Ref CognitoUserPool
+        GenerateSecret: false
+        RefreshTokenValidity: 30
+        AccessTokenValidity: 24
+        IdTokenValidity: 24
+        TokenValidityUnits:
+          RefreshToken: days
+          AccessToken: hours
+          IdToken: hours
+        ExplicitAuthFlows:
+          - ALLOW_USER_PASSWORD_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+          - ALLOW_USER_SRP_AUTH
+        PreventUserExistenceErrors: ENABLED
+        SupportedIdentityProviders:
+          - COGNITO
+        AllowedOAuthFlows:
+          - code
+          - implicit
+        AllowedOAuthScopes:
+          - phone
+          - email
+          - openid
+          - profile
+          - aws.cognito.signin.user.admin
+        AllowedOAuthFlowsUserPoolClient: true
+        CallbackURLs:
+          - http://localhost:3001
+          - https://app.myfusionhelper.ai
+
+    # User Groups
+    OwnerGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: owner
+        UserPoolId: !Ref CognitoUserPool
+        Description: Account owners with full access
+        Precedence: 10
+
+    AdminGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: admin
+        UserPoolId: !Ref CognitoUserPool
+        Description: Account admins
+        Precedence: 20
+
+    MemberGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: member
+        UserPoolId: !Ref CognitoUserPool
+        Description: Standard team members
+        Precedence: 30
+
+    ViewerGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: viewer
+        UserPoolId: !Ref CognitoUserPool
+        Description: Read-only viewers
+        Precedence: 40
+
+    # Plan-based groups (synced via Stripe webhooks)
+    PlanFreeGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: plan-free
+        UserPoolId: !Ref CognitoUserPool
+        Description: Free plan users
+        Precedence: 100
+
+    PlanStartGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: plan-start
+        UserPoolId: !Ref CognitoUserPool
+        Description: Start plan users
+        Precedence: 101
+
+    PlanGrowGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: plan-grow
+        UserPoolId: !Ref CognitoUserPool
+        Description: Grow plan users
+        Precedence: 102
+
+    PlanDeliverGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: plan-deliver
+        UserPoolId: !Ref CognitoUserPool
+        Description: Deliver plan users
+        Precedence: 103
+
+  Outputs:
+    CognitoUserPoolId:
+      Value: !Ref CognitoUserPool
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CognitoUserPoolId
+
+    CognitoUserPoolArn:
+      Value: !GetAtt CognitoUserPool.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CognitoUserPoolArn
+
+    CognitoUserPoolClientId:
+      Value: !Ref CognitoUserPoolClient
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CognitoUserPoolClientId
+
+    CognitoJwksUri:
+      Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}/.well-known/jwks.json"
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CognitoJwksUri
+
+    CognitoIssuer:
+      Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}"
+      Export:
+        Name: ${self:service}-${self:provider.stage}-CognitoIssuer

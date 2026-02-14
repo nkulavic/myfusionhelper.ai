@@ -1,0 +1,42 @@
+{
+  "platform_id": "platform:donorlead",
+  "slug": "donorlead",
+  "name": "DonorLead",
+  "category": "data",
+  "types": ["integration", "data"],
+  "description": "Donor data enrichment and prospect research platform for nonprofits",
+  "status": "active",
+  "version": "v2.1",
+  "logo_url": "/images/platforms/donorlead.png",
+  "documentation_url": "https://data.donorlead.net/docs",
+  "api_config": {
+    "base_url": "https://data.donorlead.net/v2.1",
+    "auth_type": "api_key",
+    "test_endpoint": "https://data.donorlead.net/v2.1",
+    "rate_limits": {
+      "requests_per_second": 5,
+      "requests_per_minute": 0,
+      "requests_per_hour": 0,
+      "burst_limit": 10
+    },
+    "required_headers": {},
+    "version": "v2.1"
+  },
+  "display_config": {
+    "color": "#8E24AA",
+    "accent": "#f3e5f5",
+    "initial": "D",
+    "short_name": "DL"
+  },
+  "credential_fields": [
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "placeholder": "Your DonorLead API key",
+      "hint": "Found in your DonorLead account under API settings",
+      "input_type": "password",
+      "required": true
+    }
+  ],
+  "capabilities": ["donor_search"]
+}

@@ -1,0 +1,203 @@
+service: mfh-data-explorer
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    # data-explorer uses pre-built DuckDB binary (CGO, built in AL2023 Docker container).
+    # The plugin passes: cmd -o <output_path> <source_path>
+    # For data-explorer handler: copy pre-built binary. For others: normal go build.
+    cmd: 'bash -c ''for i in "$@"; do case "$i" in *data-explorer*) cp services/api/data-explorer/.bin/bootstrap "$2" && exit 0;; esac; done; CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" "$@"'' _'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: x86_64  # Required for go-duckdb CGO
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 29
+  tracing:
+    lambda: true
+    apiGateway: true
+  httpApi:
+    id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+  environment:
+    SERVICE_VERSION: "2025.02.05.0001"
+    STAGE: ${self:provider.stage}
+    COGNITO_USER_POOL_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
+    COGNITO_CLIENT_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolClientId}
+    COGNITO_CLIENT_SECRET: ""
+    COGNITO_REGION: ${self:provider.region}
+    COGNITO_JWKS_URI: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoJwksUri}
+    COGNITO_ISSUER: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
+    USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
+    ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
+    USER_ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableName}
+    CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
+    PLATFORMS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableName}
+    ANALYTICS_BUCKET: ${cf:mfh-infrastructure-s3-${self:provider.stage}.AnalyticsBucketName}
+    DATA_SYNC_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.DataSyncQueueUrl}
+    API_VERSION: v1
+    API_REFERENCE: mfh-api
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:Query
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableArn}/index/*"
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:ListBucket
+            - s3:HeadObject
+          Resource:
+            - "arn:aws:s3:::${cf:mfh-infrastructure-s3-${self:provider.stage}.AnalyticsBucketName}"
+            - "arn:aws:s3:::${cf:mfh-infrastructure-s3-${self:provider.stage}.AnalyticsBucketName}/*"
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource:
+            - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.DataSyncQueueArn}
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+functions:
+  data-catalog:
+    handler: cmd/handlers/data-explorer/main.go
+    description: "List available data sources"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: data-catalog
+    memorySize: 512
+    timeout: 10
+    environment:
+      FUNCTION_NAME: data-catalog
+      ENDPOINT_PATH: /data/catalog
+    events:
+      - httpApi:
+          path: /data/catalog
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  data-query:
+    handler: cmd/handlers/data-explorer/main.go
+    description: "Query data records with filters and pagination"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: data-query
+    memorySize: 1024
+    timeout: 29
+    environment:
+      FUNCTION_NAME: data-query
+      ENDPOINT_PATH: /data/query
+    events:
+      - httpApi:
+          path: /data/query
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  data-record:
+    handler: cmd/handlers/data-explorer/main.go
+    description: "Get a single record by ID"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: data-record
+    memorySize: 512
+    timeout: 10
+    environment:
+      FUNCTION_NAME: data-record
+      ENDPOINT_PATH: /data/record/{connectionId}/{objectType}/{recordId}
+    events:
+      - httpApi:
+          path: /data/record/{connectionId}/{objectType}/{recordId}
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  data-export:
+    handler: cmd/handlers/data-explorer/main.go
+    description: "Export data as CSV or JSON"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: data-export
+    memorySize: 1024
+    timeout: 29
+    environment:
+      FUNCTION_NAME: data-export
+      ENDPOINT_PATH: /data/export
+    events:
+      - httpApi:
+          path: /data/export
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  data-sync:
+    handler: cmd/handlers/data-explorer/main.go
+    description: "Trigger manual data sync"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: data-sync
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: data-sync
+      ENDPOINT_PATH: /data/sync
+    events:
+      - httpApi:
+          path: /data/sync
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  data-health:
+    handler: cmd/handlers/data-explorer/main.go
+    description: "Health check endpoint"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: data-health
+    memorySize: 128
+    timeout: 5
+    environment:
+      FUNCTION_NAME: data-health
+      ENDPOINT_PATH: /data/health
+    events:
+      - httpApi:
+          path: /data/health
+          method: get

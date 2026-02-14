@@ -1,0 +1,72 @@
+service: mfh-api-key-authorizer
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 10
+  tracing:
+    lambda: true
+  environment:
+    SERVICE_VERSION: "2025.02.04.0001"
+    STAGE: ${self:provider.stage}
+    COGNITO_REGION: ${self:provider.region}
+    API_KEYS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ApiKeysTableName}
+    ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
+    HELPERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableName}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ApiKeysTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ApiKeysTableArn}/index/*"
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableArn}/index/*"
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+functions:
+  authorizer:
+    handler: cmd/handlers/api-key-authorizer/main.go
+    description: "Lambda authorizer for API key validation on execute endpoints"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: api-key-authorizer
+
+resources:
+  Outputs:
+    AuthorizerFunctionArn:
+      Value: !GetAtt AuthorizerLambdaFunction.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AuthorizerFunctionArn

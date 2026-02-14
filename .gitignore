@@ -155,5 +155,19 @@ Thumbs.db
 dist/
 build/
 
+# Go compiled binaries
+backend/golang/data-sync
+backend/golang/data-sync-scheduler
+backend/golang/bootstrap
+backend/golang/**/.bin/
+backend/golang/.cache/
+*.exe
+
 # Local env files
 .env*.local
+
+# Reference repos (legacy)
+reference/
+
+# MCP local config
+.mcp.json

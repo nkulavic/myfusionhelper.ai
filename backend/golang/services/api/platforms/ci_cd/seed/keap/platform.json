@@ -1,0 +1,40 @@
+{
+  "platform_id": "platform:keap",
+  "slug": "keap",
+  "name": "Keap (Infusionsoft)",
+  "category": "crm",
+  "types": ["crm"],
+  "description": "All-in-one CRM, sales, and marketing automation platform for small businesses",
+  "status": "active",
+  "version": "v2",
+  "logo_url": "/images/platforms/keap.png",
+  "documentation_url": "https://developer.keap.com/docs/restv2/",
+  "oauth": {
+    "auth_url": "https://accounts.infusionsoft.com/app/oauth/authorize",
+    "token_url": "https://api.infusionsoft.com/token",
+    "user_info_url": "https://api.infusionsoft.com/crm/rest/v2/oauth/connect/userinfo",
+    "scopes": ["full"],
+    "response_type": "code"
+  },
+  "api_config": {
+    "base_url": "https://api.infusionsoft.com/crm/rest/v2",
+    "auth_type": "oauth2",
+    "test_endpoint": "https://api.infusionsoft.com/crm/rest/v2/oauth/connect/userinfo",
+    "rate_limits": {
+      "requests_per_second": 10,
+      "requests_per_minute": 0,
+      "requests_per_hour": 0,
+      "burst_limit": 25
+    },
+    "required_headers": {},
+    "version": "v2"
+  },
+  "display_config": {
+    "color": "#2AB27B",
+    "accent": "#e6f7ef",
+    "initial": "K",
+    "short_name": "Keap"
+  },
+  "credential_fields": [],
+  "capabilities": ["contacts", "tags", "custom_fields", "automations", "goals", "deals", "emails"]
+}

@@ -1,0 +1,68 @@
+service: mfh-infrastructure-route53
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  stackName: ${self:service}-${self:provider.stage}
+  deploymentBucket:
+    name: mfh-serverless-deployments-${aws:accountId}-${self:provider.region}
+
+resources:
+  Resources:
+    # A Record for api.myfusionhelper.ai (production)
+    ApiDomainRecord:
+      Type: AWS::Route53::RecordSet
+      Condition: IsProduction
+      Properties:
+        HostedZoneId: Z071462818IPQJBH38AMK
+        Name: api.myfusionhelper.ai
+        Type: A
+        AliasTarget:
+          HostedZoneId: ${cf:mfh-api-gateway-${self:provider.stage}.RegionalHostedZoneId}
+          DNSName: ${cf:mfh-api-gateway-${self:provider.stage}.RegionalDomainName}
+          EvaluateTargetHealth: false
+
+    # A Record for api-dev.myfusionhelper.ai (dev/staging)
+    ApiStageDomainRecord:
+      Type: AWS::Route53::RecordSet
+      Condition: IsNotProduction
+      Properties:
+        HostedZoneId: Z071462818IPQJBH38AMK
+        Name: api-${self:provider.stage}.myfusionhelper.ai
+        Type: A
+        AliasTarget:
+          HostedZoneId: ${cf:mfh-api-gateway-${self:provider.stage}.RegionalHostedZoneId}
+          DNSName: ${cf:mfh-api-gateway-${self:provider.stage}.RegionalDomainName}
+          EvaluateTargetHealth: false
+
+  Conditions:
+    IsProduction:
+      Fn::Equals:
+        - ${self:provider.stage}
+        - prod
+    IsNotProduction:
+      Fn::Not:
+        - Fn::Equals:
+            - ${self:provider.stage}
+            - prod
+
+  Outputs:
+    ApiDomainName:
+      Description: API custom domain name
+      Value:
+        Fn::If:
+          - IsProduction
+          - api.myfusionhelper.ai
+          - api-${self:provider.stage}.myfusionhelper.ai
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ApiDomainName
+
+    HostedZoneId:
+      Description: Route53 hosted zone ID
+      Value: Z071462818IPQJBH38AMK
+      Export:
+        Name: ${self:service}-${self:provider.stage}-HostedZoneId

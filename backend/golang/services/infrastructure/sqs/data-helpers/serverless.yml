@@ -1,0 +1,532 @@
+service: mfh-sqs-data-helpers
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+
+resources:
+  Resources:
+    # advance_math
+    AdvanceMathQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-advance-math-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt AdvanceMathDLQ.Arn
+          maxReceiveCount: 3
+
+    AdvanceMathDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-advance-math-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # date_calc
+    DateCalcQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-date-calc-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt DateCalcDLQ.Arn
+          maxReceiveCount: 3
+
+    DateCalcDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-date-calc-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # format_it
+    FormatItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-format-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt FormatItDLQ.Arn
+          maxReceiveCount: 3
+
+    FormatItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-format-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # get_the_first
+    GetTheFirstQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-get-the-first-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt GetTheFirstDLQ.Arn
+          maxReceiveCount: 3
+
+    GetTheFirstDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-get-the-first-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # get_the_last
+    GetTheLastQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-get-the-last-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt GetTheLastDLQ.Arn
+          maxReceiveCount: 3
+
+    GetTheLastDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-get-the-last-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # ip_location
+    IpLocationQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-ip-location-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt IpLocationDLQ.Arn
+          maxReceiveCount: 3
+
+    IpLocationDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-ip-location-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # last_click_it
+    LastClickItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-last-click-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt LastClickItDLQ.Arn
+          maxReceiveCount: 3
+
+    LastClickItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-last-click-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # last_open_it
+    LastOpenItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-last-open-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt LastOpenItDLQ.Arn
+          maxReceiveCount: 3
+
+    LastOpenItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-last-open-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # last_send_it
+    LastSendItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-last-send-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt LastSendItDLQ.Arn
+          maxReceiveCount: 3
+
+    LastSendItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-last-send-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # math_it
+    MathItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-math-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt MathItDLQ.Arn
+          maxReceiveCount: 3
+
+    MathItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-math-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # password_it
+    PasswordItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-password-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt PasswordItDLQ.Arn
+          maxReceiveCount: 3
+
+    PasswordItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-password-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # phone_lookup
+    PhoneLookupQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-phone-lookup-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt PhoneLookupDLQ.Arn
+          maxReceiveCount: 3
+
+    PhoneLookupDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-phone-lookup-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # quote_it
+    QuoteItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-quote-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt QuoteItDLQ.Arn
+          maxReceiveCount: 3
+
+    QuoteItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-quote-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # split_it
+    SplitItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-split-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt SplitItDLQ.Arn
+          maxReceiveCount: 3
+
+    SplitItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-split-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # split_it_basic
+    SplitItBasicQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-split-it-basic-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt SplitItBasicDLQ.Arn
+          maxReceiveCount: 3
+
+    SplitItBasicDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-split-it-basic-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # text_it
+    TextItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-text-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt TextItDLQ.Arn
+          maxReceiveCount: 3
+
+    TextItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-text-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # when_is_it
+    WhenIsItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-when-is-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt WhenIsItDLQ.Arn
+          maxReceiveCount: 3
+
+    WhenIsItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-when-is-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+    # word_count_it
+    WordCountItQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-word-count-it-executions.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+        VisibilityTimeout: 360
+        MessageRetentionPeriod: 1209600
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt WordCountItDLQ.Arn
+          maxReceiveCount: 3
+
+    WordCountItDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-${self:provider.stage}-word-count-it-dlq.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: true
+
+  Outputs:
+    AdvanceMathQueueArn:
+      Value: !GetAtt AdvanceMathQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AdvanceMathQueueArn
+    AdvanceMathQueueUrl:
+      Value: !Ref AdvanceMathQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AdvanceMathQueueUrl
+
+    DateCalcQueueArn:
+      Value: !GetAtt DateCalcQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DateCalcQueueArn
+    DateCalcQueueUrl:
+      Value: !Ref DateCalcQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DateCalcQueueUrl
+
+    FormatItQueueArn:
+      Value: !GetAtt FormatItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-FormatItQueueArn
+    FormatItQueueUrl:
+      Value: !Ref FormatItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-FormatItQueueUrl
+
+    GetTheFirstQueueArn:
+      Value: !GetAtt GetTheFirstQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-GetTheFirstQueueArn
+    GetTheFirstQueueUrl:
+      Value: !Ref GetTheFirstQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-GetTheFirstQueueUrl
+
+    GetTheLastQueueArn:
+      Value: !GetAtt GetTheLastQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-GetTheLastQueueArn
+    GetTheLastQueueUrl:
+      Value: !Ref GetTheLastQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-GetTheLastQueueUrl
+
+    IpLocationQueueArn:
+      Value: !GetAtt IpLocationQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-IpLocationQueueArn
+    IpLocationQueueUrl:
+      Value: !Ref IpLocationQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-IpLocationQueueUrl
+
+    LastClickItQueueArn:
+      Value: !GetAtt LastClickItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-LastClickItQueueArn
+    LastClickItQueueUrl:
+      Value: !Ref LastClickItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-LastClickItQueueUrl
+
+    LastOpenItQueueArn:
+      Value: !GetAtt LastOpenItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-LastOpenItQueueArn
+    LastOpenItQueueUrl:
+      Value: !Ref LastOpenItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-LastOpenItQueueUrl
+
+    LastSendItQueueArn:
+      Value: !GetAtt LastSendItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-LastSendItQueueArn
+    LastSendItQueueUrl:
+      Value: !Ref LastSendItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-LastSendItQueueUrl
+
+    MathItQueueArn:
+      Value: !GetAtt MathItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-MathItQueueArn
+    MathItQueueUrl:
+      Value: !Ref MathItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-MathItQueueUrl
+
+    PasswordItQueueArn:
+      Value: !GetAtt PasswordItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PasswordItQueueArn
+    PasswordItQueueUrl:
+      Value: !Ref PasswordItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PasswordItQueueUrl
+
+    PhoneLookupQueueArn:
+      Value: !GetAtt PhoneLookupQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PhoneLookupQueueArn
+    PhoneLookupQueueUrl:
+      Value: !Ref PhoneLookupQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PhoneLookupQueueUrl
+
+    QuoteItQueueArn:
+      Value: !GetAtt QuoteItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-QuoteItQueueArn
+    QuoteItQueueUrl:
+      Value: !Ref QuoteItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-QuoteItQueueUrl
+
+    SplitItQueueArn:
+      Value: !GetAtt SplitItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SplitItQueueArn
+    SplitItQueueUrl:
+      Value: !Ref SplitItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SplitItQueueUrl
+
+    SplitItBasicQueueArn:
+      Value: !GetAtt SplitItBasicQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SplitItBasicQueueArn
+    SplitItBasicQueueUrl:
+      Value: !Ref SplitItBasicQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SplitItBasicQueueUrl
+
+    TextItQueueArn:
+      Value: !GetAtt TextItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TextItQueueArn
+    TextItQueueUrl:
+      Value: !Ref TextItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TextItQueueUrl
+
+    WhenIsItQueueArn:
+      Value: !GetAtt WhenIsItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WhenIsItQueueArn
+    WhenIsItQueueUrl:
+      Value: !Ref WhenIsItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WhenIsItQueueUrl
+
+    WordCountItQueueArn:
+      Value: !GetAtt WordCountItQueue.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WordCountItQueueArn
+    WordCountItQueueUrl:
+      Value: !Ref WordCountItQueue
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WordCountItQueueUrl

@@ -1,0 +1,368 @@
+service: mfh-infrastructure-ses
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  deploymentBucket:
+    blockPublicAccess: true
+
+# No functions - this is infrastructure only
+functions: {}
+
+resources:
+  Description: "SES email infrastructure for MyFusionHelper.ai - transactional email sending, SMS, and event tracking"
+
+  Resources:
+    # SES Email Identity for the domain
+    # NOTE: Domain verification (DNS records) must be done manually in the AWS console
+    # after this stack is deployed. SES will provide DKIM/SPF records to add to DNS.
+    SESEmailIdentity:
+      Type: AWS::SES::EmailIdentity
+      Properties:
+        EmailIdentity: myfusionhelper.ai
+        DkimAttributes:
+          SigningEnabled: true
+        DkimSigningAttributes:
+          NextSigningKeyLength: RSA_2048_BIT
+
+    # SES Configuration Set for tracking and reputation
+    SESConfigurationSet:
+      Type: AWS::SES::ConfigurationSet
+      Properties:
+        Name: mfh-${self:provider.stage}-transactional
+        ReputationOptions:
+          ReputationMetricsEnabled: true
+        SendingOptions:
+          SendingEnabled: true
+
+    # Event Destination for SES events (bounces, complaints, deliveries)
+    SESEventDestination:
+      Type: AWS::SES::ConfigurationSetEventDestination
+      Properties:
+        ConfigurationSetName: !Ref SESConfigurationSet
+        EventDestination:
+          Name: mfh-${self:provider.stage}-events
+          Enabled: true
+          CloudWatchDestination:
+            DimensionConfigurations:
+              - DimensionName: MessageTag
+                DimensionValueSource: messageTag
+                DefaultDimensionValue: none
+          MatchingEventTypes:
+            - send
+            - bounce
+            - complaint
+            - delivery
+            - reject
+            - renderingFailure
+
+    # SNS Topic for SMS (MFA codes and notifications)
+    SNSTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: mfh-${self:provider.stage}-sms-topic
+        DisplayName: MFH SMS Notifications
+
+    # IAM Role for SMS delivery status logging
+    SMSDeliveryRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: mfh-${self:provider.stage}-sms-delivery-role
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: sns.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: CloudWatchLogsPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource: "*"
+
+    # SES Email Templates
+
+    PasswordResetTemplate:
+      Type: AWS::SES::Template
+      Properties:
+        Template:
+          TemplateName: mfh-${self:provider.stage}-password-reset
+          SubjectPart: "Password Reset Request - MyFusion Helper"
+          HtmlPart: |
+            <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f5f7;">
+              <div style="max-width: 580px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.06);">
+                <div style="background: #1b3a6b; padding: 36px 32px; text-align: center;">
+                  <div style="font-size: 20px; font-weight: 700; color: #ffffff;">MyFusion Helper</div>
+                  <div style="font-size: 22px; font-weight: 600; color: #ffffff; margin-top: 6px;">Password Reset Request</div>
+                </div>
+                <div style="padding: 32px;">
+                  <p>Hello {{name}},</p>
+                  <p>We received a request to reset your password for MyFusion Helper.</p>
+                  <div style="background: #f0f4ff; border: 2px solid #1b3a6b; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 24px; font-weight: 700; text-align: center; letter-spacing: 4px; color: #1b3a6b; margin: 20px 0;">{{code}}</div>
+                  <p>This code will expire in 15 minutes.</p>
+                  <p>If you didn't request this reset, you can safely ignore this email.</p>
+                </div>
+                <div style="background: #f9fafb; padding: 24px 32px; text-align: center; border-top: 1px solid #e5e7eb;">
+                  <p style="font-size: 12px; color: #9ca3af; margin: 0;">MyFusion Helper - CRM Automation Platform</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          TextPart: |
+            Password Reset Request - MyFusion Helper
+
+            Hello {{name}},
+
+            We received a request to reset your password for MyFusion Helper.
+
+            Your reset code is: {{code}}
+
+            This code will expire in 15 minutes.
+
+            If you didn't request this reset, you can safely ignore this email.
+
+            -- MyFusion Helper
+
+    WelcomeTemplate:
+      Type: AWS::SES::Template
+      Properties:
+        Template:
+          TemplateName: mfh-${self:provider.stage}-welcome
+          SubjectPart: "Welcome to MyFusion Helper!"
+          HtmlPart: |
+            <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f5f7;">
+              <div style="max-width: 580px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.06);">
+                <div style="background: #1b3a6b; padding: 36px 32px; text-align: center;">
+                  <div style="font-size: 20px; font-weight: 700; color: #ffffff;">MyFusion Helper</div>
+                  <div style="font-size: 22px; font-weight: 600; color: #ffffff; margin-top: 6px;">Welcome!</div>
+                </div>
+                <div style="padding: 32px;">
+                  <p>Hello {{name}},</p>
+                  <p>Welcome to MyFusion Helper! We're excited to have you on board.</p>
+                  <div style="background: #f0f4ff; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                    <h3 style="color: #1b3a6b; margin: 0 0 12px 0;">Get Started in 3 Steps:</h3>
+                    <div style="margin-bottom: 8px;"><strong>1.</strong> Connect your CRM platform</div>
+                    <div style="margin-bottom: 8px;"><strong>2.</strong> Browse and activate Helpers</div>
+                    <div><strong>3.</strong> Watch your automations run</div>
+                  </div>
+                  <div style="text-align: center; margin: 28px 0;">
+                    <a href="{{baseUrl}}" style="display: inline-block; background: #1b3a6b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-size: 15px; font-weight: 600;">Go to Dashboard</a>
+                  </div>
+                </div>
+                <div style="background: #f9fafb; padding: 24px 32px; text-align: center; border-top: 1px solid #e5e7eb;">
+                  <p style="font-size: 12px; color: #9ca3af; margin: 0;">MyFusion Helper - CRM Automation Platform</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          TextPart: |
+            Welcome to MyFusion Helper!
+
+            Hello {{name}},
+
+            Welcome to MyFusion Helper! We're excited to have you on board.
+
+            Get Started in 3 Steps:
+            1. Connect your CRM platform
+            2. Browse and activate Helpers
+            3. Watch your automations run
+
+            Go to Dashboard: {{baseUrl}}
+
+            -- MyFusion Helper
+
+    ExecutionAlertTemplate:
+      Type: AWS::SES::Template
+      Properties:
+        Template:
+          TemplateName: mfh-${self:provider.stage}-execution-alert
+          SubjectPart: "[MyFusion Helper] Helper Execution Failed: {{helperName}}"
+          HtmlPart: |
+            <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f5f7;">
+              <div style="max-width: 580px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.06);">
+                <div style="background: #1b3a6b; padding: 36px 32px; text-align: center;">
+                  <div style="font-size: 20px; font-weight: 700; color: #ffffff;">MyFusion Helper</div>
+                  <div style="font-size: 22px; font-weight: 600; color: #ffffff; margin-top: 6px;">Execution Alert</div>
+                </div>
+                <div style="padding: 32px;">
+                  <p>Hello {{name}},</p>
+                  <p>A helper execution has failed and may need your attention.</p>
+                  <div style="background: #fff5f5; border-left: 4px solid #e53e3e; border-radius: 4px; padding: 16px; margin: 16px 0;">
+                    <strong>Helper:</strong> {{helperName}}<br>
+                    <strong>Error:</strong> {{errorMessage}}
+                  </div>
+                  <div style="text-align: center; margin: 28px 0;">
+                    <a href="{{baseUrl}}/executions" style="display: inline-block; background: #1b3a6b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-size: 15px; font-weight: 600;">View Executions</a>
+                  </div>
+                </div>
+                <div style="background: #f9fafb; padding: 24px 32px; text-align: center; border-top: 1px solid #e5e7eb;">
+                  <p style="font-size: 12px; color: #9ca3af; margin: 0;">MyFusion Helper - CRM Automation Platform</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          TextPart: |
+            [MyFusion Helper] Helper Execution Failed
+
+            Hello {{name}},
+
+            A helper execution has failed.
+
+            Helper: {{helperName}}
+            Error: {{errorMessage}}
+
+            View Executions: {{baseUrl}}/executions
+
+            -- MyFusion Helper
+
+    TeamInviteTemplate:
+      Type: AWS::SES::Template
+      Properties:
+        Template:
+          TemplateName: mfh-${self:provider.stage}-team-invite
+          SubjectPart: "{{inviterName}} invited you to {{accountName}} on MyFusion Helper"
+          HtmlPart: |
+            <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f5f7;">
+              <div style="max-width: 580px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.06);">
+                <div style="background: #1b3a6b; padding: 36px 32px; text-align: center;">
+                  <div style="font-size: 20px; font-weight: 700; color: #ffffff;">MyFusion Helper</div>
+                  <div style="font-size: 22px; font-weight: 600; color: #ffffff; margin-top: 6px;">You're Invited!</div>
+                </div>
+                <div style="padding: 32px;">
+                  <p><strong>{{inviterName}}</strong> ({{inviterEmail}}) has invited you to join <strong>{{accountName}}</strong> on MyFusion Helper.</p>
+                  <div style="background: #f0f4ff; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                    <strong>Your role:</strong> {{roleName}}
+                  </div>
+                  <div style="text-align: center; margin: 28px 0;">
+                    <a href="{{baseUrl}}/invite/{{inviteToken}}" style="display: inline-block; background: #1b3a6b; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-size: 15px; font-weight: 600;">Accept Invitation</a>
+                  </div>
+                </div>
+                <div style="background: #f9fafb; padding: 24px 32px; text-align: center; border-top: 1px solid #e5e7eb;">
+                  <p style="font-size: 12px; color: #9ca3af; margin: 0;">MyFusion Helper - CRM Automation Platform</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          TextPart: |
+            You're Invited to {{accountName}} on MyFusion Helper!
+
+            {{inviterName}} ({{inviterEmail}}) has invited you to join the team.
+
+            Your role: {{roleName}}
+
+            Accept Invitation: {{baseUrl}}/invite/{{inviteToken}}
+
+            -- MyFusion Helper
+
+    TrialEndingTemplate:
+      Type: AWS::SES::Template
+      Properties:
+        Template:
+          TemplateName: mfh-${self:provider.stage}-trial-ending
+          SubjectPart: "Your MyFusion Helper trial ends soon"
+          HtmlPart: |
+            <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f5f7;">
+              <div style="max-width: 580px; margin: 40px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.06);">
+                <div style="background: #1b3a6b; padding: 36px 32px; text-align: center;">
+                  <div style="font-size: 20px; font-weight: 700; color: #ffffff;">MyFusion Helper</div>
+                  <div style="font-size: 22px; font-weight: 600; color: #ffffff; margin-top: 6px;">Trial Ending Soon</div>
+                </div>
+                <div style="padding: 32px;">
+                  <p>Hello {{name}},</p>
+                  <p>Your 14-day free trial is ending soon. Subscribe to keep your Helpers running.</p>
+                  <div style="background: #f0f4ff; border-radius: 8px; padding: 16px; margin: 16px 0;">
+                    <strong>What happens next:</strong>
+                    <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+                      <li>Helpers will pause when the trial expires</li>
+                      <li>Your data and configurations are preserved</li>
+                      <li>Subscribe to any plan to resume instantly</li>
+                    </ul>
+                  </div>
+                  <p>Plans start at $39/month.</p>
+                  <div style="text-align: center; margin: 28px 0;">
+                    <a href="{{baseUrl}}/settings" style="display: inline-block; background: #8BC34A; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-size: 15px; font-weight: 600;">Choose a Plan</a>
+                  </div>
+                </div>
+                <div style="background: #f9fafb; padding: 24px 32px; text-align: center; border-top: 1px solid #e5e7eb;">
+                  <p style="font-size: 12px; color: #9ca3af; margin: 0;">MyFusion Helper - CRM Automation Platform</p>
+                </div>
+              </div>
+            </body>
+            </html>
+          TextPart: |
+            Your MyFusion Helper trial ends soon
+
+            Hello {{name}},
+
+            Your 14-day free trial is ending soon. Subscribe to keep your Helpers running.
+
+            Plans start at $39/month.
+
+            Choose a Plan: {{baseUrl}}/settings
+
+            -- MyFusion Helper
+
+  Outputs:
+    SESEmailIdentityName:
+      Description: SES verified email identity
+      Value: myfusionhelper.ai
+      Export:
+        Name: ${self:service}-${self:provider.stage}-EmailIdentity
+
+    SESConfigurationSetName:
+      Description: SES configuration set name
+      Value: !Ref SESConfigurationSet
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ConfigurationSetName
+
+    SNSTopicArn:
+      Description: SNS Topic ARN for SMS
+      Value: !Ref SNSTopic
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SNSTopicArn
+
+    PasswordResetTemplateName:
+      Description: Password Reset Email Template Name
+      Value: mfh-${self:provider.stage}-password-reset
+      Export:
+        Name: ${self:service}-${self:provider.stage}-PasswordResetTemplateName
+
+    WelcomeTemplateName:
+      Description: Welcome Email Template Name
+      Value: mfh-${self:provider.stage}-welcome
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WelcomeTemplateName
+
+    ExecutionAlertTemplateName:
+      Description: Execution Alert Email Template Name
+      Value: mfh-${self:provider.stage}-execution-alert
+      Export:
+        Name: ${self:service}-${self:provider.stage}-ExecutionAlertTemplateName
+
+    TeamInviteTemplateName:
+      Description: Team Invite Email Template Name
+      Value: mfh-${self:provider.stage}-team-invite
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TeamInviteTemplateName
+
+    TrialEndingTemplateName:
+      Description: Trial Ending Email Template Name
+      Value: mfh-${self:provider.stage}-trial-ending
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TrialEndingTemplateName

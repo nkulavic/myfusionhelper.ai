@@ -1,0 +1,49 @@
+{
+  "platform_id": "platform:trello",
+  "slug": "trello",
+  "name": "Trello",
+  "category": "productivity",
+  "types": ["integration", "productivity"],
+  "description": "Visual project management and collaboration tool using boards, lists, and cards",
+  "status": "active",
+  "version": "v1",
+  "logo_url": "/images/platforms/trello.png",
+  "documentation_url": "https://developer.atlassian.com/cloud/trello/rest/",
+  "api_config": {
+    "base_url": "https://api.trello.com/1",
+    "auth_type": "api_key",
+    "test_endpoint": "https://api.trello.com/1/members/me",
+    "rate_limits": {
+      "requests_per_second": 10,
+      "requests_per_minute": 100,
+      "requests_per_hour": 0,
+      "burst_limit": 20
+    },
+    "required_headers": {},
+    "version": "v1"
+  },
+  "display_config": {
+    "color": "#0079BF",
+    "accent": "#e3f2fd",
+    "initial": "T"
+  },
+  "credential_fields": [
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "placeholder": "Your Trello API key",
+      "hint": "Found at https://trello.com/power-ups/admin",
+      "input_type": "password",
+      "required": true
+    },
+    {
+      "key": "api_secret",
+      "label": "Token",
+      "placeholder": "Your Trello token",
+      "hint": "Generate a token from your Trello API key page",
+      "input_type": "password",
+      "required": true
+    }
+  ],
+  "capabilities": ["boards", "lists", "cards"]
+}

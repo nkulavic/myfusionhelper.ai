@@ -1,0 +1,67 @@
+service: mfh-executions-stream
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 60
+  tracing:
+    lambda: true
+  environment:
+    SERVICE_VERSION: "2025.02.04.0001"
+    STAGE: ${self:provider.stage}
+    COGNITO_REGION: ${self:provider.region}
+    HELPER_EXECUTION_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperExecutionQueueUrl}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource:
+            - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperExecutionQueueArn}
+        - Effect: Allow
+          Action:
+            - dynamodb:DescribeStream
+            - dynamodb:GetRecords
+            - dynamodb:GetShardIterator
+            - dynamodb:ListStreams
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableStreamArn}
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+functions:
+  executions-stream:
+    handler: cmd/handlers/executions-stream/main.go
+    description: "DEPRECATED: Replaced by mfh-stream-router. Kept deployed but disabled (no event trigger)."
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: executions-stream
+    # Stream trigger removed — mfh-stream-router now handles all execution routing
+    # to individual helper SQS queues with full execution data.

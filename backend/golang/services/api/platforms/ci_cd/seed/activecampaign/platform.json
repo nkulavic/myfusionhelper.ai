@@ -1,0 +1,52 @@
+{
+  "platform_id": "platform:activecampaign",
+  "slug": "activecampaign",
+  "name": "ActiveCampaign",
+  "category": "crm",
+  "types": ["crm"],
+  "description": "Email marketing, marketing automation, and CRM tools for growing businesses",
+  "status": "active",
+  "version": "v3",
+  "logo_url": "/images/platforms/activecampaign.png",
+  "documentation_url": "https://developers.activecampaign.com/reference/overview",
+  "api_config": {
+    "base_url": "https://{account}.api-us1.com/api/3",
+    "auth_type": "api_key",
+    "test_endpoint": "https://{account}.api-us1.com/api/3/users/me",
+    "rate_limits": {
+      "requests_per_second": 5,
+      "requests_per_minute": 0,
+      "requests_per_hour": 0,
+      "burst_limit": 10
+    },
+    "required_headers": {
+      "Api-Token": "{api_key}"
+    },
+    "version": "v3"
+  },
+  "display_config": {
+    "color": "#356AE6",
+    "accent": "#ebeffe",
+    "initial": "A",
+    "short_name": "AC"
+  },
+  "credential_fields": [
+    {
+      "key": "api_url",
+      "label": "Account URL",
+      "placeholder": "https://yourname.api-us1.com",
+      "hint": "Found in Settings \u2192 Developer \u2192 API Access",
+      "input_type": "url",
+      "required": true
+    },
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "placeholder": "Enter your ActiveCampaign API key",
+      "hint": "Found in Settings \u2192 Developer \u2192 API Access",
+      "input_type": "password",
+      "required": true
+    }
+  ],
+  "capabilities": ["contacts", "tags", "custom_fields", "automations", "deals", "emails"]
+}

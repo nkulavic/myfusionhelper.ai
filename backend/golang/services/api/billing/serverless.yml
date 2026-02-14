@@ -1,0 +1,183 @@
+service: mfh-billing
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 29
+  tracing:
+    lambda: true
+    apiGateway: true
+  httpApi:
+    id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+  environment:
+    SERVICE_VERSION: "2026.02.05.0001"
+    STAGE: ${self:provider.stage}
+    ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
+    USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
+    USER_ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableName}
+    COGNITO_USER_POOL_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
+    COGNITO_CLIENT_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolClientId}
+    COGNITO_REGION: ${self:provider.region}
+    COGNITO_JWKS_URI: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoJwksUri}
+    COGNITO_ISSUER: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
+    INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
+    APP_URL: https://app.myfusionhelper.ai
+    API_VERSION: v1
+    API_REFERENCE: mfh-api
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+            - dynamodb:Scan
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}/index/*"
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}/index/*"
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}/index/*"
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+          Resource:
+            - "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        - Effect: Allow
+          Action:
+            - cognito-idp:AdminAddUserToGroup
+            - cognito-idp:AdminRemoveUserFromGroup
+            - cognito-idp:AdminListGroupsForUser
+          Resource:
+            - ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolArn}
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - ses:SendRawEmail
+          Resource: "arn:aws:ses:${self:provider.region}:*:identity/myfusionhelper.ai"
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+functions:
+  # Protected endpoints (require JWT auth)
+  billing-get:
+    handler: cmd/handlers/billing/main.go
+    description: "Get billing info and usage for current account"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: billing-get
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: billing-get
+      ENDPOINT_PATH: /billing
+    events:
+      - httpApi:
+          path: /billing
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  billing-portal-session:
+    handler: cmd/handlers/billing/main.go
+    description: "Create Stripe Customer Portal session"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: billing-portal-session
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: billing-portal-session
+      ENDPOINT_PATH: /billing/portal-session
+    events:
+      - httpApi:
+          path: /billing/portal-session
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  billing-invoices:
+    handler: cmd/handlers/billing/main.go
+    description: "List invoices from Stripe"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: billing-invoices
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: billing-invoices
+      ENDPOINT_PATH: /billing/invoices
+    events:
+      - httpApi:
+          path: /billing/invoices
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  billing-checkout:
+    handler: cmd/handlers/billing/main.go
+    description: "Create Stripe Checkout session for new subscription"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: billing-checkout
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: billing-checkout
+      ENDPOINT_PATH: /billing/checkout/sessions
+    events:
+      - httpApi:
+          path: /billing/checkout/sessions
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  # Public endpoint (verified by Stripe signature, not JWT)
+  billing-webhook:
+    handler: cmd/handlers/billing/main.go
+    description: "Stripe webhook receiver"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: billing-webhook
+    memorySize: 256
+    timeout: 29
+    environment:
+      FUNCTION_NAME: billing-webhook
+      ENDPOINT_PATH: /billing/webhook
+    events:
+      - httpApi:
+          path: /billing/webhook
+          method: post

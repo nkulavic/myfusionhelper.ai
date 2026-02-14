@@ -1,0 +1,158 @@
+name: Seed Platform Data
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - 'backend/golang/services/api/platforms/ci_cd/seed/**/*.json'
+      - 'backend/golang/services/api/platforms/ci_cd/seed/seed.js'
+      - 'backend/golang/services/api/platforms/ci_cd/seed/package.json'
+      - '.github/workflows/seed-platforms.yml'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to seed (or "all" for all platforms)'
+        required: false
+        type: choice
+        default: 'auto-detect'
+        options:
+          - 'auto-detect'
+          - 'all'
+          - 'activecampaign'
+          - 'donorlead'
+          - 'everwebinar'
+          - 'gohighlevel'
+          - 'google_sheets'
+          - 'gotowebinar'
+          - 'hubspot'
+          - 'keap'
+          - 'ontraport'
+          - 'stripe'
+          - 'trello'
+          - 'webinarjam'
+          - 'zoom'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  seed-platforms:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for git diff
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "stage=prod" >> $GITHUB_OUTPUT
+          else
+            echo "stage=dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
+          aws-region: us-west-2
+
+      - name: Detect Platform Changes
+        id: detect
+        working-directory: backend/golang/services/api/platforms/ci_cd/seed
+        run: |
+          echo "🔍 Detecting platform changes..."
+
+          if [ "${{ inputs.platform }}" = "all" ]; then
+            echo "changed_platforms=all" >> $GITHUB_OUTPUT
+            echo "✓ All platforms will be seeded"
+          elif [ -n "${{ inputs.platform }}" ] && [ "${{ inputs.platform }}" != "auto-detect" ]; then
+            # Single platform selected
+            echo "changed_platforms=${{ inputs.platform }}" >> $GITHUB_OUTPUT
+            echo "✓ Selected platform: ${{ inputs.platform }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            # Detect changed platforms from git diff
+            echo "Using git diff to detect changes..."
+            CHANGED=$(git diff --name-only ${{ github.event.before }}..${{ github.sha }} | \
+              grep 'backend/golang/services/api/platforms/ci_cd/seed/.*/platform.json' | \
+              sed 's|backend/golang/services/api/platforms/ci_cd/seed/\(.*\)/platform.json|\1|' | \
+              sort -u | tr '\n' ',' | sed 's/,$//')
+
+            if [ -z "$CHANGED" ]; then
+              echo "changed_platforms=" >> $GITHUB_OUTPUT
+              echo "✓ No platform changes detected"
+            else
+              echo "changed_platforms=$CHANGED" >> $GITHUB_OUTPUT
+              echo "✓ Changed platforms: $CHANGED"
+            fi
+          else
+            echo "changed_platforms=all" >> $GITHUB_OUTPUT
+            echo "✓ Manual trigger - seeding all platforms"
+          fi
+
+      - name: Install dependencies
+        if: steps.detect.outputs.changed_platforms != ''
+        working-directory: backend/golang/services/api/platforms/ci_cd/seed
+        run: npm install
+
+      - name: Seed Platform Data
+        if: steps.detect.outputs.changed_platforms != ''
+        working-directory: backend/golang/services/api/platforms/ci_cd/seed
+        env:
+          STAGE: ${{ steps.env.outputs.stage }}
+          AWS_REGION: us-west-2
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+        run: |
+          echo "════════════════════════════════════════════════════════════════"
+          echo "🌱 Seeding Platform Data"
+          echo "════════════════════════════════════════════════════════════════"
+          echo "🌍 Stage: $STAGE"
+          echo "📍 Region: us-west-2"
+          echo "🎯 Platforms: ${{ steps.detect.outputs.changed_platforms }}"
+          echo "════════════════════════════════════════════════════════════════"
+          echo ""
+
+          CHANGED_PLATFORMS='${{ steps.detect.outputs.changed_platforms }}'
+
+          if [ "$CHANGED_PLATFORMS" = "all" ]; then
+            echo "▶️  Seeding all platforms..."
+            node seed.js
+          else
+            echo "▶️  Seeding specific platforms: $CHANGED_PLATFORMS"
+            # For now, seed.js seeds all platforms
+            # TODO: Add --platforms flag to seed.js to support selective seeding
+            node seed.js
+          fi
+
+          echo ""
+          echo "✅ Platform seeding completed successfully"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🌱 Platform Seeding Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Stage:** ${{ steps.env.outputs.stage }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ inputs.platform }}" = "all" ]; then
+            echo "**Mode:** Seed all platforms" >> $GITHUB_STEP_SUMMARY
+          elif [ -n "${{ inputs.platform }}" ] && [ "${{ inputs.platform }}" != "auto-detect" ]; then
+            echo "**Mode:** Specific platform - ${{ inputs.platform }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Mode:** Changed platforms only (auto-detect)" >> $GITHUB_STEP_SUMMARY
+            echo "**Changed:** ${{ steps.detect.outputs.changed_platforms }}" >> $GITHUB_STEP_SUMMARY
+          fi

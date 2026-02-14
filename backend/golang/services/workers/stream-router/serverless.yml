@@ -1,0 +1,69 @@
+service: mfh-stream-router
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 60
+  tracing:
+    lambda: true
+  environment:
+    STAGE: ${self:provider.stage}
+    AWS_ACCOUNT_ID: ${aws:accountId}
+    # Fallback queue for helpers that don't have individual workers yet
+    FALLBACK_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperExecutionQueueUrl}
+
+  iam:
+    role:
+      statements:
+        # Allow sending messages to all helper SQS queues (convention-based naming)
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource:
+            - arn:aws:sqs:${aws:region}:${aws:accountId}:mfh-${self:provider.stage}-*-executions.fifo
+            - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.HelperExecutionQueueArn}
+        # Allow reading from DynamoDB Stream
+        - Effect: Allow
+          Action:
+            - dynamodb:DescribeStream
+            - dynamodb:GetRecords
+            - dynamodb:GetShardIterator
+            - dynamodb:ListStreams
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableStreamArn}
+
+functions:
+  router:
+    handler: services/workers/stream-router/main.go
+    description: "Route DynamoDB execution stream events to individual helper SQS queues"
+    events:
+      - stream:
+          type: dynamodb
+          arn: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableStreamArn}
+          batchSize: 100
+          startingPosition: LATEST
+          maximumRetryAttempts: 3
+          bisectBatchOnFunctionError: true
+          functionResponseType: ReportBatchItemFailures
+          filterPatterns:
+            - eventName: [INSERT]
+              dynamodb:
+                NewImage:
+                  status:
+                    S: ["queued"]
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true

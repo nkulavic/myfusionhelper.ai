@@ -1,0 +1,134 @@
+service: mfh-internal-email
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 29
+  tracing:
+    lambda: true
+    apiGateway: true
+  httpApi:
+    id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+  environment:
+    SERVICE_VERSION: "2025.02.09.0001"
+    STAGE: ${self:provider.stage}
+    DEFAULT_FROM_EMAIL: noreply@myfusionhelper.ai
+    DEFAULT_FROM_NAME: MyFusion Helper
+    APP_URL: https://app.myfusionhelper.ai
+    EMAIL_LOGS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailLogsTableName}
+    EMAIL_TEMPLATES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailTemplatesTableName}
+    EMAIL_VERIFICATIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableName}
+  iam:
+    role:
+      statements:
+        # SES permissions for sending emails
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - ses:SendRawEmail
+            - ses:SendTemplatedEmail
+            - ses:GetSendQuota
+            - ses:GetSendStatistics
+          Resource: "*"
+        # DynamoDB permissions for email tables
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:BatchGetItem
+            - dynamodb:BatchWriteItem
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailLogsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailTemplatesTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailLogsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailTemplatesTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableArn}/index/*"
+        # CloudWatch Logs
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        # X-Ray
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+functions:
+  # Health check (internal monitoring)
+  internal-email-health:
+    handler: cmd/handlers/internal-email/main.go
+    description: "Internal email service health check"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: internal-email-health
+    memorySize: 128
+    timeout: 5
+    environment:
+      FUNCTION_NAME: internal-email-health
+      ENDPOINT_PATH: /internal/emails/health
+    events:
+      - httpApi:
+          path: /internal/emails/health
+          method: get
+
+  # Send email (internal-only, no auth)
+  internal-email-send:
+    handler: cmd/handlers/internal-email/main.go
+    description: "Send transactional email using templates"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: internal-email-send
+    memorySize: 512
+    timeout: 15
+    environment:
+      FUNCTION_NAME: internal-email-send
+      ENDPOINT_PATH: /internal/emails/send
+    events:
+      - httpApi:
+          path: /internal/emails/send
+          method: post
+
+  # Email history (internal-only, no auth)
+  internal-email-history:
+    handler: cmd/handlers/internal-email/main.go
+    description: "Retrieve email send history"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: internal-email-history
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: internal-email-history
+      ENDPOINT_PATH: /internal/emails/history
+    events:
+      - httpApi:
+          path: /internal/emails/history
+          method: get

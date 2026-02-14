@@ -1,0 +1,39 @@
+{
+  "platform_id": "platform:zoom",
+  "slug": "zoom",
+  "name": "Zoom",
+  "category": "webinar",
+  "types": ["integration", "webinar"],
+  "description": "Video conferencing, webinars, and online meetings platform for businesses",
+  "status": "active",
+  "version": "v2",
+  "logo_url": "/images/platforms/zoom.svg",
+  "documentation_url": "https://developers.zoom.us/docs/api/",
+  "oauth": {
+    "auth_url": "https://zoom.us/oauth/authorize",
+    "token_url": "https://zoom.us/oauth/token",
+    "user_info_url": "https://api.zoom.us/v2/users/me",
+    "scopes": ["meeting:write:admin", "webinar:write:admin", "user:read:admin"],
+    "response_type": "code"
+  },
+  "api_config": {
+    "base_url": "https://api.zoom.us/v2",
+    "auth_type": "oauth2",
+    "test_endpoint": "https://api.zoom.us/v2/users/me",
+    "rate_limits": {
+      "requests_per_second": 10,
+      "requests_per_minute": 0,
+      "requests_per_hour": 0,
+      "burst_limit": 20
+    },
+    "required_headers": {},
+    "version": "v2"
+  },
+  "display_config": {
+    "color": "#2D8CFF",
+    "accent": "#e5f1ff",
+    "initial": "Z"
+  },
+  "credential_fields": [],
+  "capabilities": ["meetings", "webinars", "registrants"]
+}

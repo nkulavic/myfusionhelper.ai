@@ -1,0 +1,366 @@
+service: mfh-platforms
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 29
+  tracing:
+    lambda: true
+    apiGateway: true
+  httpApi:
+    id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+  environment:
+    SERVICE_VERSION: "2025.02.04.0001"
+    STAGE: ${self:provider.stage}
+    COGNITO_USER_POOL_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
+    COGNITO_CLIENT_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolClientId}
+    COGNITO_CLIENT_SECRET: ""
+    COGNITO_REGION: ${self:provider.region}
+    COGNITO_JWKS_URI: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoJwksUri}
+    COGNITO_ISSUER: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
+    USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
+    ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
+    USER_ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableName}
+    PLATFORMS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableName}
+    CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
+    PLATFORM_CONNECTION_AUTHS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableName}
+    OAUTH_STATES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.OAuthStatesTableName}
+    OAUTH_CREDENTIALS_PARAM: /myfusionhelper/${self:provider.stage}/platforms/oauth/credentials
+    OAUTH_REDIRECT_URI: https://${self:provider.stage}.api.myfusionhelper.ai/platforms/oauth/callback
+    FRONTEND_SUCCESS_URL: https://app.myfusionhelper.ai/connections?oauth=success
+    FRONTEND_ERROR_URL: https://app.myfusionhelper.ai/connections?oauth=error
+    API_VERSION: v1
+    API_REFERENCE: mfh-api
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:BatchGetItem
+            - dynamodb:DescribeTable
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.OAuthStatesTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformConnectionAuthsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.OAuthStatesTableArn}/index/*"
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+            - ssm:GetParameters
+            - ssm:PutParameter
+            - ssm:DeleteParameter
+          Resource:
+            - "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/platforms/oauth/credentials"
+            - "arn:aws:ssm:${self:provider.region}:*:parameter/${self:provider.stage}/platforms/*"
+            - "arn:aws:ssm:${self:provider.region}:*:parameter/${self:provider.stage}/connections/*"
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+functions:
+  # Platform listing
+  platforms-list:
+    handler: cmd/handlers/platforms/main.go
+    description: "List available CRM platforms"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-list
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: platforms-list
+      ENDPOINT_PATH: /platforms
+    events:
+      - httpApi:
+          path: /platforms
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  platforms-get:
+    handler: cmd/handlers/platforms/main.go
+    description: "Get platform details"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-get
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: platforms-get
+      ENDPOINT_PATH: /platforms/{platform_id}
+    events:
+      - httpApi:
+          path: /platforms/{platform_id}
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  # Platform connections
+  platforms-connections-list:
+    handler: cmd/handlers/platforms/main.go
+    description: "List connections for a platform"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-connections-list
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: platforms-connections-list
+      ENDPOINT_PATH: /platforms/{platform_id}/connections
+    events:
+      - httpApi:
+          path: /platforms/{platform_id}/connections
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  platforms-connections-create:
+    handler: cmd/handlers/platforms/main.go
+    description: "Create a platform connection"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-connections-create
+    memorySize: 256
+    timeout: 29
+    environment:
+      FUNCTION_NAME: platforms-connections-create
+      ENDPOINT_PATH: /platforms/{platform_id}/connections
+    events:
+      - httpApi:
+          path: /platforms/{platform_id}/connections
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  platforms-connections-get:
+    handler: cmd/handlers/platforms/main.go
+    description: "Get a platform connection"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-connections-get
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: platforms-connections-get
+      ENDPOINT_PATH: /platforms/{platform_id}/connections/{connection_id}
+    events:
+      - httpApi:
+          path: /platforms/{platform_id}/connections/{connection_id}
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  platforms-connections-update:
+    handler: cmd/handlers/platforms/main.go
+    description: "Update a platform connection"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-connections-update
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: platforms-connections-update
+      ENDPOINT_PATH: /platforms/{platform_id}/connections/{connection_id}
+    events:
+      - httpApi:
+          path: /platforms/{platform_id}/connections/{connection_id}
+          method: put
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  platforms-connections-delete:
+    handler: cmd/handlers/platforms/main.go
+    description: "Delete a platform connection"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-connections-delete
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: platforms-connections-delete
+      ENDPOINT_PATH: /platforms/{platform_id}/connections/{connection_id}
+    events:
+      - httpApi:
+          path: /platforms/{platform_id}/connections/{connection_id}
+          method: delete
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  platforms-connections-fields:
+    handler: cmd/handlers/platforms/main.go
+    description: "Get available fields for a connection"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-connections-fields
+    memorySize: 256
+    timeout: 29
+    environment:
+      FUNCTION_NAME: platforms-connections-fields
+      ENDPOINT_PATH: /platforms/{platform_id}/connections/{connection_id}/fields
+    events:
+      - httpApi:
+          path: /platforms/{platform_id}/connections/{connection_id}/fields
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  platforms-connections-tags:
+    handler: cmd/handlers/platforms/main.go
+    description: "Get available tags for a connection"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-connections-tags
+    memorySize: 256
+    timeout: 29
+    environment:
+      FUNCTION_NAME: platforms-connections-tags
+      ENDPOINT_PATH: /platforms/{platform_id}/connections/{connection_id}/tags
+    events:
+      - httpApi:
+          path: /platforms/{platform_id}/connections/{connection_id}/tags
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  platforms-connections-test:
+    handler: cmd/handlers/platforms/main.go
+    description: "Test a platform connection"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-connections-test
+    memorySize: 256
+    timeout: 29
+    environment:
+      FUNCTION_NAME: platforms-connections-test
+      ENDPOINT_PATH: /platforms/{platform_id}/connections/{connection_id}/test
+    events:
+      - httpApi:
+          path: /platforms/{platform_id}/connections/{connection_id}/test
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  # List all connections (no platform filter)
+  platform-connections-list-all:
+    handler: cmd/handlers/platforms/main.go
+    description: "List all platform connections"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platform-connections-list-all
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: platform-connections-list-all
+      ENDPOINT_PATH: /platform-connections
+    events:
+      - httpApi:
+          path: /platform-connections
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  # OAuth flow
+  oauth-start:
+    handler: cmd/handlers/platforms/main.go
+    description: "Start OAuth flow for a platform"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: oauth-start
+    memorySize: 256
+    timeout: 29
+    environment:
+      FUNCTION_NAME: oauth-start
+      ENDPOINT_PATH: /platforms/{platform_id}/oauth/start
+    events:
+      - httpApi:
+          path: /platforms/{platform_id}/oauth/start
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  oauth-callback:
+    handler: cmd/handlers/platforms/main.go
+    description: "OAuth callback handler (public)"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: oauth-callback
+    memorySize: 256
+    timeout: 29
+    environment:
+      FUNCTION_NAME: oauth-callback
+      ENDPOINT_PATH: /platforms/oauth/callback
+    events:
+      - httpApi:
+          path: /platforms/oauth/callback
+          method: get
+
+  # Public endpoints
+  platforms-health:
+    handler: cmd/handlers/platforms/main.go
+    description: "Health check endpoint"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: platforms-health
+    memorySize: 128
+    timeout: 5
+    environment:
+      FUNCTION_NAME: platforms-health
+      ENDPOINT_PATH: /platforms/health
+    events:
+      - httpApi:
+          path: /platforms/health
+          method: get

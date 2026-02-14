@@ -1,0 +1,60 @@
+service: mfh-sms-chat-webhook
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 29
+  logRetentionInDays: 7
+  iam:
+    role:
+      statements:
+        # DynamoDB permissions
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+          Resource:
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.PHONE_MAPPINGS_TABLE}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.RATE_LIMITS_TABLE}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.CONVERSATIONS_TABLE}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.MESSAGES_TABLE}
+  environment:
+    STAGE: ${self:provider.stage}
+    # Unified secrets (Groq + Twilio)
+    INTERNAL_SECRETS: '{{resolve:ssm-secure:/${self:provider.stage}/myfusionhelper/secrets}}'
+    # DynamoDB tables
+    PHONE_MAPPINGS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PhoneMappingsTableName}
+    RATE_LIMITS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.RateLimitsTableName}
+    CONVERSATIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatConversationsTableName}
+    MESSAGES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatMessagesTableName}
+    # API base URL for MCP service
+    API_BASE_URL: https://${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}.execute-api.${aws:region}.amazonaws.com
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux CGO_ENABLED=0 go build -ldflags="-s -w" -o bootstrap'
+    monorepo: false
+
+functions:
+  sms-webhook:
+    handler: cmd/handlers/sms-chat-webhook
+    events:
+      - httpApi:
+          method: POST
+          path: /sms-webhook
+    environment:
+      # Override handler-specific env vars if needed
