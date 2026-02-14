@@ -61,6 +61,16 @@ export function useResetPassword() {
   })
 }
 
+export function useCompleteOnboarding() {
+  const { updateUserData } = useAuthStore()
+  return useMutation({
+    mutationFn: () => authApi.completeOnboarding(),
+    onSuccess: () => {
+      updateUserData({ onboardingComplete: true })
+    },
+  })
+}
+
 export function useLogout() {
   const { clearAuth } = useAuthStore()
   const { reset } = useWorkspaceStore()

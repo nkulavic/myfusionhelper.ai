@@ -43,13 +43,14 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	}
 
 	var user struct {
-		UserID           string `json:"user_id" dynamodbav:"user_id"`
-		Email            string `json:"email" dynamodbav:"email"`
-		Name             string `json:"name" dynamodbav:"name"`
-		Status           string `json:"status" dynamodbav:"status"`
-		CurrentAccountID string `json:"current_account_id" dynamodbav:"current_account_id"`
-		CreatedAt        string `json:"created_at" dynamodbav:"created_at"`
-		UpdatedAt        string `json:"updated_at" dynamodbav:"updated_at"`
+		UserID             string `json:"user_id" dynamodbav:"user_id"`
+		Email              string `json:"email" dynamodbav:"email"`
+		Name               string `json:"name" dynamodbav:"name"`
+		Status             string `json:"status" dynamodbav:"status"`
+		CurrentAccountID   string `json:"current_account_id" dynamodbav:"current_account_id"`
+		OnboardingComplete bool   `json:"onboarding_complete" dynamodbav:"onboarding_complete"`
+		CreatedAt          string `json:"created_at" dynamodbav:"created_at"`
+		UpdatedAt          string `json:"updated_at" dynamodbav:"updated_at"`
 	}
 	if err := attributevalue.UnmarshalMap(userResult.Item, &user); err != nil {
 		return authMiddleware.CreateErrorResponse(500, "Internal server error"), nil
@@ -75,14 +76,15 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	}
 
 	return authMiddleware.CreateSuccessResponse(200, "Status retrieved successfully", map[string]interface{}{
-		"user_id":            user.UserID,
-		"email":              user.Email,
-		"name":               user.Name,
-		"status":             user.Status,
-		"current_account_id": user.CurrentAccountID,
-		"created_at":         user.CreatedAt,
-		"updated_at":         user.UpdatedAt,
-		"account_context":    accountContext,
-		"available_accounts": availableAccounts,
+		"user_id":              user.UserID,
+		"email":                user.Email,
+		"name":                 user.Name,
+		"status":               user.Status,
+		"current_account_id":   user.CurrentAccountID,
+		"onboarding_complete":  user.OnboardingComplete,
+		"created_at":           user.CreatedAt,
+		"updated_at":           user.UpdatedAt,
+		"account_context":      accountContext,
+		"available_accounts":   availableAccounts,
 	}), nil
 }

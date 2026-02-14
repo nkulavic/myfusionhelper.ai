@@ -16,6 +16,7 @@ type User struct {
 	Company                 string                   `json:"company,omitempty" dynamodbav:"company,omitempty"`
 	Status                  string                   `json:"status" dynamodbav:"status"`
 	CurrentAccountID        string                   `json:"current_account_id" dynamodbav:"current_account_id"`
+	OnboardingComplete      bool                     `json:"onboarding_complete" dynamodbav:"onboarding_complete"`
 	NotificationPreferences *NotificationPreferences `json:"notification_preferences,omitempty" dynamodbav:"notification_preferences,omitempty"`
 	CreatedAt               time.Time                `json:"created_at" dynamodbav:"created_at"`
 	UpdatedAt               time.Time                `json:"updated_at" dynamodbav:"updated_at"`
@@ -329,14 +330,17 @@ type HelperTemplate struct {
 type Execution struct {
 	ExecutionID  string                 `json:"execution_id" dynamodbav:"execution_id"`
 	HelperID     string                 `json:"helper_id" dynamodbav:"helper_id"`
+	HelperType   string                 `json:"helper_type,omitempty" dynamodbav:"helper_type,omitempty"`
 	AccountID    string                 `json:"account_id" dynamodbav:"account_id"`
 	UserID       string                 `json:"user_id,omitempty" dynamodbav:"user_id,omitempty"`
 	APIKeyID     string                 `json:"api_key_id,omitempty" dynamodbav:"api_key_id,omitempty"`
 	ConnectionID string                 `json:"connection_id,omitempty" dynamodbav:"connection_id,omitempty"`
 	ContactID    string                 `json:"contact_id,omitempty" dynamodbav:"contact_id,omitempty"`
+	Config       map[string]interface{} `json:"config,omitempty" dynamodbav:"config,omitempty"`
 	Status       string                 `json:"status" dynamodbav:"status"`
 	TriggerType  string                 `json:"trigger_type" dynamodbav:"trigger_type"`
 	Input        map[string]interface{} `json:"input,omitempty" dynamodbav:"input,omitempty"`
+	QueryParams  map[string]string      `json:"query_params,omitempty" dynamodbav:"query_params,omitempty"`
 	Output       map[string]interface{} `json:"output,omitempty" dynamodbav:"output,omitempty"`
 	ErrorMessage string                 `json:"error_message,omitempty" dynamodbav:"error_message,omitempty"`
 	DurationMs   int64                  `json:"duration_ms" dynamodbav:"duration_ms"`

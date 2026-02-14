@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
+	helperResolve "github.com/myfusionhelper/api/internal/helpers"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/ratelimit"
 	apitypes "github.com/myfusionhelper/api/internal/types"
@@ -22,6 +23,7 @@ import (
 var (
 	executionsTable = os.Getenv("EXECUTIONS_TABLE")
 	accountsTable   = os.Getenv("ACCOUNTS_TABLE")
+	helpersTable    = os.Getenv("HELPERS_TABLE")
 	rateLimitsTable = os.Getenv("RATE_LIMITS_TABLE")
 )
 
@@ -86,41 +88,49 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return createRateLimitResponse(burstResult, account.Plan), nil
 	}
 
-	// Parse input — POST body first, then query string fallback
+	// Look up the helper to freeze its config at execution time.
+	// The authorizer already validated ownership and status, so this is a simple read.
+	helper, err := helperResolve.ResolveHelper(ctx, db, helpersTable, helperID)
+	if err != nil {
+		log.Printf("Failed to resolve helper %s: %v", helperID, err)
+		return authMiddleware.CreateErrorResponse(500, "Failed to load helper"), nil
+	}
+
+	// Parse POST body for per-execution data (contact_id, input)
 	var body map[string]interface{}
 	if event.Body != "" {
 		_ = json.Unmarshal([]byte(event.Body), &body)
 	}
 
 	contactID := ""
-	connectionID := ""
 	var input map[string]interface{}
 
 	if body != nil {
 		if v, ok := body["contact_id"].(string); ok {
 			contactID = v
 		}
-		if v, ok := body["connection_id"].(string); ok {
-			connectionID = v
-		}
 		if v, ok := body["input"].(map[string]interface{}); ok {
 			input = v
 		}
 	}
 
-	// Query string fallback
+	// Query string fallback for contact_id
 	if contactID == "" {
 		contactID = event.QueryStringParameters["contact_id"]
 	}
-	if connectionID == "" {
-		connectionID = event.QueryStringParameters["connection_id"]
+
+	// Capture all query string parameters for downstream access
+	var queryParams map[string]string
+	if len(event.QueryStringParameters) > 0 {
+		queryParams = event.QueryStringParameters
 	}
 
 	// Extract x-api-key header for relay helpers (chain_it, etc.)
 	apiKey := event.Headers["x-api-key"]
 
-	// Create execution record with status="queued".
-	// DynamoDB Streams auto-dispatches to SQS FIFO.
+	// Create execution record with ALL helper data frozen at this point.
+	// connection_id and config come from the helper record, NOT the POST body.
+	// DynamoDB Streams auto-dispatches to SQS FIFO via stream-router.
 	now := time.Now().UTC()
 	executionID := "exec:" + uuid.Must(uuid.NewV7()).String()
 	ttl := now.Add(7 * 24 * time.Hour).Unix()
@@ -128,14 +138,17 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	execution := map[string]interface{}{
 		"execution_id":  executionID,
 		"helper_id":     helperID,
+		"helper_type":   helper.HelperType,
 		"account_id":    accountID,
 		"api_key_id":    apiKeyID,
-		"api_key":       apiKey, // Store for relay helpers (TTL auto-cleanup)
-		"connection_id": connectionID,
+		"api_key":       apiKey,
+		"connection_id": helper.ConnectionID,
 		"contact_id":    contactID,
+		"config":        helper.Config,
 		"status":        "queued",
 		"trigger_type":  "api",
 		"input":         input,
+		"query_params":  queryParams,
 		"created_at":    now.Format(time.RFC3339),
 		"started_at":    now.Format(time.RFC3339),
 		"ttl":           ttl,

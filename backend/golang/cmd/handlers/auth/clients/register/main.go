@@ -17,6 +17,7 @@ import (
 	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/google/uuid"
+	"github.com/myfusionhelper/api/internal/billing"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/notifications"
 )
@@ -42,16 +43,36 @@ type User struct {
 	UpdatedAt        string `json:"updated_at" dynamodbav:"updated_at"`
 }
 
+type AccountSettings struct {
+	MaxHelpers     int  `json:"max_helpers" dynamodbav:"max_helpers"`
+	MaxConnections int  `json:"max_connections" dynamodbav:"max_connections"`
+	MaxAPIKeys     int  `json:"max_api_keys" dynamodbav:"max_api_keys"`
+	MaxTeamMembers int  `json:"max_team_members" dynamodbav:"max_team_members"`
+	MaxExecutions  int  `json:"max_executions" dynamodbav:"max_executions"`
+	WebhooksEnabled bool `json:"webhooks_enabled" dynamodbav:"webhooks_enabled"`
+}
+
+type AccountUsage struct {
+	Helpers            int `json:"helpers" dynamodbav:"helpers"`
+	Connections        int `json:"connections" dynamodbav:"connections"`
+	APIKeys            int `json:"api_keys" dynamodbav:"api_keys"`
+	TeamMembers        int `json:"team_members" dynamodbav:"team_members"`
+	MonthlyExecutions  int `json:"monthly_executions" dynamodbav:"monthly_executions"`
+	MonthlyAPIRequests int `json:"monthly_api_requests" dynamodbav:"monthly_api_requests"`
+}
+
 type Account struct {
-	AccountID       string `json:"account_id" dynamodbav:"account_id"`
-	OwnerUserID     string `json:"owner_user_id" dynamodbav:"owner_user_id"`
-	CreatedByUserID string `json:"created_by_user_id" dynamodbav:"created_by_user_id"`
-	Name            string `json:"name" dynamodbav:"name"`
-	Company         string `json:"company" dynamodbav:"company"`
-	Plan            string `json:"plan" dynamodbav:"plan"`
-	Status          string `json:"status" dynamodbav:"status"`
-	CreatedAt       string `json:"created_at" dynamodbav:"created_at"`
-	UpdatedAt       string `json:"updated_at" dynamodbav:"updated_at"`
+	AccountID       string          `json:"account_id" dynamodbav:"account_id"`
+	OwnerUserID     string          `json:"owner_user_id" dynamodbav:"owner_user_id"`
+	CreatedByUserID string          `json:"created_by_user_id" dynamodbav:"created_by_user_id"`
+	Name            string          `json:"name" dynamodbav:"name"`
+	Company         string          `json:"company" dynamodbav:"company"`
+	Plan            string          `json:"plan" dynamodbav:"plan"`
+	Status          string          `json:"status" dynamodbav:"status"`
+	Settings        AccountSettings `json:"settings" dynamodbav:"settings"`
+	Usage           AccountUsage    `json:"usage" dynamodbav:"usage"`
+	CreatedAt       string          `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt       string          `json:"updated_at" dynamodbav:"updated_at"`
 }
 
 var (
@@ -155,7 +176,8 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		companyName = req.Name
 	}
 
-	// Create account
+	// Create account with sandbox (free) plan limits
+	sandboxPlan := billing.GetPlan("free")
 	account := Account{
 		AccountID:       accountID,
 		OwnerUserID:     userID,
@@ -164,8 +186,16 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		Company:         companyName,
 		Plan:            "free",
 		Status:          "active",
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		Settings: AccountSettings{
+			MaxHelpers:     sandboxPlan.MaxHelpers,
+			MaxConnections: sandboxPlan.MaxConnections,
+			MaxAPIKeys:     sandboxPlan.MaxAPIKeys,
+			MaxTeamMembers: sandboxPlan.MaxTeamMembers,
+			MaxExecutions:  sandboxPlan.MaxExecutions,
+		},
+		Usage:     AccountUsage{},
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 
 	accountItem, err := attributevalue.MarshalMap(account)

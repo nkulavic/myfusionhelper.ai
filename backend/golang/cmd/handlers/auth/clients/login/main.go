@@ -26,16 +26,17 @@ type LoginRequest struct {
 }
 
 type User struct {
-	UserID           string `json:"user_id" dynamodbav:"user_id"`
-	CognitoUserID    string `json:"cognito_user_id" dynamodbav:"cognito_user_id"`
-	Email            string `json:"email" dynamodbav:"email"`
-	Name             string `json:"name" dynamodbav:"name"`
-	PhoneNumber      string `json:"phone_number,omitempty" dynamodbav:"phone_number,omitempty"`
-	Company          string `json:"company,omitempty" dynamodbav:"company,omitempty"`
-	Status           string `json:"status" dynamodbav:"status"`
-	CurrentAccountID string `json:"current_account_id" dynamodbav:"current_account_id"`
-	CreatedAt        string `json:"created_at" dynamodbav:"created_at"`
-	UpdatedAt        string `json:"updated_at" dynamodbav:"updated_at"`
+	UserID             string `json:"user_id" dynamodbav:"user_id"`
+	CognitoUserID      string `json:"cognito_user_id" dynamodbav:"cognito_user_id"`
+	Email              string `json:"email" dynamodbav:"email"`
+	Name               string `json:"name" dynamodbav:"name"`
+	PhoneNumber        string `json:"phone_number,omitempty" dynamodbav:"phone_number,omitempty"`
+	Company            string `json:"company,omitempty" dynamodbav:"company,omitempty"`
+	Status             string `json:"status" dynamodbav:"status"`
+	CurrentAccountID   string `json:"current_account_id" dynamodbav:"current_account_id"`
+	OnboardingComplete bool   `json:"onboarding_complete" dynamodbav:"onboarding_complete"`
+	CreatedAt          string `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt          string `json:"updated_at" dynamodbav:"updated_at"`
 }
 
 type Account struct {

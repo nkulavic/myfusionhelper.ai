@@ -109,8 +109,14 @@ export const settingsApi = {
   listInvoices: () =>
     apiClient.get<Invoice[]>('/billing/invoices'),
 
-  createCheckoutSession: (plan: 'start' | 'grow' | 'deliver') =>
-    apiClient.post<{ url: string; sessionId: string }>('/billing/checkout/sessions', { plan }),
+  createCheckoutSession: (
+    plan: 'start' | 'grow' | 'deliver',
+    returnUrl?: string
+  ) =>
+    apiClient.post<{ url: string; sessionId: string }>('/billing/checkout/sessions', {
+      plan,
+      ...(returnUrl && { returnUrl }),
+    }),
 }
 
 export interface BillingInfo {

@@ -32,6 +32,8 @@ type HelperInput struct {
 	ContactID    string                                  `json:"contact_id"`
 	ContactData  *connectors.NormalizedContact            `json:"contact_data,omitempty"`
 	Config       map[string]interface{}                   `json:"config"`
+	Input        map[string]interface{}                   `json:"input,omitempty"`        // Per-execution data from POST body
+	QueryParams  map[string]string                        `json:"query_params,omitempty"` // Query string parameters from request
 	Connector    connectors.CRMConnector                  `json:"-"`
 	ServiceAuths map[string]*connectors.ConnectorConfig   `json:"-"` // keyed by platform slug (e.g. "zoom", "trello")
 	UserID       string                                  `json:"user_id"`

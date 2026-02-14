@@ -27,7 +27,8 @@ var (
 
 // CreateCheckoutRequest is the request body for POST /billing/checkout/sessions
 type CreateCheckoutRequest struct {
-	Plan string `json:"plan"` // "start", "grow", or "deliver"
+	Plan      string `json:"plan"`       // "start", "grow", or "deliver"
+	ReturnURL string `json:"return_url"` // optional: redirect back to this path after checkout (e.g., "/onboarding")
 }
 
 // HandleWithAuth creates a Stripe Checkout session for a new subscription
@@ -126,8 +127,14 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	if baseURL == "" {
 		baseURL = "https://app.myfusionhelper.ai"
 	}
-	successURL := baseURL + "/settings?tab=billing&session_id={CHECKOUT_SESSION_ID}"
+	successURL := baseURL + "/settings/billing/success?session_id={CHECKOUT_SESSION_ID}"
 	cancelURL := baseURL + "/settings?tab=billing&billing=cancelled"
+
+	// Allow caller to specify a return URL (e.g., onboarding flow)
+	if req.ReturnURL != "" {
+		successURL = baseURL + req.ReturnURL + "?session_id={CHECKOUT_SESSION_ID}"
+		cancelURL = baseURL + req.ReturnURL + "&billing=cancelled"
+	}
 
 	params := &stripe.CheckoutSessionParams{
 		Customer: stripe.String(customerID),

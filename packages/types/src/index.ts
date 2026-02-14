@@ -9,6 +9,7 @@ export interface User {
   company?: string
   status: string
   currentAccountId: string
+  onboardingComplete?: boolean
   notificationPreferences?: NotificationPreferences
   createdAt: string
   updatedAt: string
@@ -34,7 +35,7 @@ export interface Account {
   createdByUserId: string
   name: string
   company: string
-  plan: 'free' | 'pro' | 'business'
+  plan: 'free' | 'start' | 'grow' | 'deliver'
   status: 'active' | 'suspended' | 'cancelled'
   stripeCustomerId?: string
   settings: AccountSettings

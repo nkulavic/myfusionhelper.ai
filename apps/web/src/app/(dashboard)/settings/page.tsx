@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   User,
   Building,
@@ -76,7 +77,18 @@ const tabs = [
 ]
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState('profile')
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const validTabs = tabs.map((t) => t.id)
+  const [activeTab, setActiveTab] = useState(
+    tabParam && validTabs.includes(tabParam) ? tabParam : 'profile'
+  )
+
+  useEffect(() => {
+    if (tabParam && validTabs.includes(tabParam)) {
+      setActiveTab(tabParam)
+    }
+  }, [tabParam])
 
   return (
     <div className="animate-fade-in-up space-y-6">
@@ -831,7 +843,7 @@ function BillingTab() {
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null)
 
   const planLabels: Record<string, string> = {
-    free: 'Free',
+    free: 'Sandbox',
     start: 'Start',
     grow: 'Grow',
     deliver: 'Deliver',
@@ -846,9 +858,10 @@ function BillingTab() {
       features: [
         '10 active helpers',
         '2 CRM connections',
-        '1,000 monthly executions',
+        '5,000 monthly executions included',
         '2 API keys',
         'Email support',
+        'Overage: $0.01/execution',
       ],
     },
     {
@@ -860,11 +873,11 @@ function BillingTab() {
       features: [
         '50 active helpers',
         '5 CRM connections',
-        '10,000 monthly executions',
+        '25,000 monthly executions included',
         '10 API keys',
         '5 team members',
         'Priority support',
-        'Webhook notifications',
+        'Overage: $0.008/execution',
       ],
     },
     {
@@ -874,13 +887,12 @@ function BillingTab() {
       description: 'For teams that need unlimited power and support',
       features: [
         'Unlimited helpers',
-        'Unlimited connections',
-        '100,000 monthly executions',
-        'Unlimited API keys',
-        'Unlimited team members',
+        '20 CRM connections',
+        '100,000 monthly executions included',
+        '100 API keys',
+        '100 team members',
         'Dedicated support',
-        'Webhook notifications',
-        'Full API access',
+        'Overage: $0.005/execution',
       ],
     },
   ]
@@ -897,7 +909,7 @@ function BillingTab() {
 
   const handleSelectPlan = (planId: 'start' | 'grow' | 'deliver') => {
     setCheckoutPlan(planId)
-    createCheckout.mutate(planId, {
+    createCheckout.mutate({ plan: planId }, {
       onSuccess: (res) => {
         if (res.data?.url) {
           window.location.href = res.data.url

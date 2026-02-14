@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/myfusionhelper/api/internal/billing"
 	appConfig "github.com/myfusionhelper/api/internal/config"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/types"
@@ -82,7 +83,7 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	resp := BillingResponse{
 		Plan:             account.Plan,
 		Status:           account.Status,
-		PriceMonthly:     getPlanPrice(account.Plan),
+		PriceMonthly:     billing.GetPlan(account.Plan).PriceMonthly,
 		StripeCustomerID: account.StripeCustomerID,
 		Usage:            account.Usage,
 		Limits:           account.Settings,
@@ -117,15 +118,3 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	return authMiddleware.CreateSuccessResponse(200, "OK", resp), nil
 }
 
-func getPlanPrice(plan string) int {
-	switch plan {
-	case "start":
-		return 39
-	case "grow":
-		return 59
-	case "deliver":
-		return 79
-	default:
-		return 0
-	}
-}

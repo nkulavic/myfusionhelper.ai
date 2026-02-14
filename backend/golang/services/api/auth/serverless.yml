@@ -137,6 +137,25 @@ functions:
           authorizer:
             id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
+  auth-onboarding-complete:
+    handler: cmd/handlers/auth/main.go
+    description: "Mark onboarding as complete"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-onboarding-complete
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-onboarding-complete
+      ENDPOINT_PATH: /auth/onboarding-complete
+    events:
+      - httpApi:
+          path: /auth/onboarding-complete
+          method: patch
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
   auth-logout:
     handler: cmd/handlers/auth/main.go
     description: "Session logout and token revocation"

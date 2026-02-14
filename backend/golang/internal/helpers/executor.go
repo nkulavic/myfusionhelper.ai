@@ -14,6 +14,8 @@ type ExecutionRequest struct {
 	HelperType   string                                  `json:"helper_type"`
 	ContactID    string                                  `json:"contact_id"`
 	Config       map[string]interface{}                   `json:"config"`
+	Input        map[string]interface{}                   `json:"input"`        // Per-execution data from POST body
+	QueryParams  map[string]string                        `json:"query_params"` // Query string parameters from request
 	UserID       string                                  `json:"user_id"`
 	AccountID    string                                  `json:"account_id"`
 	HelperID     string                                  `json:"helper_id"`
@@ -90,6 +92,8 @@ func (e *Executor) Execute(ctx context.Context, req ExecutionRequest, connector 
 		ContactID:    req.ContactID,
 		ContactData:  contactData,
 		Config:       req.Config,
+		Input:        req.Input,
+		QueryParams:  req.QueryParams,
 		Connector:    connector,
 		ServiceAuths: req.ServiceAuths,
 		UserID:       req.UserID,

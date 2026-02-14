@@ -1,21 +1,24 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useWorkspaceStore } from '@/lib/stores/workspace-store'
 import { useAuthStore } from '@/lib/stores/auth-store'
+import { useCompleteOnboarding } from '@/lib/hooks/use-auth'
 import { WelcomeStep } from './_components/welcome-step'
 import { ConnectCRMStep } from './_components/connect-crm-step'
+import { PlanStep } from './_components/plan-step'
 import { PickHelperStep } from './_components/pick-helper-step'
 import { QuickTourStep } from './_components/quick-tour-step'
 
-const STEPS = ['welcome', 'connect', 'helper', 'tour'] as const
+const STEPS = ['welcome', 'connect', 'plan', 'helper', 'tour'] as const
 type Step = (typeof STEPS)[number]
 
 const stepLabels: Record<Step, string> = {
   welcome: 'Welcome',
   connect: 'Connect CRM',
+  plan: 'Pick Plan',
   helper: 'First Helper',
   tour: 'Quick Tour',
 }
@@ -42,19 +45,27 @@ const transition = {
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user } = useAuthStore()
   const { completeOnboarding, onboardingComplete, _hasHydrated } = useWorkspaceStore()
-  const [currentStep, setCurrentStep] = useState<Step>('welcome')
+  const completeOnboardingMutation = useCompleteOnboarding()
+
+  // Resume at correct step when returning from Stripe Checkout
+  const stepParam = searchParams.get('step') as Step | null
+  const initialStep: Step =
+    stepParam && STEPS.includes(stepParam as Step) ? (stepParam as Step) : 'welcome'
+
+  const [currentStep, setCurrentStep] = useState<Step>(initialStep)
   const [direction, setDirection] = useState(0)
 
-  // If onboarding is already complete, redirect to helpers (wait for hydration)
+  // If onboarding is already complete (from localStorage or user record), redirect
   useEffect(() => {
-    if (_hasHydrated && onboardingComplete) {
+    if (_hasHydrated && (onboardingComplete || user?.onboardingComplete)) {
       router.replace('/helpers')
     }
-  }, [_hasHydrated, onboardingComplete, router])
+  }, [_hasHydrated, onboardingComplete, user?.onboardingComplete, router])
 
-  if (!_hasHydrated || onboardingComplete) {
+  if (!_hasHydrated || onboardingComplete || user?.onboardingComplete) {
     return null
   }
 
@@ -83,13 +94,15 @@ export default function OnboardingPage() {
 
   const finish = useCallback(() => {
     completeOnboarding()
+    completeOnboardingMutation.mutate()
     router.push('/helpers')
-  }, [completeOnboarding, router])
+  }, [completeOnboarding, completeOnboardingMutation, router])
 
   const skip = useCallback(() => {
     completeOnboarding()
+    completeOnboardingMutation.mutate()
     router.push('/helpers')
-  }, [completeOnboarding, router])
+  }, [completeOnboarding, completeOnboardingMutation, router])
 
   const firstName = user?.name?.split(' ')[0] || 'there'
 
@@ -171,6 +184,9 @@ export default function OnboardingPage() {
             )}
             {currentStep === 'connect' && (
               <ConnectCRMStep onNext={next} onBack={back} onSkip={skip} />
+            )}
+            {currentStep === 'plan' && (
+              <PlanStep onNext={next} onBack={back} onSkip={next} />
             )}
             {currentStep === 'helper' && (
               <PickHelperStep onNext={next} onBack={back} onSkip={skip} />

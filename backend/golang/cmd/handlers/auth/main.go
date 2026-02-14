@@ -11,6 +11,7 @@ import (
 
 	// Protected endpoints (require auth)
 	logoutClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/logout"
+	onboardingClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/onboarding"
 	passwordClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/password"
 	profileClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/profile"
 	statusClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/status"
@@ -34,7 +35,7 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 			StatusCode: 200,
 			Headers: map[string]string{
 				"Access-Control-Allow-Origin":  "*",
-				"Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+				"Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, OPTIONS",
 				"Access-Control-Allow-Headers": "Content-Type, Authorization, X-Account-Context",
 			},
 			Body: "",
@@ -52,6 +53,8 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return routeToProtectedHandler(ctx, event, logoutClient.HandleWithAuth)
 	case "/auth/password":
 		return routeToProtectedHandler(ctx, event, passwordClient.HandleWithAuth)
+	case "/auth/onboarding-complete":
+		return routeToProtectedHandler(ctx, event, onboardingClient.HandleWithAuth)
 
 	// Public endpoints
 	case "/auth/health":

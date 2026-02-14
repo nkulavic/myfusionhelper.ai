@@ -130,8 +130,13 @@ export function useCreatePortalSession() {
 
 export function useCreateCheckoutSession() {
   return useMutation({
-    mutationFn: (plan: 'start' | 'grow' | 'deliver') =>
-      settingsApi.createCheckoutSession(plan),
+    mutationFn: ({
+      plan,
+      returnUrl,
+    }: {
+      plan: 'start' | 'grow' | 'deliver'
+      returnUrl?: string
+    }) => settingsApi.createCheckoutSession(plan, returnUrl),
   })
 }
 

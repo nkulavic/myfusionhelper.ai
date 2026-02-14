@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/myfusionhelper/api/internal/billing"
 	appConfig "github.com/myfusionhelper/api/internal/config"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/notifications"
@@ -235,7 +236,7 @@ func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event, str
 
 	log.Printf("Activating subscription for account %s, plan: %s", accountID, plan)
 
-	limits := getPlanLimits(plan)
+	planCfg := billing.GetPlan(plan)
 
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -258,9 +259,9 @@ func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event, str
 		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
 			":plan":   &ddbtypes.AttributeValueMemberS{Value: plan},
 			":status": &ddbtypes.AttributeValueMemberS{Value: "active"},
-			":mh":     &ddbtypes.AttributeValueMemberN{Value: intToStr(limits.MaxHelpers)},
-			":mc":     &ddbtypes.AttributeValueMemberN{Value: intToStr(limits.MaxConnections)},
-			":me":     &ddbtypes.AttributeValueMemberN{Value: intToStr(limits.MaxExecutions)},
+			":mh":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxHelpers)},
+			":mc":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxConnections)},
+			":me":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxExecutions)},
 			":now":    &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
 		},
 	})
@@ -338,7 +339,7 @@ func updateAccountByStripeCustomer(ctx context.Context, stripeCustomerID, plan, 
 		ownerUserID = ownerAttr.(*ddbtypes.AttributeValueMemberS).Value
 	}
 
-	limits := getPlanLimits(plan)
+	planCfg := billing.GetPlan(plan)
 
 	_, err = dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(accountsTable),
@@ -353,49 +354,17 @@ func updateAccountByStripeCustomer(ctx context.Context, stripeCustomerID, plan, 
 		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
 			":plan":   &ddbtypes.AttributeValueMemberS{Value: plan},
 			":status": &ddbtypes.AttributeValueMemberS{Value: status},
-			":mh":     &ddbtypes.AttributeValueMemberN{Value: intToStr(limits.MaxHelpers)},
-			":mc":     &ddbtypes.AttributeValueMemberN{Value: intToStr(limits.MaxConnections)},
-			":me":     &ddbtypes.AttributeValueMemberN{Value: intToStr(limits.MaxExecutions)},
+			":mh":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxHelpers)},
+			":mc":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxConnections)},
+			":me":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxExecutions)},
 			":now":    &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
 		},
 	})
 	return ownerUserID, err
 }
 
-type planLimits struct {
-	MaxHelpers     int
-	MaxConnections int
-	MaxExecutions  int
-}
-
-func getPlanLimits(plan string) planLimits {
-	switch plan {
-	case "start":
-		return planLimits{MaxHelpers: 10, MaxConnections: 2, MaxExecutions: 10000}
-	case "grow":
-		return planLimits{MaxHelpers: 50, MaxConnections: 5, MaxExecutions: 50000}
-	case "deliver":
-		return planLimits{MaxHelpers: 999999, MaxConnections: 20, MaxExecutions: 500000}
-	default: // free
-		return planLimits{MaxHelpers: 3, MaxConnections: 1, MaxExecutions: 1000}
-	}
-}
-
 func intToStr(n int) string {
 	return fmt.Sprintf("%d", n)
-}
-
-func getPlanLabel(plan string) string {
-	switch plan {
-	case "start":
-		return "Start"
-	case "grow":
-		return "Grow"
-	case "deliver":
-		return "Deliver"
-	default:
-		return "Free"
-	}
 }
 
 // sendBillingEmail looks up the account owner and sends a billing notification email
@@ -442,7 +411,7 @@ func sendBillingEmail(ctx context.Context, dbClient *dynamodb.Client, ownerUserI
 		return
 	}
 
-	if err := notifSvc.SendBillingEvent(ctx, userName, userEmail, eventType, getPlanLabel(plan)); err != nil {
+	if err := notifSvc.SendBillingEvent(ctx, userName, userEmail, eventType, billing.GetPlanLabel(plan)); err != nil {
 		log.Printf("Failed to send billing email: %v", err)
 	}
 }

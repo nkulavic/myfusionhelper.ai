@@ -15,6 +15,7 @@ import (
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 
+	"github.com/myfusionhelper/api/internal/billing"
 	"github.com/myfusionhelper/api/internal/connectors"
 	"github.com/myfusionhelper/api/internal/connectors/loader"
 	"github.com/myfusionhelper/api/internal/google"
@@ -28,7 +29,9 @@ var (
 	notificationQueueURL = os.Getenv("NOTIFICATION_QUEUE_URL")
 )
 
-// HelperExecutionJob represents a job from the SQS queue
+// HelperExecutionJob represents a job from the SQS queue.
+// All fields are populated at execution time by the execute endpoint
+// and forwarded through the DynamoDB Stream → Stream Router → SQS pipeline.
 type HelperExecutionJob struct {
 	ExecutionID  string                 `json:"execution_id"`
 	HelperID     string                 `json:"helper_id"`
@@ -39,6 +42,7 @@ type HelperExecutionJob struct {
 	ContactID    string                 `json:"contact_id"`
 	Config       map[string]interface{} `json:"config"`
 	Input        map[string]interface{} `json:"input"`
+	QueryParams  map[string]string      `json:"query_params"`
 	APIKey       string                 `json:"api_key"`
 	RetryCount   int                    `json:"retry_count"`
 }
@@ -65,6 +69,18 @@ func HandleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 
 		log.Printf("Processing execution %s (helper: %s, type: %s)", job.ExecutionID, job.HelperID, job.HelperType)
 
+		// Check execution limit for sandbox (free) accounts
+		accountsTable := os.Getenv("ACCOUNTS_TABLE")
+		if accountsTable != "" {
+			if err := billing.CheckExecutionLimit(ctx, db, accountsTable, job.AccountID); err != nil {
+				if limitErr, ok := err.(*billing.LimitExceededError); ok {
+					log.Printf("Execution %s blocked: %s", job.ExecutionID, limitErr.Message)
+					updateExecutionResult(ctx, db, job.ExecutionID, "failed", limitErr.Message, nil, nil)
+					continue
+				}
+			}
+		}
+
 		// Update execution status to running
 		updateExecutionStatus(ctx, db, job.ExecutionID, "running", "", 0)
 
@@ -80,6 +96,10 @@ func HandleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 		} else if result != nil && result.Success {
 			log.Printf("Execution %s completed successfully", job.ExecutionID)
 			updateExecutionResult(ctx, db, job.ExecutionID, "completed", "", result, &now)
+			// Increment account-level execution count (best-effort)
+			if accountsTable != "" {
+				billing.IncrementUsage(ctx, db, accountsTable, job.AccountID, "monthly_executions", 1)
+			}
 			// Report usage to Stripe (best-effort, non-blocking)
 			go stripeusage.ReportExecution(ctx, db, job.ExecutionID, job.AccountID, now.Unix())
 		} else {
@@ -119,6 +139,8 @@ func processJob(ctx context.Context, db *dynamodb.Client, job HelperExecutionJob
 		HelperType:   job.HelperType,
 		ContactID:    job.ContactID,
 		Config:       job.Config,
+		Input:        job.Input,
+		QueryParams:  job.QueryParams,
 		UserID:       job.UserID,
 		AccountID:    job.AccountID,
 		HelperID:     job.HelperID,

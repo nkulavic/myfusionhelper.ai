@@ -50,6 +50,9 @@ export const authApi = {
   refresh: () =>
     apiClient.post<{ token: string }>('/auth/refresh'),
 
+  completeOnboarding: () =>
+    apiClient.patch<{ onboardingComplete: boolean }>('/auth/onboarding-complete'),
+
   forgotPassword: (input: ForgotPasswordInput) =>
     apiClient.post<void>('/auth/forgot-password', input),
 

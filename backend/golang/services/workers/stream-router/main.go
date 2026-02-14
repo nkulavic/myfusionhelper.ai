@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -69,8 +71,14 @@ func Handle(ctx context.Context, event events.DynamoDBEvent) error {
 			return fmt.Errorf("no queue available for helper_type: %s", helperType)
 		}
 
-		// Build the SQS message body as the full execution job JSON from DynamoDB record
-		messageBody := executionID
+		// Convert the full DynamoDB Stream record to JSON for the worker.
+		// The execution record contains all data frozen at execution time
+		// (helper_type, connection_id, config, input, query_params, etc.)
+		messageBody, err := streamImageToJSON(record.Change.NewImage)
+		if err != nil {
+			log.Printf("ERROR: Failed to convert stream image to JSON for execution %s: %v", executionID, err)
+			return err
+		}
 
 		// Use first 8 chars of execution_id as MessageGroupId for FIFO queue ordering
 		groupID := executionID
@@ -78,7 +86,7 @@ func Handle(ctx context.Context, event events.DynamoDBEvent) error {
 			groupID = groupID[:8]
 		}
 
-		_, err := sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
+		_, err = sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
 			QueueUrl:       aws.String(queueURL),
 			MessageBody:    aws.String(messageBody),
 			MessageGroupId: aws.String(groupID),
@@ -108,6 +116,60 @@ func buildQueueURL(helperType string) string {
 
 	return fmt.Sprintf("https://sqs.%s.amazonaws.com/%s/mfh-%s-%s-executions.fifo",
 		region, accountID, stage, queueName)
+}
+
+// streamImageToJSON converts a DynamoDB Stream NewImage to a JSON string.
+// This allows the full execution record to be forwarded to the worker via SQS.
+func streamImageToJSON(image map[string]events.DynamoDBAttributeValue) (string, error) {
+	m := convertStreamImage(image)
+	bytes, err := json.Marshal(m)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal stream image: %w", err)
+	}
+	return string(bytes), nil
+}
+
+func convertStreamImage(image map[string]events.DynamoDBAttributeValue) map[string]interface{} {
+	result := make(map[string]interface{}, len(image))
+	for k, v := range image {
+		result[k] = convertStreamValue(v)
+	}
+	return result
+}
+
+func convertStreamValue(v events.DynamoDBAttributeValue) interface{} {
+	switch v.DataType() {
+	case events.DataTypeString:
+		return v.String()
+	case events.DataTypeNumber:
+		n := v.Number()
+		if i, err := strconv.ParseInt(n, 10, 64); err == nil {
+			return i
+		}
+		if f, err := strconv.ParseFloat(n, 64); err == nil {
+			return f
+		}
+		return n
+	case events.DataTypeBoolean:
+		return v.Boolean()
+	case events.DataTypeMap:
+		return convertStreamImage(v.Map())
+	case events.DataTypeList:
+		list := v.List()
+		result := make([]interface{}, len(list))
+		for i, item := range list {
+			result[i] = convertStreamValue(item)
+		}
+		return result
+	case events.DataTypeStringSet:
+		return v.StringSet()
+	case events.DataTypeNumberSet:
+		return v.NumberSet()
+	case events.DataTypeNull:
+		return nil
+	default:
+		return nil
+	}
 }
 
 func main() {

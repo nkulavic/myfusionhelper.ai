@@ -51,6 +51,12 @@ functions:
           maximumRetryAttempts: 3
           bisectBatchOnFunctionError: true
           functionResponseType: ReportBatchItemFailures
+          filterPatterns:
+            - eventName: [INSERT]
+              dynamodb:
+                NewImage:
+                  status:
+                    S: ["queued"]
 
 plugins:
   - serverless-go-plugin

@@ -19,6 +19,7 @@ import (
 	ebtypes "github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	lambdasvc "github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/google/uuid"
+	"github.com/myfusionhelper/api/internal/billing"
 	helperEngine "github.com/myfusionhelper/api/internal/helpers"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/nanoid"
@@ -188,6 +189,20 @@ func createHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, aut
 
 	if !authCtx.Permissions.CanManageHelpers {
 		return authMiddleware.CreateErrorResponse(403, "Permission denied"), nil
+	}
+
+	// Check plan limit before creating
+	accountsTable := os.Getenv("ACCOUNTS_TABLE")
+	if accountsTable != "" {
+		cfg, cfgErr := config.LoadDefaultConfig(ctx)
+		if cfgErr == nil {
+			db := dynamodb.NewFromConfig(cfg)
+			if err := billing.CheckHelperLimit(ctx, db, accountsTable, authCtx.AccountID); err != nil {
+				if limitErr, ok := err.(*billing.LimitExceededError); ok {
+					return authMiddleware.CreateErrorResponse(403, limitErr.Message), nil
+				}
+			}
+		}
 	}
 
 	var req CreateHelperRequest
@@ -527,7 +542,8 @@ func executeHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, au
 		return authMiddleware.CreateErrorResponse(400, "Helper is disabled"), nil
 	}
 
-	// Create execution record with status="queued" directly.
+	// Create execution record with ALL helper data frozen at this point.
+	// connection_id and config come from the helper record.
 	// DynamoDB Streams will auto-dispatch to SQS FIFO for async processing.
 	now := time.Now().UTC()
 	executionID := "exec:" + uuid.Must(uuid.NewV7()).String()
@@ -536,10 +552,12 @@ func executeHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, au
 	execution := apitypes.Execution{
 		ExecutionID:  executionID,
 		HelperID:     helperID,
+		HelperType:   helper.HelperType,
 		AccountID:    authCtx.AccountID,
 		UserID:       authCtx.UserID,
 		ConnectionID: helper.ConnectionID,
 		ContactID:    req.ContactID,
+		Config:       helper.Config,
 		Status:       "queued",
 		TriggerType:  "manual",
 		Input:        req.Input,

@@ -58,22 +58,10 @@ provider:
 functions:
   executions-stream:
     handler: cmd/handlers/executions-stream/main.go
-    description: "Dispatch queued executions from DynamoDB Stream to SQS FIFO"
+    description: "DEPRECATED: Replaced by mfh-stream-router. Kept deployed but disabled (no event trigger)."
     tags:
       Service: ${self:service}
       Stage: ${self:provider.stage}
       Function: executions-stream
-    events:
-      - stream:
-          type: dynamodb
-          arn: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableStreamArn}
-          batchSize: 10
-          startingPosition: TRIM_HORIZON
-          maximumRetryAttempts: 3
-          functionResponseType: ReportBatchItemFailures
-          filterPatterns:
-            - eventName: [INSERT]
-              dynamodb:
-                NewImage:
-                  status:
-                    S: ["queued"]
+    # Stream trigger removed — mfh-stream-router now handles all execution routing
+    # to individual helper SQS queues with full execution data.

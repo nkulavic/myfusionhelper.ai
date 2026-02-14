@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
 	"github.com/myfusionhelper/api/internal/helpers"
 )
@@ -184,47 +185,87 @@ func (h *ChainIt) Execute(ctx context.Context, input helpers.HelperInput) (*help
 		return nil, fmt.Errorf("EXECUTIONS_TABLE environment variable not set")
 	}
 
+	// Look up helper table name
+	helpersTable := os.Getenv("HELPERS_TABLE")
+
 	// Create execution records for each chained helper
 	now := time.Now().UTC()
 	var executionIDs []string
 	var queuedHelpers []string
 
-	for i, helper := range helpersChain {
+	for i, helperCfg := range helpersChain {
 		// Calculate start time with delay
 		startTime := now
 		if i > 0 && delaySeconds > 0 {
 			startTime = startTime.Add(time.Duration(delaySeconds*i) * time.Second)
 		}
 
-		// Build config - use helper-specific config if provided, otherwise use shared config
-		configToUse := input.Config
-		if helper.Config != nil {
-			configToUse = helper.Config
+		// Look up the downstream helper to freeze its data
+		var downstreamHelperType string
+		var downstreamConnectionID string
+		var downstreamConfig map[string]interface{}
+
+		if helpersTable != "" {
+			helperResult, err := db.GetItem(ctx, &dynamodb.GetItemInput{
+				TableName: aws.String(helpersTable),
+				Key: map[string]ddbtypes.AttributeValue{
+					"helper_id": &ddbtypes.AttributeValueMemberS{Value: helperCfg.ID},
+				},
+			})
+			if err == nil && helperResult.Item != nil {
+				if v, ok := helperResult.Item["helper_type"]; ok {
+					if s, ok := v.(*ddbtypes.AttributeValueMemberS); ok {
+						downstreamHelperType = s.Value
+					}
+				}
+				if v, ok := helperResult.Item["connection_id"]; ok {
+					if s, ok := v.(*ddbtypes.AttributeValueMemberS); ok {
+						downstreamConnectionID = s.Value
+					}
+				}
+				if v, ok := helperResult.Item["config"]; ok {
+					if m, ok := v.(*ddbtypes.AttributeValueMemberM); ok {
+						downstreamConfig = make(map[string]interface{})
+						_ = attributevalue.UnmarshalMap(m.Value, &downstreamConfig)
+					}
+				}
+			} else {
+				output.Logs = append(output.Logs, fmt.Sprintf("Helper %d (%s): Failed to look up helper, skipping", i+1, helperCfg.ID))
+				continue
+			}
 		}
 
-		// Create execution record
+		// Use chain override config if provided, otherwise use the downstream helper's own config
+		configToUse := downstreamConfig
+		if helperCfg.Config != nil {
+			configToUse = helperCfg.Config
+		}
+
+		// Create execution record with frozen helper data
 		executionID := "exec:" + uuid.Must(uuid.NewV7()).String()
 		ttl := now.Add(7 * 24 * time.Hour).Unix()
 
 		execution := map[string]interface{}{
 			"execution_id":  executionID,
-			"helper_id":     helper.ID,
+			"helper_id":     helperCfg.ID,
+			"helper_type":   downstreamHelperType,
 			"account_id":    input.AccountID,
 			"user_id":       input.UserID,
-			"connection_id": "", // Will be inherited if needed
+			"connection_id": downstreamConnectionID,
 			"contact_id":    input.ContactID,
+			"config":        configToUse,
 			"status":        "queued",
 			"trigger_type":  "chain",
-			"input":         configToUse,
+			"input":         input.Input,
 			"created_at":    now.Format(time.RFC3339),
 			"started_at":    startTime.Format(time.RFC3339),
 			"ttl":           ttl,
-			"parent_exec":   input.HelperID, // Track parent chain_it execution
+			"parent_exec":   input.HelperID,
 		}
 
 		item, err := attributevalue.MarshalMap(execution)
 		if err != nil {
-			output.Logs = append(output.Logs, fmt.Sprintf("Helper %d (%s): Failed to marshal execution: %v", i+1, helper.ID, err))
+			output.Logs = append(output.Logs, fmt.Sprintf("Helper %d (%s): Failed to marshal execution: %v", i+1, helperCfg.ID, err))
 			continue
 		}
 
@@ -233,17 +274,17 @@ func (h *ChainIt) Execute(ctx context.Context, input helpers.HelperInput) (*help
 			Item:      item,
 		})
 		if err != nil {
-			output.Logs = append(output.Logs, fmt.Sprintf("Helper %d (%s): Failed to create execution: %v", i+1, helper.ID, err))
+			output.Logs = append(output.Logs, fmt.Sprintf("Helper %d (%s): Failed to create execution: %v", i+1, helperCfg.ID, err))
 			continue
 		}
 
 		executionIDs = append(executionIDs, executionID)
-		queuedHelpers = append(queuedHelpers, helper.ID)
+		queuedHelpers = append(queuedHelpers, helperCfg.ID)
 
 		if delaySeconds > 0 && i > 0 {
-			output.Logs = append(output.Logs, fmt.Sprintf("Queued helper %d: %s (delayed %d seconds)", i+1, helper.ID, delaySeconds*i))
+			output.Logs = append(output.Logs, fmt.Sprintf("Queued helper %d: %s (delayed %d seconds)", i+1, helperCfg.ID, delaySeconds*i))
 		} else {
-			output.Logs = append(output.Logs, fmt.Sprintf("Queued helper %d: %s", i+1, helper.ID))
+			output.Logs = append(output.Logs, fmt.Sprintf("Queued helper %d: %s", i+1, helperCfg.ID))
 		}
 	}
 
