@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	"github.com/myfusionhelper/api/internal/billing"
 	appConfig "github.com/myfusionhelper/api/internal/config"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
@@ -56,7 +57,7 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return authMiddleware.CreateErrorResponse(400, "Missing Stripe signature"), nil
 	}
 
-	stripeEvent, err := webhook.ConstructEvent([]byte(event.Body), sig, secrets.Stripe.WebhookSecret)
+	stripeEvent, err := webhook.ConstructEvent([]byte(apiutil.GetBody(event)), sig, secrets.Stripe.WebhookSecret)
 	if err != nil {
 		log.Printf("Webhook signature verification failed: %v", err)
 		return authMiddleware.CreateErrorResponse(400, "Invalid signature"), nil

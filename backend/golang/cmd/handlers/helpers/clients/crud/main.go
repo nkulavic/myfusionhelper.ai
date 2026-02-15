@@ -19,6 +19,7 @@ import (
 	ebtypes "github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 	lambdasvc "github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/google/uuid"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	"github.com/myfusionhelper/api/internal/billing"
 	helperEngine "github.com/myfusionhelper/api/internal/helpers"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
@@ -206,7 +207,7 @@ func createHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, aut
 	}
 
 	var req CreateHelperRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &req); err != nil {
 		return authMiddleware.CreateErrorResponse(400, "Invalid request format"), nil
 	}
 
@@ -307,7 +308,7 @@ func updateHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, aut
 	}
 
 	var req UpdateHelperRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &req); err != nil {
 		return authMiddleware.CreateErrorResponse(400, "Invalid request format"), nil
 	}
 
@@ -510,8 +511,8 @@ func executeHelper(ctx context.Context, event events.APIGatewayV2HTTPRequest, au
 	}
 
 	var req ExecuteHelperRequest
-	if event.Body != "" {
-		if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if reqBody := apiutil.GetBody(event); reqBody != "" {
+		if err := json.Unmarshal([]byte(reqBody), &req); err != nil {
 			return authMiddleware.CreateErrorResponse(400, "Invalid request format"), nil
 		}
 	}

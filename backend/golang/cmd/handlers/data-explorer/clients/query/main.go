@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	_ "github.com/marcboeker/go-duckdb"
 
+	"github.com/myfusionhelper/api/internal/apiutil"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/services/parquet"
 	apitypes "github.com/myfusionhelper/api/internal/types"
@@ -69,7 +70,7 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	start := time.Now()
 
 	var req QueryRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &req); err != nil {
 		return authMiddleware.CreateErrorResponse(400, "Invalid request body"), nil
 	}
 

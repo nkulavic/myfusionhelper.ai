@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/google/uuid"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	"github.com/myfusionhelper/api/internal/services"
 	"github.com/myfusionhelper/api/internal/types"
 )
@@ -122,7 +123,7 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 
 	// Parse Alexa request
 	var alexaReq AlexaRequest
-	if err := json.Unmarshal([]byte(event.Body), &alexaReq); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &alexaReq); err != nil {
 		return createErrorResponse("Invalid request"), nil
 	}
 

@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	helperResolve "github.com/myfusionhelper/api/internal/helpers"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/ratelimit"
@@ -98,8 +99,8 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 
 	// Parse POST body for per-execution data (contact_id, input)
 	var body map[string]interface{}
-	if event.Body != "" {
-		_ = json.Unmarshal([]byte(event.Body), &body)
+	if reqBody := apiutil.GetBody(event); reqBody != "" {
+		_ = json.Unmarshal([]byte(reqBody), &body)
 	}
 
 	contactID := ""

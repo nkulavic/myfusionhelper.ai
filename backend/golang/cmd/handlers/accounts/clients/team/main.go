@@ -16,6 +16,7 @@ import (
 	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	apitypes "github.com/myfusionhelper/api/internal/types"
 )
@@ -134,7 +135,7 @@ func inviteTeamMember(ctx context.Context, event events.APIGatewayV2HTTPRequest,
 	}
 
 	var req InviteTeamMemberRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &req); err != nil {
 		return authMiddleware.CreateErrorResponse(400, "Invalid request format"), nil
 	}
 
@@ -339,7 +340,7 @@ func updateTeamMember(ctx context.Context, event events.APIGatewayV2HTTPRequest,
 	}
 
 	var req UpdateTeamMemberRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &req); err != nil {
 		return authMiddleware.CreateErrorResponse(400, "Invalid request format"), nil
 	}
 

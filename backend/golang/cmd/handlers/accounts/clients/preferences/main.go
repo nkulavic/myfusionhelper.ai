@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	apitypes "github.com/myfusionhelper/api/internal/types"
 )
@@ -77,7 +78,7 @@ func updatePreferences(ctx context.Context, event events.APIGatewayV2HTTPRequest
 	log.Printf("Update notification preferences for user: %s", authCtx.UserID)
 
 	var prefs apitypes.NotificationPreferences
-	if err := json.Unmarshal([]byte(event.Body), &prefs); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &prefs); err != nil {
 		return authMiddleware.CreateErrorResponse(400, "Invalid request format"), nil
 	}
 

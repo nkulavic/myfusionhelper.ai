@@ -20,6 +20,7 @@ import (
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/google/uuid"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	mfhconfig "github.com/myfusionhelper/api/internal/config"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	apitypes "github.com/myfusionhelper/api/internal/types"
@@ -200,7 +201,7 @@ func createConnection(ctx context.Context, event events.APIGatewayV2HTTPRequest,
 	}
 
 	var req ConnectionRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &req); err != nil {
 		return authMiddleware.CreateErrorResponse(400, "Invalid request body"), nil
 	}
 
@@ -317,7 +318,7 @@ func updateConnection(ctx context.Context, event events.APIGatewayV2HTTPRequest,
 	}
 
 	var req ConnectionRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &req); err != nil {
 		return authMiddleware.CreateErrorResponse(400, "Invalid request body"), nil
 	}
 
@@ -658,12 +659,12 @@ func oauthStart(ctx context.Context, event events.APIGatewayV2HTTPRequest, authC
 	// Parse redirect URLs from request body
 	successRedirect := ""
 	failureRedirect := ""
-	if event.Body != "" {
+	if reqBody := apiutil.GetBody(event); reqBody != "" {
 		var bodyParams struct {
 			SuccessRedirect string `json:"success_redirect"`
 			FailureRedirect string `json:"failure_redirect"`
 		}
-		if err := json.Unmarshal([]byte(event.Body), &bodyParams); err == nil {
+		if err := json.Unmarshal([]byte(reqBody), &bodyParams); err == nil {
 			successRedirect = bodyParams.SuccessRedirect
 			failureRedirect = bodyParams.FailureRedirect
 		}
