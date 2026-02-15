@@ -12,6 +12,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { usePlanLimits } from '@/lib/hooks/use-plan-limits'
+import Link from 'next/link'
 import type { HelperTypeDefinition } from '@myfusionhelper/types'
 import {
   helpersCatalog,
@@ -185,10 +187,7 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: Helpe
             )}
           </p>
         </div>
-        <Button onClick={onNewHelper}>
-          <Plus className="h-4 w-4" />
-          New Helper
-        </Button>
+        <NewHelperButton onClick={onNewHelper} />
       </div>
 
       {/* Search and Filters */}
@@ -407,5 +406,24 @@ function CatalogCard({
         <CRMBadges crmIds={item.supportedCRMs} />
       </div>
     </button>
+  )
+}
+
+function NewHelperButton({ onClick }: { onClick: () => void }) {
+  const { canCreate } = usePlanLimits()
+  const atLimit = !canCreate('helpers')
+
+  return (
+    <div className="flex items-center gap-2">
+      {atLimit && (
+        <Link href="/settings?tab=billing" className="text-xs text-primary hover:underline">
+          Upgrade to add more
+        </Link>
+      )}
+      <Button onClick={onClick} disabled={atLimit}>
+        <Plus className="h-4 w-4" />
+        New Helper
+      </Button>
+    </div>
   )
 }

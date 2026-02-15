@@ -6,17 +6,23 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Check, Minus } from 'lucide-react'
 import { fadeUp, staggerContainer, scaleUp } from './animation-variants'
 import { cn } from '@/lib/utils'
+import {
+  PLAN_CONFIGS,
+  COMPARISON_ROWS,
+  getAnnualSavingsPercent,
+  formatLimit,
+} from '@/lib/plan-constants'
 
 const plans = [
   {
-    name: 'Start',
-    monthlyPrice: 39,
-    annualPrice: 33,
-    description: "When you're starting out",
+    name: PLAN_CONFIGS.start.name,
+    monthlyPrice: PLAN_CONFIGS.start.monthlyPrice,
+    annualPrice: PLAN_CONFIGS.start.annualMonthlyPrice,
+    description: PLAN_CONFIGS.start.description,
     features: [
-      '10 active helpers',
-      '5,000 executions/mo',
-      '1 CRM connection',
+      `${PLAN_CONFIGS.start.maxHelpers} active helpers`,
+      `${formatLimit(PLAN_CONFIGS.start.maxExecutions)} executions/mo`,
+      `${PLAN_CONFIGS.start.maxConnections} CRM connections`,
       'Webhooks & rest hooks',
       'Email support',
       'Execution logs (7 days)',
@@ -25,14 +31,14 @@ const plans = [
     highlighted: false,
   },
   {
-    name: 'Grow',
-    monthlyPrice: 59,
-    annualPrice: 49,
-    description: 'For growing teams and businesses',
+    name: PLAN_CONFIGS.grow.name,
+    monthlyPrice: PLAN_CONFIGS.grow.monthlyPrice,
+    annualPrice: PLAN_CONFIGS.grow.annualMonthlyPrice,
+    description: PLAN_CONFIGS.grow.description,
     features: [
-      '50 active helpers',
-      '50,000 executions/mo',
-      '3 CRM connections',
+      `${PLAN_CONFIGS.grow.maxHelpers} active helpers`,
+      `${formatLimit(PLAN_CONFIGS.grow.maxExecutions)} executions/mo`,
+      `${PLAN_CONFIGS.grow.maxConnections} CRM connections`,
       'AI insights & email composer',
       'Scheduled reports',
       'Priority support',
@@ -42,14 +48,14 @@ const plans = [
     highlighted: true,
   },
   {
-    name: 'Deliver',
-    monthlyPrice: 79,
-    annualPrice: 66,
-    description: 'Built for expert marketers',
+    name: PLAN_CONFIGS.deliver.name,
+    monthlyPrice: PLAN_CONFIGS.deliver.monthlyPrice,
+    annualPrice: PLAN_CONFIGS.deliver.annualMonthlyPrice,
+    description: PLAN_CONFIGS.deliver.description,
     features: [
-      'Unlimited active helpers',
-      'Unlimited executions',
-      'Unlimited CRM connections',
+      `${formatLimit(PLAN_CONFIGS.deliver.maxHelpers)} active helpers`,
+      `${formatLimit(PLAN_CONFIGS.deliver.maxExecutions)} executions/mo`,
+      `${PLAN_CONFIGS.deliver.maxConnections} CRM connections`,
       'AI insights & email composer',
       'Scheduled reports',
       'Phone & priority support',
@@ -60,10 +66,10 @@ const plans = [
   },
 ]
 
-const comparisonRows = [
-  { feature: 'Active Helpers', start: '10', grow: '50', deliver: 'Unlimited' },
-  { feature: 'Executions/month', start: '5,000', grow: '50,000', deliver: 'Unlimited' },
-  { feature: 'CRM Connections', start: '1', grow: '3', deliver: 'Unlimited' },
+const comparisonRows: { feature: string; start: string | boolean; grow: string | boolean; deliver: string | boolean }[] = [
+  { feature: 'Active Helpers', start: formatLimit(PLAN_CONFIGS.start.maxHelpers), grow: formatLimit(PLAN_CONFIGS.grow.maxHelpers), deliver: formatLimit(PLAN_CONFIGS.deliver.maxHelpers) },
+  { feature: 'Executions/month', start: formatLimit(PLAN_CONFIGS.start.maxExecutions), grow: formatLimit(PLAN_CONFIGS.grow.maxExecutions), deliver: formatLimit(PLAN_CONFIGS.deliver.maxExecutions) },
+  { feature: 'CRM Connections', start: String(PLAN_CONFIGS.start.maxConnections), grow: String(PLAN_CONFIGS.grow.maxConnections), deliver: String(PLAN_CONFIGS.deliver.maxConnections) },
   { feature: 'Webhook Triggers', start: true, grow: true, deliver: true },
   { feature: 'AI Insights', start: false, grow: true, deliver: true },
   { feature: 'AI Email Composer', start: false, grow: true, deliver: true },
@@ -71,9 +77,15 @@ const comparisonRows = [
   { feature: 'Scheduled Reports', start: false, grow: true, deliver: true },
   { feature: 'Log Retention', start: '7 days', grow: '30 days', deliver: '90 days' },
   { feature: 'Support', start: 'Email', grow: 'Priority', deliver: 'Phone + Priority' },
-  { feature: 'Team Members', start: '1', grow: '3', deliver: '10' },
+  { feature: 'Team Members', start: String(PLAN_CONFIGS.start.maxTeamMembers), grow: String(PLAN_CONFIGS.grow.maxTeamMembers), deliver: String(PLAN_CONFIGS.deliver.maxTeamMembers) },
   { feature: 'API Access', start: false, grow: true, deliver: true },
 ]
+
+const maxSavingsPercent = Math.max(
+  getAnnualSavingsPercent('start'),
+  getAnnualSavingsPercent('grow'),
+  getAnnualSavingsPercent('deliver')
+)
 
 function ComparisonCell({ value }: { value: string | boolean }) {
   if (typeof value === 'boolean') {
@@ -155,7 +167,7 @@ export function PricingTeaserSection() {
             </span>
             {isAnnual && (
               <span className="rounded-full bg-brand-green/10 px-2.5 py-0.5 text-xs font-semibold text-brand-green">
-                Save up to 17%
+                Save up to {maxSavingsPercent}%
               </span>
             )}
           </motion.div>

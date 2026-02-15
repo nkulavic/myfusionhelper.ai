@@ -19,12 +19,15 @@ type SecretsConfig struct {
 }
 
 type StripeSecrets struct {
-	SecretKey      string `json:"secret_key"`
-	PublishableKey string `json:"publishable_key"`
-	WebhookSecret  string `json:"webhook_secret"`
-	PriceStart     string `json:"price_start"`
-	PriceGrow      string `json:"price_grow"`
-	PriceDeliver   string `json:"price_deliver"`
+	SecretKey          string `json:"secret_key"`
+	PublishableKey     string `json:"publishable_key"`
+	WebhookSecret      string `json:"webhook_secret"`
+	PriceStart         string `json:"price_start"`
+	PriceGrow          string `json:"price_grow"`
+	PriceDeliver       string `json:"price_deliver"`
+	PriceStartAnnual   string `json:"price_start_annual"`
+	PriceGrowAnnual    string `json:"price_grow_annual"`
+	PriceDeliverAnnual string `json:"price_deliver_annual"`
 }
 
 type GroqSecrets struct {

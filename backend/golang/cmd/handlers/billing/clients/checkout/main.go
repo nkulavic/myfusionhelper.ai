@@ -27,8 +27,9 @@ var (
 
 // CreateCheckoutRequest is the request body for POST /billing/checkout/sessions
 type CreateCheckoutRequest struct {
-	Plan      string `json:"plan"`       // "start", "grow", or "deliver"
-	ReturnURL string `json:"return_url"` // optional: redirect back to this path after checkout (e.g., "/onboarding")
+	Plan          string `json:"plan"`            // "start", "grow", or "deliver"
+	ReturnURL     string `json:"return_url"`      // optional: redirect back to this path after checkout (e.g., "/onboarding")
+	BillingPeriod string `json:"billing_period"`  // "monthly" or "annual" (default: "monthly")
 }
 
 // HandleWithAuth creates a Stripe Checkout session for a new subscription
@@ -54,7 +55,15 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		return authMiddleware.CreateErrorResponse(400, "Invalid request body"), nil
 	}
 
-	priceID := getPriceID(req.Plan, secrets)
+	billingPeriod := req.BillingPeriod
+	if billingPeriod == "" {
+		billingPeriod = "monthly"
+	}
+	if billingPeriod != "monthly" && billingPeriod != "annual" {
+		return authMiddleware.CreateErrorResponse(400, "Invalid billing_period. Must be 'monthly' or 'annual'"), nil
+	}
+
+	priceID := getPriceID(req.Plan, billingPeriod, secrets)
 	if priceID == "" {
 		return authMiddleware.CreateErrorResponse(400, "Invalid plan. Must be one of: start, grow, deliver"), nil
 	}
@@ -168,7 +177,19 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	}), nil
 }
 
-func getPriceID(plan string, secrets *appConfig.SecretsConfig) string {
+func getPriceID(plan string, billingPeriod string, secrets *appConfig.SecretsConfig) string {
+	if billingPeriod == "annual" {
+		switch plan {
+		case "start":
+			return secrets.Stripe.PriceStartAnnual
+		case "grow":
+			return secrets.Stripe.PriceGrowAnnual
+		case "deliver":
+			return secrets.Stripe.PriceDeliverAnnual
+		default:
+			return ""
+		}
+	}
 	switch plan {
 	case "start":
 		return secrets.Stripe.PriceStart

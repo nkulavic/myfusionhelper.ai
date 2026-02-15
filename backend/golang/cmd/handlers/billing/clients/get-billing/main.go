@@ -28,6 +28,8 @@ type BillingResponse struct {
 	Plan             string                    `json:"plan"`
 	Status           string                    `json:"status"`
 	PriceMonthly     int                       `json:"price_monthly"`
+	PriceAnnually    int                       `json:"price_annually"`
+	BillingPeriod    string                    `json:"billing_period"`
 	RenewsAt         *int64                    `json:"renews_at,omitempty"`
 	TrialEndsAt      *int64                    `json:"trial_ends_at,omitempty"`
 	CancelAt         *int64                    `json:"cancel_at,omitempty"`
@@ -80,10 +82,13 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		return authMiddleware.CreateErrorResponse(500, "Internal error"), nil
 	}
 
+	planConfig := billing.GetPlan(account.Plan)
 	resp := BillingResponse{
 		Plan:             account.Plan,
 		Status:           account.Status,
-		PriceMonthly:     billing.GetPlan(account.Plan).PriceMonthly,
+		PriceMonthly:     planConfig.PriceMonthly,
+		PriceAnnually:    planConfig.PriceAnnually,
+		BillingPeriod:    "monthly", // default, overridden from Stripe subscription below
 		StripeCustomerID: account.StripeCustomerID,
 		Usage:            account.Usage,
 		Limits:           account.Settings,
@@ -104,6 +109,12 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 				periodEnd := sub.Items.Data[0].CurrentPeriodEnd
 				if periodEnd > 0 {
 					resp.RenewsAt = &periodEnd
+				}
+				// Detect billing period from subscription price interval
+				if sub.Items.Data[0].Price != nil && sub.Items.Data[0].Price.Recurring != nil {
+					if sub.Items.Data[0].Price.Recurring.Interval == stripe.PriceRecurringIntervalYear {
+						resp.BillingPeriod = "annual"
+					}
 				}
 			}
 			if sub.TrialEnd > 0 {
