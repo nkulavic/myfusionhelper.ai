@@ -318,35 +318,33 @@ jobs:
 
   # ──────────────────────────────────────────────
   # 3b. Deploy Route53 DNS Records (after gateway creates custom domain)
-  # TEMPORARILY DISABLED - Custom domain DNS not critical for P0 testing
-  # API Gateway works fine with default endpoint
   # ──────────────────────────────────────────────
-  # deploy-route53:
-  #   name: Deploy Route53 DNS
-  #   needs: deploy-gateway
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
+  deploy-route53:
+    name: Deploy Route53 DNS
+    needs: deploy-gateway
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-  #     - uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '20'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-  #     - uses: aws-actions/configure-aws-credentials@v4
-  #       with:
-  #         role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
-  #         aws-region: us-west-2
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
+          aws-region: us-west-2
 
-  #     - name: Install Serverless Framework
-  #       run: npm install -g serverless
-  #       env:
-  #         SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+      - name: Install Serverless Framework
+        run: npm install -g serverless
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
-  #     - name: Deploy Route53
-  #       working-directory: backend/golang/services/infrastructure/route53
-  #       run: npx sls deploy --stage ${{ env.DEPLOY_STAGE }} --region us-west-2
-  #       env:
-  #         SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+      - name: Deploy Route53
+        working-directory: backend/golang/services/infrastructure/route53
+        run: npx sls deploy --stage ${{ env.DEPLOY_STAGE }} --region us-west-2
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
   # 4. Deploy API Services (parallel matrix)

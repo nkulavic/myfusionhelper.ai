@@ -54,12 +54,6 @@ provider:
         - OPTIONS
       maxAge: 86400
     disableExecuteApiEndpoint: false  # Keep default endpoint during transition
-    domain:
-      domainName: ${self:custom.customDomain.${self:provider.stage}}
-      certificateArn: ${cf:mfh-infrastructure-acm-${self:provider.stage}.CertificateArn}
-      endpointType: REGIONAL
-      securityPolicy: TLS_1_2
-      basePath: ''  # API at root of domain
     authorizers:
       cognitoAuthorizer:
         type: jwt
@@ -146,6 +140,25 @@ resources:
               - !Ref HttpApi
               - '/*'
 
+    # Custom domain name for the API
+    ApiDomainName:
+      Type: AWS::ApiGatewayV2::DomainName
+      Properties:
+        DomainName: ${self:custom.customDomain.${self:provider.stage}}
+        DomainNameConfigurations:
+          - CertificateArn: ${cf:mfh-infrastructure-acm-${self:provider.stage}.CertificateArn}
+            EndpointType: REGIONAL
+            SecurityPolicy: TLS_1_2
+
+    # Map the custom domain to the HTTP API
+    ApiDomainMapping:
+      Type: AWS::ApiGatewayV2::ApiMapping
+      DependsOn: ApiDomainName
+      Properties:
+        DomainName: ${self:custom.customDomain.${self:provider.stage}}
+        ApiId: !Ref HttpApi
+        Stage: $default
+
   Outputs:
     HttpApiId:
       Description: "HTTP API Gateway ID"
@@ -182,3 +195,13 @@ resources:
       Value: ${self:custom.customDomain.${self:provider.stage}}
       Export:
         Name: ${self:service}-${self:provider.stage}-CustomDomainName
+    RegionalDomainName:
+      Description: "Regional domain name for the API custom domain (for Route53 alias)"
+      Value: !GetAtt ApiDomainName.RegionalDomainName
+      Export:
+        Name: ${self:service}-${self:provider.stage}-RegionalDomainName
+    RegionalHostedZoneId:
+      Description: "Regional hosted zone ID for the API custom domain (for Route53 alias)"
+      Value: !GetAtt ApiDomainName.RegionalHostedZoneId
+      Export:
+        Name: ${self:service}-${self:provider.stage}-RegionalHostedZoneId
