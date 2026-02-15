@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 )
 
@@ -68,12 +69,13 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return authMiddleware.CreateErrorResponse(500, "Authentication service not configured"), nil
 	}
 
-	if event.Body == "" {
+	body := apiutil.GetBody(event)
+	if body == "" {
 		return authMiddleware.CreateErrorResponse(400, "Request body is required"), nil
 	}
 
 	var req LoginRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
 		return authMiddleware.CreateErrorResponse(400, "Invalid JSON format"), nil
 	}
 

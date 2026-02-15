@@ -6,8 +6,9 @@ import (
 	"log"
 
 	"github.com/aws/aws-lambda-go/events"
-	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	"github.com/myfusionhelper/api/internal/email"
+	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/types"
 )
 
@@ -22,7 +23,7 @@ type SendEmailRequest struct {
 // Handle sends an email using pre-defined templates
 func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	var req SendEmailRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &req); err != nil {
 		log.Printf("Failed to parse request: %v", err)
 		return authMiddleware.CreateErrorResponse(400, "Invalid request body"), nil
 	}

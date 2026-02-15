@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/types"
 	apitypes "github.com/myfusionhelper/api/internal/types"
@@ -28,8 +29,8 @@ var (
 func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCtx *apitypes.AuthContext) (events.APIGatewayV2HTTPResponse, error) {
 	// Parse request body
 	var req types.CreateConversationRequest
-	if event.Body != "" {
-		if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if reqBody := apiutil.GetBody(event); reqBody != "" {
+		if err := json.Unmarshal([]byte(reqBody), &req); err != nil {
 			return authMiddleware.CreateErrorResponse(400, "Invalid request body"), nil
 		}
 	}

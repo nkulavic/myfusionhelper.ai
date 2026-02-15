@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/myfusionhelper/api/internal/apiutil"
 )
 
 var (
@@ -55,11 +56,12 @@ func handleRequest(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 	log.Printf("Received Zoom webhook: %s %s", event.RequestContext.HTTP.Method, event.RequestContext.HTTP.Path)
 
 	// Verify webhook signature
+	body := apiutil.GetBody(event)
 	if zoomWebhookSecret != "" {
 		signature := event.Headers["x-zm-signature"]
 		timestamp := event.Headers["x-zm-request-timestamp"]
 
-		if !verifySignature(event.Body, signature, timestamp, zoomWebhookSecret) {
+		if !verifySignature(body, signature, timestamp, zoomWebhookSecret) {
 			log.Printf("Invalid webhook signature")
 			return createResponse(401, map[string]interface{}{
 				"success": false,
@@ -70,7 +72,7 @@ func handleRequest(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 
 	// Parse webhook event
 	var webhookEvent ZoomWebhookEvent
-	if err := json.Unmarshal([]byte(event.Body), &webhookEvent); err != nil {
+	if err := json.Unmarshal([]byte(body), &webhookEvent); err != nil {
 		log.Printf("Failed to parse webhook: %v", err)
 		return createResponse(400, map[string]interface{}{
 			"success": false,

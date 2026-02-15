@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/google/uuid"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	"github.com/myfusionhelper/api/internal/services"
 	"github.com/myfusionhelper/api/internal/types"
 )
@@ -132,7 +133,7 @@ func main() {
 func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	// Parse Google Assistant request
 	var googleReq GoogleAssistantRequest
-	if err := json.Unmarshal([]byte(event.Body), &googleReq); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &googleReq); err != nil {
 		return createErrorResponse("Invalid request"), nil
 	}
 

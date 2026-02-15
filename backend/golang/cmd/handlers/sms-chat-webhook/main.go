@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	"github.com/myfusionhelper/api/internal/services"
 	"github.com/myfusionhelper/api/internal/types"
 )
@@ -70,7 +71,7 @@ func main() {
 // Handle processes incoming Twilio SMS webhooks
 func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	// Parse Twilio webhook (form-encoded)
-	twilioReq, err := parseTwilioWebhook(event.Body)
+	twilioReq, err := parseTwilioWebhook(apiutil.GetBody(event))
 	if err != nil {
 		return createTwiMLResponse(fmt.Sprintf("Error: %v", err)), nil
 	}

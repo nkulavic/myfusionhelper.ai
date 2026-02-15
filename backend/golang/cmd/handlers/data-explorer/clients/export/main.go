@@ -18,6 +18,7 @@ import (
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	_ "github.com/marcboeker/go-duckdb"
 
+	"github.com/myfusionhelper/api/internal/apiutil"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	apitypes "github.com/myfusionhelper/api/internal/types"
 )
@@ -44,7 +45,7 @@ var allowedObjectTypes = map[string]bool{
 // HandleWithAuth handles POST /data/export.
 func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCtx *apitypes.AuthContext) (events.APIGatewayV2HTTPResponse, error) {
 	var req ExportRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &req); err != nil {
 		return authMiddleware.CreateErrorResponse(400, "Invalid request body"), nil
 	}
 

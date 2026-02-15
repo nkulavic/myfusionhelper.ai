@@ -9,10 +9,11 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
-	"github.com/myfusionhelper/api/internal/types"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	"github.com/myfusionhelper/api/internal/email"
+	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/services"
+	"github.com/myfusionhelper/api/internal/types"
 )
 
 type SendEmailRequest struct {
@@ -25,7 +26,7 @@ type SendEmailRequest struct {
 
 func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCtx *types.AuthContext) (events.APIGatewayV2HTTPResponse, error) {
 	var req SendEmailRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &req); err != nil {
 		log.Printf("Failed to parse request: %v", err)
 		return authMiddleware.CreateErrorResponse(400, "Invalid request body"), nil
 	}

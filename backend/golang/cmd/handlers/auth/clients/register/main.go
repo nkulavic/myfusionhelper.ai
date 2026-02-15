@@ -17,6 +17,7 @@ import (
 	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/google/uuid"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	"github.com/myfusionhelper/api/internal/billing"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/notifications"
@@ -88,7 +89,7 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	log.Printf("Register handler called")
 
 	var req RegisterRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &req); err != nil {
 		return authMiddleware.CreateErrorResponse(400, "Invalid request format"), nil
 	}
 

@@ -19,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	apitypes "github.com/myfusionhelper/api/internal/types"
 )
@@ -106,7 +107,7 @@ func createAPIKey(ctx context.Context, event events.APIGatewayV2HTTPRequest, aut
 	}
 
 	var req CreateAPIKeyRequest
-	if err := json.Unmarshal([]byte(event.Body), &req); err != nil {
+	if err := json.Unmarshal([]byte(apiutil.GetBody(event)), &req); err != nil {
 		return authMiddleware.CreateErrorResponse(400, "Invalid request format"), nil
 	}
 
