@@ -156,7 +156,7 @@ Infrastructure must deploy before API services. The CI pipeline (`deploy-backend
 2. **Infrastructure** (parallel): cognito, dynamodb-core, s3, sqs, ses, monitoring, acm
 3. **Pre-gateway** (parallel): api-key-authorizer, scheduler, executions-stream, stream-router
 4. **API Gateway** (creates HttpApi + Cognito authorizer + custom domain mapping)
-5. ~~Route53~~ (currently disabled -- custom domain DNS not critical for P0)
+5. **Route53** (creates DNS records for custom domain after gateway)
 6. **API services** (parallel, max 3): auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat, emails
 7. **Helper workers** (parallel, max 10): 97 individual self-contained workers, auto-detected from changed `services/workers/*-worker/` directories
 8. **Non-helper workers** (parallel): helper-worker (deprecated monolith), notification-worker, data-sync
@@ -188,9 +188,11 @@ Three GitHub Actions workflows in `.github/workflows/`:
 **Job dependency graph**:
 ```
 build-test
-  ├── deploy-infra (parallel: cognito, dynamodb-core, s3, sqs, ses, monitoring, acm)
+  ├── deploy-infra (parallel: cognito, dynamodb-core, s3, sqs, ses, acm)
   │     ├── deploy-pre-gateway (parallel: api-key-authorizer, scheduler, executions-stream, stream-router)
   │     │     ├── deploy-gateway (API Gateway + Cognito authorizer + custom domain)
+  │     │     │     ├── deploy-route53 (DNS records for custom domain)
+  │     │     │     ├── deploy-monitoring (CloudWatch alarms)
   │     │     │     └── deploy-api (parallel max 3: auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat, emails)
   │     │     └── deploy-helpers (parallel max 10: auto-detected changed *-worker/ directories)
   │     └── deploy-workers (parallel: helper-worker [monolith], notification-worker, data-sync)
@@ -200,7 +202,7 @@ build-test
 
 **Helper auto-detection**: On push, uses `git diff` to detect changed `services/workers/*-worker/` directories. On manual dispatch, deploys ALL helpers. Excludes: helper-worker, notification-worker, data-sync, executions-stream, scheduler, voice assistant webhooks.
 
-**Route53**: Currently disabled (commented out) -- custom domain DNS not critical for P0 testing.
+**Route53**: Deploys after gateway. Creates DNS A records for custom API domain (`api-dev.myfusionhelper.ai`, `api.myfusionhelper.ai`).
 
 ### 2. `sync-internal-secrets.yml` -- Secrets Sync to SSM
 
