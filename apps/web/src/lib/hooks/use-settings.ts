@@ -133,10 +133,12 @@ export function useCreateCheckoutSession() {
     mutationFn: ({
       plan,
       returnUrl,
+      billingPeriod,
     }: {
       plan: 'start' | 'grow' | 'deliver'
       returnUrl?: string
-    }) => settingsApi.createCheckoutSession(plan, returnUrl),
+      billingPeriod?: 'monthly' | 'annual'
+    }) => settingsApi.createCheckoutSession(plan, returnUrl, billingPeriod),
   })
 }
 

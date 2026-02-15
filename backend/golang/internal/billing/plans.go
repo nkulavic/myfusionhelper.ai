@@ -9,6 +9,7 @@ type PlanConfig struct {
 	MaxTeamMembers int
 	MaxExecutions  int     // included per billing cycle
 	PriceMonthly   int     // in USD
+	PriceAnnually  int     // in USD (total per year)
 	OverageRate    float64 // cost per execution beyond included (0 = blocked at limit)
 }
 
@@ -23,6 +24,7 @@ var Plans = map[string]PlanConfig{
 		MaxTeamMembers: 1,
 		MaxExecutions:  100,
 		PriceMonthly:   0,
+		PriceAnnually:  0,
 		OverageRate:    0, // hard-blocked at limit
 	},
 	"start": {
@@ -33,6 +35,7 @@ var Plans = map[string]PlanConfig{
 		MaxTeamMembers: 2,
 		MaxExecutions:  5000,
 		PriceMonthly:   39,
+		PriceAnnually:  396,
 		OverageRate:    0.01,
 	},
 	"grow": {
@@ -43,6 +46,7 @@ var Plans = map[string]PlanConfig{
 		MaxTeamMembers: 5,
 		MaxExecutions:  25000,
 		PriceMonthly:   59,
+		PriceAnnually:  588,
 		OverageRate:    0.008,
 	},
 	"deliver": {
@@ -53,6 +57,7 @@ var Plans = map[string]PlanConfig{
 		MaxTeamMembers: 100,
 		MaxExecutions:  100000,
 		PriceMonthly:   79,
+		PriceAnnually:  792,
 		OverageRate:    0.005,
 	},
 }

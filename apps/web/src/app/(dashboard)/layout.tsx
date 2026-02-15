@@ -21,7 +21,7 @@ import {
   X,
   Search,
 } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useWorkspaceStore } from '@/lib/stores/workspace-store'
@@ -32,6 +32,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { AIChatPanel } from '@/components/ai-chat-panel'
 import { CommandPalette } from '@/components/command-palette'
 import { Button } from '@/components/ui/button'
+import { useBillingInfo } from '@/lib/hooks/use-settings'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -231,6 +232,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main Content */}
       <div className="flex flex-1 flex-col pt-14 lg:pt-0 lg:pl-64">
+        <UpgradeBanner />
         <main className="flex-1 p-4 sm:p-6">
           {children}
         </main>
@@ -254,4 +256,72 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <CommandPalette />
     </div>
   )
+}
+
+function UpgradeBanner() {
+  const { data: billing } = useBillingInfo()
+  const [dismissed, setDismissed] = useState(false)
+
+  // Check sessionStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('mfh_banner_dismissed') === '1') {
+      setDismissed(true)
+    }
+  }, [])
+
+  if (dismissed || !billing) return null
+
+  const handleDismiss = () => {
+    setDismissed(true)
+    sessionStorage.setItem('mfh_banner_dismissed', '1')
+  }
+
+  // Sandbox upgrade banner
+  if (billing.plan === 'free') {
+    return (
+      <div className="flex items-center justify-between gap-4 border-b bg-primary/5 px-4 py-2 sm:px-6">
+        <p className="text-sm text-foreground">
+          You&apos;re on the free sandbox (1 helper, 100 executions).{' '}
+          <Link href="/settings?tab=billing" className="font-medium text-primary hover:underline">
+            Choose a plan
+          </Link>{' '}
+          to unlock full features.
+        </p>
+        <button
+          onClick={handleDismiss}
+          className="shrink-0 text-muted-foreground hover:text-foreground"
+          aria-label="Dismiss"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    )
+  }
+
+  // Trial countdown (< 7 days remaining)
+  if (billing.trialEndsAt) {
+    const now = Date.now() / 1000
+    const daysLeft = Math.ceil((billing.trialEndsAt - now) / 86400)
+    if (daysLeft > 0 && daysLeft <= 7) {
+      return (
+        <div className="flex items-center justify-between gap-4 border-b bg-amber-50 px-4 py-2 dark:bg-amber-950/30 sm:px-6">
+          <p className="text-sm text-foreground">
+            Your trial ends in {daysLeft} day{daysLeft !== 1 ? 's' : ''}.{' '}
+            <Link href="/settings?tab=billing" className="font-medium text-primary hover:underline">
+              Manage subscription
+            </Link>
+          </p>
+          <button
+            onClick={handleDismiss}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            aria-label="Dismiss"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )
+    }
+  }
+
+  return null
 }

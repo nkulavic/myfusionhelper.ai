@@ -16,7 +16,9 @@ import {
   ArrowLeft,
   Loader2,
 } from 'lucide-react'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { usePlanLimits } from '@/lib/hooks/use-plan-limits'
 import {
   useConnections,
   usePlatforms,
@@ -526,10 +528,7 @@ export default function ConnectionsPage() {
           <h1 className="text-2xl font-bold">Connections</h1>
           <p className="text-muted-foreground">Connect and manage your CRM platforms</p>
         </div>
-        <Button onClick={() => setView('add')}>
-          <Plus className="h-4 w-4" />
-          Add Connection
-        </Button>
+        <AddConnectionButton onClick={() => setView('add')} />
       </div>
 
       {/* Active Connections */}
@@ -707,6 +706,25 @@ export default function ConnectionsPage() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+function AddConnectionButton({ onClick }: { onClick: () => void }) {
+  const { canCreate } = usePlanLimits()
+  const atLimit = !canCreate('connections')
+
+  return (
+    <div className="flex items-center gap-2">
+      {atLimit && (
+        <Link href="/settings?tab=billing" className="text-xs text-primary hover:underline">
+          Upgrade to add more
+        </Link>
+      )}
+      <Button onClick={onClick} disabled={atLimit}>
+        <Plus className="h-4 w-4" />
+        Add Connection
+      </Button>
     </div>
   )
 }

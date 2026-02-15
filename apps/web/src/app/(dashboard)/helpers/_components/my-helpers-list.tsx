@@ -35,6 +35,8 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import type { Helper } from '@myfusionhelper/types'
+import { usePlanLimits } from '@/lib/hooks/use-plan-limits'
+import { Badge } from '@/components/ui/badge'
 
 interface MyHelpersListProps {
   onSelectHelper: (id: string) => void
@@ -224,20 +226,35 @@ function MyHelpersHeader({
   onNewHelper: () => void
   total: number
 }) {
+  const { canCreate, getUsage, getLimit } = usePlanLimits()
+  const atLimit = !canCreate('helpers')
+
   return (
     <div className="flex items-center justify-between">
       <div>
-        <h1 className="text-2xl font-bold">My Helpers</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">My Helpers</h1>
+          <Badge variant="secondary" className="text-xs">
+            {getUsage('helpers')} / {getLimit('helpers')}
+          </Badge>
+        </div>
         <p className="text-muted-foreground">
           {total > 0
             ? `${total} configured helper${total !== 1 ? 's' : ''}`
             : 'Set up automation helpers for your CRM'}
         </p>
       </div>
-      <Button onClick={onNewHelper}>
-        <Plus className="h-4 w-4" />
-        New Helper
-      </Button>
+      <div className="flex items-center gap-2">
+        {atLimit && (
+          <Link href="/settings?tab=billing" className="text-xs text-primary hover:underline">
+            Upgrade to add more
+          </Link>
+        )}
+        <Button onClick={onNewHelper} disabled={atLimit}>
+          <Plus className="h-4 w-4" />
+          New Helper
+        </Button>
+      </div>
     </div>
   )
 }

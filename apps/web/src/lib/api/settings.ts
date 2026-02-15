@@ -111,11 +111,13 @@ export const settingsApi = {
 
   createCheckoutSession: (
     plan: 'start' | 'grow' | 'deliver',
-    returnUrl?: string
+    returnUrl?: string,
+    billingPeriod?: 'monthly' | 'annual'
   ) =>
     apiClient.post<{ url: string; sessionId: string }>('/billing/checkout/sessions', {
       plan,
       ...(returnUrl && { returnUrl }),
+      ...(billingPeriod && { billingPeriod }),
     }),
 }
 
@@ -123,6 +125,8 @@ export interface BillingInfo {
   plan: string
   status: string
   priceMonthly: number
+  priceAnnually: number
+  billingPeriod: 'monthly' | 'annual'
   renewsAt?: number
   trialEndsAt?: number
   cancelAt?: number

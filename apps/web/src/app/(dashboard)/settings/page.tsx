@@ -64,6 +64,16 @@ import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
+import { toast } from 'sonner'
+import {
+  PLAN_CONFIGS,
+  PAID_PLAN_IDS,
+  formatLimit,
+  getAnnualSavingsPercent,
+  getPlanLabel,
+  type PlanId,
+} from '@/lib/plan-constants'
+import { usePlanLimits } from '@/lib/hooks/use-plan-limits'
 
 const tabs = [
   { id: 'profile', name: 'Profile', icon: User },
@@ -499,9 +509,11 @@ function APIKeysTab() {
   const { data: apiKeys, isLoading } = useAPIKeys()
   const createKey = useCreateAPIKey()
   const revokeKey = useRevokeAPIKey()
+  const { canCreate: canCreateResource, getUsage, getLimit } = usePlanLimits()
   const [newKeyName, setNewKeyName] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [newKey, setNewKey] = useState<string | null>(null)
+  const atApiKeyLimit = !canCreateResource('apiKeys')
 
   const handleCreate = () => {
     if (!newKeyName.trim()) return
@@ -530,10 +542,15 @@ function APIKeysTab() {
                 Use API keys to authenticate helper executions from your CRM automations.
               </CardDescription>
             </div>
-            <Button onClick={() => setShowCreate(!showCreate)}>
-              <Plus className="h-4 w-4" />
-              Create New Key
-            </Button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {getUsage('apiKeys')} / {getLimit('apiKeys')} keys
+              </span>
+              <Button onClick={() => setShowCreate(!showCreate)} disabled={atApiKeyLimit}>
+                <Plus className="h-4 w-4" />
+                Create New Key
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -836,66 +853,44 @@ function AITab() {
 // Billing Tab
 // ---------------------------------------------------------------------------
 function BillingTab() {
+  const searchParams = useSearchParams()
   const { data: billing, isLoading: billingLoading } = useBillingInfo()
   const { data: invoices, isLoading: invoicesLoading } = useInvoices()
   const createPortal = useCreatePortalSession()
   const createCheckout = useCreateCheckoutSession()
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null)
+  const [isAnnual, setIsAnnual] = useState(false)
 
-  const planLabels: Record<string, string> = {
-    free: 'Sandbox',
-    start: 'Start',
-    grow: 'Grow',
-    deliver: 'Deliver',
-  }
+  // Handle checkout cancellation toast
+  useEffect(() => {
+    if (searchParams.get('billing') === 'cancelled') {
+      toast.info('Checkout cancelled. You can try again anytime.')
+      // Clear the param from URL
+      const url = new URL(window.location.href)
+      url.searchParams.delete('billing')
+      window.history.replaceState({}, '', url.toString())
+    }
+  }, [searchParams])
 
-  const plans = [
-    {
-      id: 'start' as const,
-      name: 'Start',
-      price: 39,
-      description: 'For solopreneurs getting started with CRM automation',
+  const plans = PAID_PLAN_IDS.map((id) => {
+    const config = PLAN_CONFIGS[id]
+    return {
+      id,
+      name: config.name,
+      description: config.description,
+      popular: id === 'grow',
       features: [
-        '10 active helpers',
-        '2 CRM connections',
-        '5,000 monthly executions included',
-        '2 API keys',
-        'Email support',
-        'Overage: $0.01/execution',
+        `${formatLimit(config.maxHelpers)} active helpers`,
+        `${config.maxConnections} CRM connections`,
+        `${formatLimit(config.maxExecutions)} monthly executions included`,
+        `${config.maxApiKeys} API keys`,
+        `${config.maxTeamMembers} team members`,
+        config.overageRate > 0
+          ? `Overage: $${config.overageRate}/execution`
+          : 'Dedicated support',
       ],
-    },
-    {
-      id: 'grow' as const,
-      name: 'Grow',
-      price: 59,
-      description: 'For growing businesses scaling their automations',
-      popular: true,
-      features: [
-        '50 active helpers',
-        '5 CRM connections',
-        '25,000 monthly executions included',
-        '10 API keys',
-        '5 team members',
-        'Priority support',
-        'Overage: $0.008/execution',
-      ],
-    },
-    {
-      id: 'deliver' as const,
-      name: 'Deliver',
-      price: 79,
-      description: 'For teams that need unlimited power and support',
-      features: [
-        'Unlimited helpers',
-        '20 CRM connections',
-        '100,000 monthly executions included',
-        '100 API keys',
-        '100 team members',
-        'Dedicated support',
-        'Overage: $0.005/execution',
-      ],
-    },
-  ]
+    }
+  })
 
   const handleManageSubscription = () => {
     createPortal.mutate(undefined, {
@@ -909,20 +904,26 @@ function BillingTab() {
 
   const handleSelectPlan = (planId: 'start' | 'grow' | 'deliver') => {
     setCheckoutPlan(planId)
-    createCheckout.mutate({ plan: planId }, {
-      onSuccess: (res) => {
-        if (res.data?.url) {
-          window.location.href = res.data.url
-        }
-        setCheckoutPlan(null)
-      },
-      onError: () => {
-        setCheckoutPlan(null)
-      },
-    })
+    createCheckout.mutate(
+      { plan: planId, billingPeriod: isAnnual ? 'annual' : 'monthly' },
+      {
+        onSuccess: (res) => {
+          if (res.data?.url) {
+            window.location.href = res.data.url
+          }
+          setCheckoutPlan(null)
+        },
+        onError: () => {
+          setCheckoutPlan(null)
+        },
+      }
+    )
   }
 
   const currentPlan = billing?.plan || 'free'
+  const maxSavings = Math.max(
+    ...PAID_PLAN_IDS.map((id) => getAnnualSavingsPercent(id))
+  )
 
   return (
     <div className="space-y-6">
@@ -938,12 +939,19 @@ function BillingTab() {
             <div className="flex items-center justify-between rounded-lg bg-primary/10 p-4">
               <div>
                 <p className="text-lg font-bold">
-                  {planLabels[billing.plan] || billing.plan} Plan
+                  {getPlanLabel(billing.plan)} Plan
                 </p>
                 {billing.priceMonthly > 0 && (
                   <p className="text-sm text-muted-foreground">
-                    ${billing.priceMonthly}/month
+                    {billing.billingPeriod === 'annual'
+                      ? `$${billing.priceAnnually}/year ($${Math.round(billing.priceAnnually / 12)}/mo)`
+                      : `$${billing.priceMonthly}/month`}
                   </p>
+                )}
+                {billing.billingPeriod === 'annual' && billing.plan !== 'free' && (
+                  <Badge variant="secondary" className="mt-1 text-xs">
+                    Annual billing
+                  </Badge>
                 )}
                 {billing.renewsAt && (
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -983,18 +991,65 @@ function BillingTab() {
       {/* Plan Tiers */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">
-            {currentPlan === 'free' ? 'Choose a Plan' : 'Change Plan'}
-          </CardTitle>
-          <CardDescription>
-            {currentPlan === 'free'
-              ? 'Select the plan that best fits your needs'
-              : 'Upgrade or change your current plan'}
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">
+                {currentPlan === 'free' ? 'Choose a Plan' : 'Change Plan'}
+              </CardTitle>
+              <CardDescription>
+                {currentPlan === 'free'
+                  ? 'Select the plan that best fits your needs'
+                  : 'Upgrade or change your current plan'}
+              </CardDescription>
+            </div>
+            {/* Billing toggle */}
+            <div className="flex items-center gap-3">
+              <span
+                className={cn(
+                  'text-sm font-medium transition-colors',
+                  !isAnnual ? 'text-foreground' : 'text-muted-foreground'
+                )}
+              >
+                Monthly
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isAnnual}
+                onClick={() => setIsAnnual(!isAnnual)}
+                className={cn(
+                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
+                  isAnnual ? 'bg-primary' : 'bg-muted-foreground/30'
+                )}
+              >
+                <span
+                  className={cn(
+                    'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform',
+                    isAnnual ? 'translate-x-5' : 'translate-x-0'
+                  )}
+                />
+              </button>
+              <span
+                className={cn(
+                  'text-sm font-medium transition-colors',
+                  isAnnual ? 'text-foreground' : 'text-muted-foreground'
+                )}
+              >
+                Annual
+              </span>
+              {isAnnual && (
+                <Badge variant="secondary" className="text-xs">
+                  Save up to {maxSavings}%
+                </Badge>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3">
             {plans.map((plan) => {
+              const config = PLAN_CONFIGS[plan.id]
+              const price = isAnnual ? config.annualMonthlyPrice : config.monthlyPrice
               const isCurrentPlan = currentPlan === plan.id
               const isPlanLoading = checkoutPlan === plan.id && createCheckout.isPending
               return (
@@ -1019,8 +1074,13 @@ function BillingTab() {
                     <p className="mt-1 text-xs text-muted-foreground">{plan.description}</p>
                   </div>
                   <div className="mb-4">
-                    <span className="text-3xl font-bold">${plan.price}</span>
+                    <span className="text-3xl font-bold">${price}</span>
                     <span className="text-sm text-muted-foreground">/month</span>
+                    {isAnnual && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        billed yearly
+                      </span>
+                    )}
                   </div>
                   <ul className="mb-6 flex-1 space-y-2">
                     {plan.features.map((feature) => (
@@ -1039,14 +1099,14 @@ function BillingTab() {
                     <Button
                       variant={plan.popular ? 'default' : 'outline'}
                       className="w-full"
-                      onClick={() => handleSelectPlan(plan.id)}
+                      onClick={() => handleSelectPlan(plan.id as 'start' | 'grow' | 'deliver')}
                       disabled={isPlanLoading || createCheckout.isPending}
                     >
                       {isPlanLoading && <Loader2 className="h-4 w-4 animate-spin" />}
                       {currentPlan === 'free'
                         ? 'Get Started'
-                        : plans.findIndex((p) => p.id === currentPlan) <
-                            plans.findIndex((p) => p.id === plan.id)
+                        : PAID_PLAN_IDS.indexOf(currentPlan as PlanId) <
+                            PAID_PLAN_IDS.indexOf(plan.id)
                           ? 'Upgrade'
                           : 'Downgrade'}
                     </Button>

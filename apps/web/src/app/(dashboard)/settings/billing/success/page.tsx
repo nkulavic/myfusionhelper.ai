@@ -1,26 +1,76 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, ArrowRight, Settings } from 'lucide-react'
+import { CheckCircle2, ArrowRight, Settings, Loader2 } from 'lucide-react'
 import confetti from 'canvas-confetti'
+import { useBillingInfo } from '@/lib/hooks/use-settings'
+import { getPlanLabel } from '@/lib/plan-constants'
 
 export default function BillingSuccessPage() {
   const router = useRouter()
-  const queryClient = useQueryClient()
+  const { data: billing, refetch } = useBillingInfo()
+  const [activated, setActivated] = useState(false)
+  const confettiFired = useRef(false)
 
+  // Poll until plan activates (webhook processes)
   useEffect(() => {
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 },
-    })
+    if (activated) return
 
-    queryClient.invalidateQueries({ queryKey: ['billing'] })
-  }, [queryClient])
+    let attempts = 0
+    const maxAttempts = 15
+
+    const interval = setInterval(async () => {
+      attempts++
+      const result = await refetch()
+      const plan = result.data?.plan
+
+      if (plan && plan !== 'free') {
+        clearInterval(interval)
+        setActivated(true)
+      } else if (attempts >= maxAttempts) {
+        clearInterval(interval)
+        // Timeout — show success anyway (webhook may still be processing)
+        setActivated(true)
+      }
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [activated, refetch])
+
+  // Fire confetti once activated
+  useEffect(() => {
+    if (activated && !confettiFired.current) {
+      confettiFired.current = true
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+      })
+    }
+  }, [activated])
+
+  // Show activation spinner while waiting
+  if (!activated) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center space-y-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <div className="text-center">
+          <h2 className="text-xl font-semibold">Activating your subscription...</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            This only takes a moment
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  const planName = billing?.plan ? getPlanLabel(billing.plan) : 'your new'
+  const trialEndsAt = billing?.trialEndsAt
+    ? new Date(billing.trialEndsAt * 1000).toLocaleDateString()
+    : null
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
@@ -29,9 +79,14 @@ export default function BillingSuccessPage() {
           <div className="mb-4 flex justify-center">
             <CheckCircle2 className="h-16 w-16 text-success" />
           </div>
-          <CardTitle className="text-2xl">Subscription Activated!</CardTitle>
+          <CardTitle className="text-2xl">{planName} Plan Activated!</CardTitle>
           <CardDescription>
-            Your plan has been upgraded successfully
+            Your subscription is now active
+            {trialEndsAt && (
+              <span className="block mt-1">
+                Your 14-day free trial ends on {trialEndsAt}
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -56,7 +111,7 @@ export default function BillingSuccessPage() {
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => router.push('/settings')}
+              onClick={() => router.push('/settings?tab=billing')}
             >
               <Settings className="h-4 w-4" />
               Back to Settings
