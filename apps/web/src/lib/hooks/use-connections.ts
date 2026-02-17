@@ -7,7 +7,8 @@ export function useConnections() {
     queryKey: ['connections'],
     queryFn: async () => {
       const res = await connectionsApi.list()
-      return Array.isArray(res.data) ? res.data : []
+      // Backend returns { connections: [...], total: number }
+      return Array.isArray(res.data?.connections) ? res.data.connections : Array.isArray(res.data) ? res.data : []
     },
   })
 }

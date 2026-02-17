@@ -97,7 +97,7 @@ export interface PlatformDefinition {
 export const connectionsApi = {
   // List ALL connections across all platforms
   list: () =>
-    apiClient.get<PlatformConnection[]>('/platform-connections'),
+    apiClient.get<{ connections: PlatformConnection[]; total: number }>('/platform-connections'),
 
   // List connections scoped to a specific platform
   listByPlatform: (platformId: string) =>
