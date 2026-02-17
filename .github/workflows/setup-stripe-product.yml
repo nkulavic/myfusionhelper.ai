@@ -15,11 +15,10 @@ on:
         description: 'Stripe Product name'
         required: true
         default: 'MyFusion Helper'
-      dry_run:
-        description: 'Dry run (show what would be created without creating)'
+      existing_product_id:
+        description: 'Existing Stripe Product ID (skip product creation)'
         required: false
-        type: boolean
-        default: false
+        default: ''
 
 permissions:
   contents: read
@@ -44,9 +43,10 @@ jobs:
         env:
           STRIPE_SECRET_KEY: ${{ github.event.inputs.stage == 'dev' && secrets.DEV_INTERNAL_STRIPE_SECRET_KEY || (github.event.inputs.stage == 'staging' && secrets.STAGING_INTERNAL_STRIPE_SECRET_KEY || secrets.MAIN_INTERNAL_STRIPE_SECRET_KEY) }}
           PRODUCT_NAME: ${{ github.event.inputs.product_name }}
-          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          EXISTING_PRODUCT_ID: ${{ github.event.inputs.existing_product_id }}
+          STAGE_UPPER: ${{ steps.stripe-key.outputs.stage_upper }}
         run: |
-          set -euo pipefail
+          set -eo pipefail
 
           if [ -z "$STRIPE_SECRET_KEY" ]; then
             echo "ERROR: No Stripe secret key found for stage ${{ github.event.inputs.stage }}"
@@ -55,40 +55,31 @@ jobs:
 
           echo "Stripe key loaded (${STRIPE_SECRET_KEY:0:7}...)"
 
-          if [ "$DRY_RUN" = "true" ]; then
-            echo "=== DRY RUN MODE ==="
-            echo "Would create product: $PRODUCT_NAME"
-            echo "Would create 6 prices:"
-            echo "  - Start Monthly: $39/mo recurring"
-            echo "  - Start Annual: $396/yr recurring ($33/mo)"
-            echo "  - Grow Monthly: $59/mo recurring"
-            echo "  - Grow Annual: $588/yr recurring ($49/mo)"
-            echo "  - Deliver Monthly: $79/mo recurring"
-            echo "  - Deliver Annual: $792/yr recurring ($66/mo)"
-            exit 0
-          fi
+          # 1. Create or reuse the Product
+          if [ -n "$EXISTING_PRODUCT_ID" ]; then
+            PRODUCT_ID="$EXISTING_PRODUCT_ID"
+            echo "Using existing product: $PRODUCT_ID"
+          else
+            echo "Creating Stripe Product: $PRODUCT_NAME..."
+            PRODUCT_RESPONSE=$(curl -s -X POST https://api.stripe.com/v1/products \
+              -u "${STRIPE_SECRET_KEY}:" \
+              -d "name=${PRODUCT_NAME}" \
+              -d "description=MyFusion Helper CRM automation subscription plans" \
+              -d "metadata[app]=myfusionhelper" \
+              -d "metadata[managed_by]=github-actions")
 
-          # 1. Create the Product
-          echo "Creating Stripe Product: $PRODUCT_NAME..."
-          PRODUCT_RESPONSE=$(curl -s -X POST https://api.stripe.com/v1/products \
-            -u "${STRIPE_SECRET_KEY}:" \
-            -d "name=${PRODUCT_NAME}" \
-            -d "description=MyFusion Helper CRM automation subscription plans" \
-            -d "metadata[app]=myfusionhelper" \
-            -d "metadata[managed_by]=github-actions")
-
-          PRODUCT_ID=$(echo "$PRODUCT_RESPONSE" | jq -r '.id // empty')
-          if [ -z "$PRODUCT_ID" ]; then
-            echo "ERROR: Failed to create product"
-            echo "$PRODUCT_RESPONSE" | jq '.'
-            exit 1
+            PRODUCT_ID=$(echo "$PRODUCT_RESPONSE" | jq -r '.id // empty')
+            if [ -z "$PRODUCT_ID" ]; then
+              echo "ERROR: Failed to create product"
+              echo "$PRODUCT_RESPONSE" | jq '.'
+              exit 1
+            fi
+            echo "Product created: $PRODUCT_ID"
           fi
-          echo "Product created: $PRODUCT_ID"
 
           # 2. Create 6 Prices under the Product
 
-          # Start Monthly - $39/mo
-          echo "Creating Start Monthly price ($39/mo)..."
+          echo "Creating Start Monthly price (3900 cents/mo)..."
           START_MONTHLY=$(curl -s -X POST https://api.stripe.com/v1/prices \
             -u "${STRIPE_SECRET_KEY}:" \
             -d "product=${PRODUCT_ID}" \
@@ -101,8 +92,7 @@ jobs:
             | jq -r '.id')
           echo "  Start Monthly: $START_MONTHLY"
 
-          # Start Annual - $396/yr
-          echo "Creating Start Annual price ($396/yr)..."
+          echo "Creating Start Annual price (39600 cents/yr)..."
           START_ANNUAL=$(curl -s -X POST https://api.stripe.com/v1/prices \
             -u "${STRIPE_SECRET_KEY}:" \
             -d "product=${PRODUCT_ID}" \
@@ -115,8 +105,7 @@ jobs:
             | jq -r '.id')
           echo "  Start Annual: $START_ANNUAL"
 
-          # Grow Monthly - $59/mo
-          echo "Creating Grow Monthly price ($59/mo)..."
+          echo "Creating Grow Monthly price (5900 cents/mo)..."
           GROW_MONTHLY=$(curl -s -X POST https://api.stripe.com/v1/prices \
             -u "${STRIPE_SECRET_KEY}:" \
             -d "product=${PRODUCT_ID}" \
@@ -129,8 +118,7 @@ jobs:
             | jq -r '.id')
           echo "  Grow Monthly: $GROW_MONTHLY"
 
-          # Grow Annual - $588/yr
-          echo "Creating Grow Annual price ($588/yr)..."
+          echo "Creating Grow Annual price (58800 cents/yr)..."
           GROW_ANNUAL=$(curl -s -X POST https://api.stripe.com/v1/prices \
             -u "${STRIPE_SECRET_KEY}:" \
             -d "product=${PRODUCT_ID}" \
@@ -143,8 +131,7 @@ jobs:
             | jq -r '.id')
           echo "  Grow Annual: $GROW_ANNUAL"
 
-          # Deliver Monthly - $79/mo
-          echo "Creating Deliver Monthly price ($79/mo)..."
+          echo "Creating Deliver Monthly price (7900 cents/mo)..."
           DELIVER_MONTHLY=$(curl -s -X POST https://api.stripe.com/v1/prices \
             -u "${STRIPE_SECRET_KEY}:" \
             -d "product=${PRODUCT_ID}" \
@@ -157,8 +144,7 @@ jobs:
             | jq -r '.id')
           echo "  Deliver Monthly: $DELIVER_MONTHLY"
 
-          # Deliver Annual - $792/yr
-          echo "Creating Deliver Annual price ($792/yr)..."
+          echo "Creating Deliver Annual price (79200 cents/yr)..."
           DELIVER_ANNUAL=$(curl -s -X POST https://api.stripe.com/v1/prices \
             -u "${STRIPE_SECRET_KEY}:" \
             -d "product=${PRODUCT_ID}" \
@@ -178,7 +164,7 @@ jobs:
           echo "============================================"
           echo "Product ID: $PRODUCT_ID"
           echo ""
-          echo "Price IDs (update these in GitHub Secrets):"
+          echo "Price IDs:"
           echo "  STRIPE_PRICE_START:          $START_MONTHLY"
           echo "  STRIPE_PRICE_START_ANNUAL:   $START_ANNUAL"
           echo "  STRIPE_PRICE_GROW:           $GROW_MONTHLY"
@@ -186,13 +172,12 @@ jobs:
           echo "  STRIPE_PRICE_DELIVER:        $DELIVER_MONTHLY"
           echo "  STRIPE_PRICE_DELIVER_ANNUAL: $DELIVER_ANNUAL"
           echo ""
-          echo "To update GitHub Secrets, run:"
-          STAGE_UPPER="${{ steps.stripe-key.outputs.stage_upper }}"
-          echo "  gh secret set ${STAGE_UPPER}_INTERNAL_STRIPE_PRICE_START -b \"$START_MONTHLY\""
-          echo "  gh secret set ${STAGE_UPPER}_INTERNAL_STRIPE_PRICE_START_ANNUAL -b \"$START_ANNUAL\""
-          echo "  gh secret set ${STAGE_UPPER}_INTERNAL_STRIPE_PRICE_GROW -b \"$GROW_MONTHLY\""
-          echo "  gh secret set ${STAGE_UPPER}_INTERNAL_STRIPE_PRICE_GROW_ANNUAL -b \"$GROW_ANNUAL\""
-          echo "  gh secret set ${STAGE_UPPER}_INTERNAL_STRIPE_PRICE_DELIVER -b \"$DELIVER_MONTHLY\""
-          echo "  gh secret set ${STAGE_UPPER}_INTERNAL_STRIPE_PRICE_DELIVER_ANNUAL -b \"$DELIVER_ANNUAL\""
+          echo "GitHub Secret update commands:"
+          echo "  gh secret set ${STAGE_UPPER}_INTERNAL_STRIPE_PRICE_START -b $START_MONTHLY"
+          echo "  gh secret set ${STAGE_UPPER}_INTERNAL_STRIPE_PRICE_START_ANNUAL -b $START_ANNUAL"
+          echo "  gh secret set ${STAGE_UPPER}_INTERNAL_STRIPE_PRICE_GROW -b $GROW_MONTHLY"
+          echo "  gh secret set ${STAGE_UPPER}_INTERNAL_STRIPE_PRICE_GROW_ANNUAL -b $GROW_ANNUAL"
+          echo "  gh secret set ${STAGE_UPPER}_INTERNAL_STRIPE_PRICE_DELIVER -b $DELIVER_MONTHLY"
+          echo "  gh secret set ${STAGE_UPPER}_INTERNAL_STRIPE_PRICE_DELIVER_ANNUAL -b $DELIVER_ANNUAL"
           echo ""
-          echo "Then run the 'Sync Internal Secrets to SSM' workflow for stage: ${{ github.event.inputs.stage }}"
+          echo "Then run: Sync Internal Secrets to SSM (stage: ${{ github.event.inputs.stage }})"
