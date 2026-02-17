@@ -7,7 +7,8 @@ plugins:
 
 custom:
   appUrl:
-    dev: http://localhost:3001
+    dev: https://dev.myfusionhelper.ai
+    staging: https://staging.myfusionhelper.ai
     main: https://app.myfusionhelper.ai
   go:
     baseDir: ../../..

@@ -6,6 +6,10 @@ plugins:
   - serverless-go-plugin
 
 custom:
+  appUrl:
+    dev: https://dev.myfusionhelper.ai
+    staging: https://staging.myfusionhelper.ai
+    main: https://app.myfusionhelper.ai
   go:
     baseDir: ../../..
     supportedRuntimes: ["provided.al2023"]
@@ -37,7 +41,7 @@ provider:
     COGNITO_JWKS_URI: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoJwksUri}
     COGNITO_ISSUER: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
     INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
-    APP_URL: https://app.myfusionhelper.ai
+    APP_URL: ${self:custom.appUrl.${self:provider.stage}, 'http://localhost:3001'}
     API_VERSION: v1
     API_REFERENCE: mfh-api
   iam:

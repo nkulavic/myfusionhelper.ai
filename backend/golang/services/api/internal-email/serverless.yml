@@ -6,6 +6,10 @@ plugins:
   - serverless-go-plugin
 
 custom:
+  appUrl:
+    dev: https://dev.myfusionhelper.ai
+    staging: https://staging.myfusionhelper.ai
+    main: https://app.myfusionhelper.ai
   go:
     baseDir: ../../..
     supportedRuntimes: ["provided.al2023"]
@@ -30,7 +34,7 @@ provider:
     STAGE: ${self:provider.stage}
     DEFAULT_FROM_EMAIL: noreply@myfusionhelper.ai
     DEFAULT_FROM_NAME: MyFusion Helper
-    APP_URL: https://app.myfusionhelper.ai
+    APP_URL: ${self:custom.appUrl.${self:provider.stage}, 'http://localhost:3001'}
     EMAIL_LOGS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailLogsTableName}
     EMAIL_TEMPLATES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailTemplatesTableName}
     EMAIL_VERIFICATIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableName}
