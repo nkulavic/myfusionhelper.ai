@@ -840,7 +840,7 @@ func oauthCallback(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 	}
 
 	// Fetch user info from provider
-	var externalUserID, externalUserEmail string
+	var externalUserID, externalUserEmail, externalAppName string
 	if platform.OAuth.UserInfoURL != "" {
 		userInfo, err := fetchUserInfo(ctx, platform.OAuth.UserInfoURL, tokens.AccessToken)
 		if err != nil {
@@ -851,8 +851,14 @@ func oauthCallback(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 		}
 	}
 
-	// Check for existing connection (one connection per platform per account)
-	existingConn, _ := findExistingConnection(ctx, db, oauthState.AccountID, oauthState.PlatformID)
+	// Fetch the CRM account/app name (platform-specific)
+	externalAppName = fetchAppName(ctx, platform.Slug, tokens.AccessToken)
+	if externalAppName != "" {
+		log.Printf("Fetched app name: %s", externalAppName)
+	}
+
+	// Check for existing connection (matched by account + platform + external user)
+	existingConn, _ := findExistingConnection(ctx, db, oauthState.AccountID, oauthState.PlatformID, externalUserID)
 
 	now := time.Now().UTC()
 	var connectionID string
@@ -905,7 +911,15 @@ func oauthCallback(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 		if externalUserEmail != "" {
 			updateParts = append(updateParts, "external_user_email = :eue")
 			updateValues[":eue"] = &ddbtypes.AttributeValueMemberS{Value: externalUserEmail}
-			// Update name to include email for better identification
+		}
+		if externalAppName != "" {
+			updateParts = append(updateParts, "external_app_name = :ean")
+			updateValues[":ean"] = &ddbtypes.AttributeValueMemberS{Value: externalAppName}
+			// Update name to show the CRM account name
+			updateParts = append(updateParts, "#n = :name")
+			updateNames["#n"] = "name"
+			updateValues[":name"] = &ddbtypes.AttributeValueMemberS{Value: fmt.Sprintf("%s — %s", platform.Name, externalAppName)}
+		} else if externalUserEmail != "" {
 			updateParts = append(updateParts, "#n = :name")
 			updateNames["#n"] = "name"
 			updateValues[":name"] = &ddbtypes.AttributeValueMemberS{Value: fmt.Sprintf("%s (%s)", platform.Name, externalUserEmail)}
@@ -956,7 +970,9 @@ func oauthCallback(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 		}
 
 		connectionName := fmt.Sprintf("%s Connection", platform.Name)
-		if externalUserEmail != "" {
+		if externalAppName != "" {
+			connectionName = fmt.Sprintf("%s — %s", platform.Name, externalAppName)
+		} else if externalUserEmail != "" {
 			connectionName = fmt.Sprintf("%s (%s)", platform.Name, externalUserEmail)
 		}
 
@@ -967,6 +983,7 @@ func oauthCallback(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 			PlatformID:        oauthState.PlatformID,
 			ExternalUserID:    externalUserID,
 			ExternalUserEmail: externalUserEmail,
+			ExternalAppName:   externalAppName,
 			Name:              connectionName,
 			Status:            "active",
 			AuthType:          "oauth2",
@@ -1064,9 +1081,11 @@ func exchangeCodeForTokens(ctx context.Context, tokenURL, clientID, clientSecret
 
 // OAuthUserInfo represents the user info from an OAuth provider
 type OAuthUserInfo struct {
-	ID    string `json:"id"`
-	Sub   string `json:"sub"`
-	Email string `json:"email"`
+	ID       string `json:"id"`
+	Sub      string `json:"sub"`
+	Email    string `json:"email"`
+	AppName  string `json:"app_name"`  // e.g. "MyFusion Solutions, LLC" — the CRM account name
+	TenantID string `json:"tenant_id"` // e.g. "ag238" — Keap app identifier
 }
 
 func fetchUserInfo(ctx context.Context, userInfoURL, accessToken string) (*OAuthUserInfo, error) {
@@ -1111,7 +1130,52 @@ func fetchUserInfo(ctx context.Context, userInfoURL, accessToken string) (*OAuth
 		userInfo.Email = email
 	}
 
+	// Extract tenant/app ID (Keap returns tenant_id)
+	if tenantID, ok := raw["tenant_id"].(string); ok {
+		userInfo.TenantID = tenantID
+	}
+
 	return userInfo, nil
+}
+
+// fetchAppName fetches the CRM account/app name using the access token.
+// Platform-specific: each CRM has a different endpoint for this.
+func fetchAppName(ctx context.Context, slug, accessToken string) string {
+	var profileURL string
+	switch slug {
+	case "keap":
+		profileURL = "https://api.infusionsoft.com/crm/rest/v1/account/profile"
+	default:
+		return ""
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", profileURL, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return ""
+	}
+
+	var raw map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return ""
+	}
+
+	if name, ok := raw["name"].(string); ok && name != "" {
+		return name
+	}
+	return ""
 }
 
 // loadOAuthCredentials is deprecated. Use config.GetPlatformOAuth() instead.
@@ -1124,15 +1188,20 @@ func loadOAuthCredentials(ctx context.Context, ssmClient *ssm.Client, stage, slu
 	return oauthConfig.ClientID, oauthConfig.ClientSecret, nil
 }
 
-func findExistingConnection(ctx context.Context, db *dynamodb.Client, accountID, platformID string) (*apitypes.PlatformConnection, error) {
+func findExistingConnection(ctx context.Context, db *dynamodb.Client, accountID, platformID, externalUserID string) (*apitypes.PlatformConnection, error) {
+	if externalUserID == "" {
+		return nil, nil
+	}
+
 	result, err := db.Query(ctx, &dynamodb.QueryInput{
 		TableName:              aws.String(connectionsTable),
 		IndexName:              aws.String("AccountIdIndex"),
 		KeyConditionExpression: aws.String("account_id = :account_id"),
-		FilterExpression:       aws.String("platform_id = :platform_id"),
+		FilterExpression:       aws.String("platform_id = :platform_id AND external_user_id = :external_user_id"),
 		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
-			":account_id":  &ddbtypes.AttributeValueMemberS{Value: accountID},
-			":platform_id": &ddbtypes.AttributeValueMemberS{Value: platformID},
+			":account_id":       &ddbtypes.AttributeValueMemberS{Value: accountID},
+			":platform_id":      &ddbtypes.AttributeValueMemberS{Value: platformID},
+			":external_user_id": &ddbtypes.AttributeValueMemberS{Value: externalUserID},
 		},
 	})
 	if err != nil {
