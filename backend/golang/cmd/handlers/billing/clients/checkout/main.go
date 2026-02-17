@@ -20,6 +20,7 @@ import (
 	stripe "github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/checkout/session"
 	"github.com/stripe/stripe-go/v82/customer"
+	"github.com/stripe/stripe-go/v82/subscription"
 )
 
 var (
@@ -131,6 +132,22 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		if err != nil {
 			log.Printf("Failed to save Stripe customer ID: %v", err)
 			// Non-fatal -- proceed with checkout
+		}
+	}
+
+	// Guard: reject checkout if customer already has an active subscription
+	// Plan changes should go through the Stripe Customer Portal, not new checkouts
+	subListParams := &stripe.SubscriptionListParams{
+		Customer: customerID,
+		Status:   "all",
+	}
+	subListParams.Filters.AddFilter("limit", "", "1")
+	subIter := subscription.List(subListParams)
+	for subIter.Next() {
+		sub := subIter.Subscription()
+		if sub.Status == stripe.SubscriptionStatusActive || sub.Status == stripe.SubscriptionStatusTrialing {
+			log.Printf("Account %s already has active subscription %s (status: %s), rejecting checkout", authCtx.AccountID, sub.ID, sub.Status)
+			return authMiddleware.CreateErrorResponse(409, "You already have an active subscription. Use the billing portal to change your plan."), nil
 		}
 	}
 
