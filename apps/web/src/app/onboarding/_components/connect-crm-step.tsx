@@ -36,8 +36,8 @@ export function ConnectCRMStep({ onNext, onBack, onSkip }: ConnectCRMStepProps) 
     if (selectedPlatform.apiConfig.authType === 'oauth2') {
       startOAuth.mutate(selectedPlatform.platformId, {
         onSuccess: (res) => {
-          if (res.data?.url) {
-            window.location.href = res.data.url
+          if (res.data?.authorizationUrl) {
+            window.location.href = res.data.authorizationUrl
           }
         },
       })

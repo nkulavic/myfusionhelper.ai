@@ -98,8 +98,8 @@ export default function ConnectionsPage() {
     if (selectedPlatform.apiConfig.authType === 'oauth2') {
       startOAuth.mutate(selectedPlatform.platformId, {
         onSuccess: (res) => {
-          if (res.data?.url) {
-            window.location.href = res.data.url
+          if (res.data?.authorizationUrl) {
+            window.location.href = res.data.authorizationUrl
           }
         },
       })
@@ -392,7 +392,7 @@ export default function ConnectionsPage() {
               <Button
                 size="sm"
                 onClick={() => startOAuth.mutate(selectedConnection.platformId, {
-                  onSuccess: (res) => { if (res.data?.url) window.location.href = res.data.url },
+                  onSuccess: (res) => { if (res.data?.authorizationUrl) window.location.href = res.data.authorizationUrl },
                 })}
               >
                 <ExternalLink className="h-4 w-4" />

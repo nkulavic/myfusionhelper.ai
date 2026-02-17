@@ -139,7 +139,7 @@ export const connectionsApi = {
 
   // Start OAuth flow for a platform
   startOAuth: (platformId: string) =>
-    apiClient.post<{ url: string }>(
+    apiClient.post<{ authorizationUrl: string; state: string; platformId: string; platformName: string; expiresIn: number }>(
       `/platforms/${platformId}/oauth/start`
     ),
 
