@@ -38,6 +38,10 @@ provider:
     CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
     API_VERSION: v1
     API_REFERENCE: mfh-api
+    INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
+    API_BASE_URL: https://${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}.execute-api.${aws:region}.amazonaws.com
+    HELPERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableName}
+    EXECUTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableName}
   iam:
     role:
       statements:
@@ -57,8 +61,13 @@ provider:
             - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatConversationsTableArn}
             - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatMessagesTableArn}
             - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableArn}
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatConversationsTableArn}/index/*"
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ChatMessagesTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.HelpersTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ExecutionsTableArn}/index/*"
         - Effect: Allow
           Action:
             - ssm:GetParameter

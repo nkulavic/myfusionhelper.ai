@@ -4,6 +4,7 @@ import type { Account, APIKey, User, NotificationPreferences } from '@myfusionhe
 export interface UpdateProfileInput {
   name?: string
   email?: string
+  phoneNumber?: string
 }
 
 export interface UpdateAccountInput {

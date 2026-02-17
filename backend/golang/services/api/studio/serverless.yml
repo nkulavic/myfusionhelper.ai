@@ -1,0 +1,233 @@
+service: mfh-studio
+
+frameworkVersion: '4'
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 29
+  tracing:
+    lambda: true
+    apiGateway: true
+  httpApi:
+    id: ${cf:mfh-api-gateway-${self:provider.stage}.HttpApiId}
+  environment:
+    SERVICE_VERSION: "2025.02.16.0001"
+    STAGE: ${self:provider.stage}
+    COGNITO_USER_POOL_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolId}
+    COGNITO_CLIENT_ID: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoUserPoolClientId}
+    COGNITO_CLIENT_SECRET: ""
+    COGNITO_REGION: ${self:provider.region}
+    COGNITO_JWKS_URI: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoJwksUri}
+    COGNITO_ISSUER: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
+    USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
+    ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
+    USER_ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableName}
+    DASHBOARDS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.DashboardsTableName}
+    CONNECTIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableName}
+    PLATFORMS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableName}
+    API_VERSION: v1
+    API_REFERENCE: mfh-api
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:Query
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.ConnectionsTableArn}/index/*"
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.PlatformsTableArn}/index/*"
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:Query
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.DashboardsTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.DashboardsTableArn}/index/*"
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:${self:provider.region}:*:*"
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: "*"
+
+functions:
+  studio-health:
+    handler: cmd/handlers/studio/main.go
+    description: "Studio service health check"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: studio-health
+    memorySize: 128
+    timeout: 5
+    environment:
+      FUNCTION_NAME: studio-health
+      ENDPOINT_PATH: /studio/health
+    events:
+      - httpApi:
+          path: /studio/health
+          method: get
+
+  studio-dashboards-list:
+    handler: cmd/handlers/studio/main.go
+    description: "List dashboards for account"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: studio-dashboards-list
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: studio-dashboards-list
+      ENDPOINT_PATH: /studio/dashboards
+    events:
+      - httpApi:
+          path: /studio/dashboards
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  studio-dashboards-create:
+    handler: cmd/handlers/studio/main.go
+    description: "Create a new dashboard"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: studio-dashboards-create
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: studio-dashboards-create
+      ENDPOINT_PATH: /studio/dashboards
+    events:
+      - httpApi:
+          path: /studio/dashboards
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  studio-dashboards-get:
+    handler: cmd/handlers/studio/main.go
+    description: "Get a single dashboard by ID"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: studio-dashboards-get
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: studio-dashboards-get
+      ENDPOINT_PATH: /studio/dashboards/{id}
+    events:
+      - httpApi:
+          path: /studio/dashboards/{id}
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  studio-dashboards-update:
+    handler: cmd/handlers/studio/main.go
+    description: "Update a dashboard"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: studio-dashboards-update
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: studio-dashboards-update
+      ENDPOINT_PATH: /studio/dashboards/{id}
+    events:
+      - httpApi:
+          path: /studio/dashboards/{id}
+          method: put
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  studio-dashboards-delete:
+    handler: cmd/handlers/studio/main.go
+    description: "Delete a dashboard (soft delete)"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: studio-dashboards-delete
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: studio-dashboards-delete
+      ENDPOINT_PATH: /studio/dashboards/{id}
+    events:
+      - httpApi:
+          path: /studio/dashboards/{id}
+          method: delete
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  studio-templates-list:
+    handler: cmd/handlers/studio/main.go
+    description: "List available dashboard templates"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: studio-templates-list
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: studio-templates-list
+      ENDPOINT_PATH: /studio/templates
+    events:
+      - httpApi:
+          path: /studio/templates
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  studio-templates-apply:
+    handler: cmd/handlers/studio/main.go
+    description: "Create dashboard from template"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: studio-templates-apply
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: studio-templates-apply
+      ENDPOINT_PATH: /studio/templates/{templateId}/apply
+    events:
+      - httpApi:
+          path: /studio/templates/{templateId}/apply
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}

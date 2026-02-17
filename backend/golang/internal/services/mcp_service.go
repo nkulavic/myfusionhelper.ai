@@ -195,6 +195,44 @@ func (s *MCPService) GetToolDefinitions() []types.GroqTool {
 				},
 			},
 		},
+		// Get Execution History Tool
+		{
+			Type: "function",
+			Function: types.GroqFunctionDef{
+				Name:        "get_execution_history",
+				Description: "Get recent helper execution history. Shows what helpers ran, their status (success/failed/pending), and when they executed.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"helper_id": map[string]interface{}{
+							"type":        "string",
+							"description": "Filter by specific helper ID (optional)",
+						},
+						"status": map[string]interface{}{
+							"type":        "string",
+							"description": "Filter by status: pending, running, completed, failed (optional)",
+						},
+						"limit": map[string]interface{}{
+							"type":        "integer",
+							"description": "Maximum number of results (default 10, max 50)",
+							"default":     10,
+						},
+					},
+				},
+			},
+		},
+		// Get Account Info Tool
+		{
+			Type: "function",
+			Function: types.GroqFunctionDef{
+				Name:        "get_account_info",
+				Description: "Get current account information including name, plan tier, usage stats, and settings.",
+				Parameters: map[string]interface{}{
+					"type":       "object",
+					"properties": map[string]interface{}{},
+				},
+			},
+		},
 	}
 }
 
@@ -222,6 +260,10 @@ func (s *MCPService) ExecuteTool(ctx context.Context, toolCall types.GroqToolCal
 		return s.getHelperConfig(ctx, args, accessToken)
 	case "get_connections":
 		return s.getConnections(ctx, accessToken)
+	case "get_execution_history":
+		return s.getExecutionHistory(ctx, args, accessToken)
+	case "get_account_info":
+		return s.getAccountInfo(ctx, accessToken)
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolCall.Function.Name)
 	}
@@ -556,6 +598,131 @@ func (s *MCPService) formatContactsResponse(resp map[string]interface{}) string 
 	}
 
 	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return s.formatResponse(resp)
+	}
+	return string(jsonBytes)
+}
+
+// getExecutionHistory calls GET /executions with optional filters
+func (s *MCPService) getExecutionHistory(ctx context.Context, args map[string]interface{}, accessToken string) (string, error) {
+	params := []string{}
+
+	if helperID, ok := args["helper_id"].(string); ok && helperID != "" {
+		params = append(params, "helper_id="+helperID)
+	}
+	if status, ok := args["status"].(string); ok && status != "" {
+		params = append(params, "status="+status)
+	}
+
+	limit := 10
+	if l, ok := args["limit"].(float64); ok && l > 0 {
+		limit = int(l)
+		if limit > 50 {
+			limit = 50
+		}
+	}
+	params = append(params, fmt.Sprintf("limit=%d", limit))
+
+	path := "/executions"
+	if len(params) > 0 {
+		path += "?" + strings.Join(params, "&")
+	}
+
+	resp, err := s.makeAPIRequest(ctx, "GET", path, nil, accessToken)
+	if err != nil {
+		return "", fmt.Errorf("get execution history failed: %w", err)
+	}
+	return s.formatExecutionsResponse(resp), nil
+}
+
+// getAccountInfo calls GET /accounts/{id} using the current user's account
+func (s *MCPService) getAccountInfo(ctx context.Context, accessToken string) (string, error) {
+	// The accounts endpoint at GET /accounts returns the user's accounts list
+	resp, err := s.makeAPIRequest(ctx, "GET", "/accounts", nil, accessToken)
+	if err != nil {
+		return "", fmt.Errorf("get account info failed: %w", err)
+	}
+	return s.formatAccountInfoResponse(resp), nil
+}
+
+// formatExecutionsResponse condenses execution data to reduce token usage
+func (s *MCPService) formatExecutionsResponse(resp map[string]interface{}) string {
+	data, ok := resp["data"].(map[string]interface{})
+	if !ok {
+		return s.formatResponse(resp)
+	}
+
+	executions, ok := data["executions"].([]interface{})
+	if !ok {
+		return s.formatResponse(resp)
+	}
+
+	condensed := make([]map[string]interface{}, 0, len(executions))
+	for _, e := range executions {
+		exec, ok := e.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		item := map[string]interface{}{
+			"execution_id": exec["execution_id"],
+			"helper_id":    exec["helper_id"],
+			"status":       exec["status"],
+			"created_at":   exec["created_at"],
+			"duration_ms":  exec["duration_ms"],
+		}
+		if errMsg, ok := exec["error_message"].(string); ok && errMsg != "" {
+			item["error_message"] = errMsg
+		}
+		if triggerType, ok := exec["trigger_type"].(string); ok && triggerType != "" {
+			item["trigger_type"] = triggerType
+		}
+		condensed = append(condensed, item)
+	}
+
+	result := map[string]interface{}{
+		"executions": condensed,
+		"total":      len(condensed),
+		"has_more":   data["has_more"],
+	}
+
+	jsonBytes, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return s.formatResponse(resp)
+	}
+	return string(jsonBytes)
+}
+
+// formatAccountInfoResponse condenses account data to reduce token usage
+func (s *MCPService) formatAccountInfoResponse(resp map[string]interface{}) string {
+	data, ok := resp["data"]
+	if !ok {
+		return s.formatResponse(resp)
+	}
+
+	// The accounts list endpoint may return accounts array or single account
+	dataMap, ok := data.(map[string]interface{})
+	if !ok {
+		return s.formatResponse(resp)
+	}
+
+	// Extract relevant account fields
+	condensed := map[string]interface{}{
+		"account_id": dataMap["account_id"],
+		"name":       dataMap["name"],
+		"company":    dataMap["company"],
+		"plan":       dataMap["plan"],
+		"status":     dataMap["status"],
+	}
+
+	if usage, ok := dataMap["usage"].(map[string]interface{}); ok {
+		condensed["usage"] = usage
+	}
+	if settings, ok := dataMap["settings"].(map[string]interface{}); ok {
+		condensed["settings"] = settings
+	}
+
+	jsonBytes, err := json.MarshalIndent(condensed, "", "  ")
 	if err != nil {
 		return s.formatResponse(resp)
 	}

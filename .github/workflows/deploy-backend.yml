@@ -387,6 +387,7 @@ jobs:
           - billing
           - chat
           - emails
+          - studio
     steps:
       - uses: actions/checkout@v4
 

@@ -448,6 +448,46 @@ type SyncExecution struct {
 	TTL                  int64          `json:"ttl,omitempty" dynamodbav:"ttl,omitempty"`
 }
 
+// ========== STUDIO TYPES ==========
+
+// Dashboard represents a user-created Studio dashboard
+type Dashboard struct {
+	DashboardID  string            `json:"dashboard_id" dynamodbav:"dashboard_id"`
+	AccountID    string            `json:"account_id" dynamodbav:"account_id"`
+	Name         string            `json:"name" dynamodbav:"name"`
+	Description  string            `json:"description,omitempty" dynamodbav:"description,omitempty"`
+	Widgets      []DashboardWidget `json:"widgets" dynamodbav:"widgets"`
+	TemplateID   string            `json:"template_id,omitempty" dynamodbav:"template_id,omitempty"`
+	ConnectionID string            `json:"connection_id,omitempty" dynamodbav:"connection_id,omitempty"`
+	Status       string            `json:"status" dynamodbav:"status"`
+	CreatedBy    string            `json:"created_by" dynamodbav:"created_by"`
+	CreatedAt    string            `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt    string            `json:"updated_at" dynamodbav:"updated_at"`
+}
+
+// DashboardWidget represents a single chart/widget on a dashboard
+type DashboardWidget struct {
+	WidgetID     string `json:"widget_id" dynamodbav:"widget_id"`
+	Type         string `json:"type" dynamodbav:"type"`                 // scorecard, bar, line, area, pie, funnel, table
+	Title        string `json:"title" dynamodbav:"title"`
+	DataSource   string `json:"data_source" dynamodbav:"data_source"`   // contacts, deals, tags
+	Metric       string `json:"metric" dynamodbav:"metric"`             // count, sum, average
+	MetricField  string `json:"metric_field,omitempty" dynamodbav:"metric_field,omitempty"`
+	Dimension    string `json:"dimension" dynamodbav:"dimension"`
+	Size         string `json:"size" dynamodbav:"size"`                 // sm, md, lg, full
+	Order        int    `json:"order" dynamodbav:"order"`
+	ConnectionID string `json:"connection_id,omitempty" dynamodbav:"connection_id,omitempty"`
+}
+
+// DashboardTemplate represents a pre-built dashboard template
+type DashboardTemplate struct {
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	Platform    string            `json:"platform"` // "generic", "keap", "gohighlevel", etc.
+	Widgets     []DashboardWidget `json:"widgets"`
+}
+
 // ========== PLAN TYPES ==========
 
 // PlanLimits defines limits for an account plan

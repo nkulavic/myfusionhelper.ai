@@ -113,7 +113,12 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	}
 
 	if authResult.ChallengeName != "" {
-		return authMiddleware.CreateErrorResponse(400, "Additional authentication required"), nil
+		log.Printf("MFA challenge required: %s", authResult.ChallengeName)
+		return authMiddleware.CreateSuccessResponse(200, "MFA required", map[string]interface{}{
+			"mfa_required":  true,
+			"challenge_name": string(authResult.ChallengeName),
+			"session":        aws.ToString(authResult.Session),
+		}), nil
 	}
 
 	if authResult.AuthenticationResult == nil {

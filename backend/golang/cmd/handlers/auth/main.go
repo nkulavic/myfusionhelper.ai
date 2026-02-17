@@ -11,6 +11,7 @@ import (
 
 	// Protected endpoints (require auth)
 	logoutClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/logout"
+	mfaSetupClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/mfa-setup"
 	onboardingClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/onboarding"
 	passwordClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/password"
 	profileClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/profile"
@@ -20,6 +21,7 @@ import (
 	forgotPasswordClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/forgot-password"
 	healthClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/health"
 	loginClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/login"
+	mfaChallengeClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/mfa-challenge"
 	refreshClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/refresh"
 	registerClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/register"
 	resetPasswordClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/reset-password"
@@ -55,6 +57,8 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return routeToProtectedHandler(ctx, event, passwordClient.HandleWithAuth)
 	case "/auth/onboarding-complete":
 		return routeToProtectedHandler(ctx, event, onboardingClient.HandleWithAuth)
+	case "/auth/mfa/status", "/auth/mfa/setup-totp", "/auth/mfa/verify-totp", "/auth/mfa/enable-sms", "/auth/mfa/disable":
+		return routeToProtectedHandler(ctx, event, mfaSetupClient.HandleWithAuth)
 
 	// Public endpoints
 	case "/auth/health":
@@ -69,6 +73,8 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return forgotPasswordClient.Handle(ctx, event)
 	case "/auth/reset-password":
 		return resetPasswordClient.Handle(ctx, event)
+	case "/auth/mfa-challenge":
+		return mfaChallengeClient.Handle(ctx, event)
 
 	default:
 		log.Printf("No handler found for path: %s", event.RequestContext.HTTP.Path)

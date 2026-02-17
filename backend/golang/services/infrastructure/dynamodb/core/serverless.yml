@@ -527,6 +527,32 @@ resources:
             Projection:
               ProjectionType: ALL
 
+    # Studio Dashboards Table (user-created dashboard configs with widgets)
+    DashboardsTable:
+      Type: AWS::DynamoDB::Table
+      DeletionPolicy: Retain
+      Properties:
+        TableName: mfh-${self:provider.stage}-dashboards
+        BillingMode: PAY_PER_REQUEST
+        DeletionProtectionEnabled: true
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        AttributeDefinitions:
+          - AttributeName: dashboard_id
+            AttributeType: S
+          - AttributeName: account_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: dashboard_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: AccountIdIndex
+            KeySchema:
+              - AttributeName: account_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
     # Email Verifications Table (email verification tokens with TTL)
     EmailVerificationsTable:
       Type: AWS::DynamoDB::Table
@@ -740,3 +766,12 @@ resources:
       Value: !GetAtt SyncExecutionsTable.Arn
       Export:
         Name: ${self:service}-${self:provider.stage}-SyncExecutionsTableArn
+
+    DashboardsTableName:
+      Value: !Ref DashboardsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DashboardsTableName
+    DashboardsTableArn:
+      Value: !GetAtt DashboardsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DashboardsTableArn

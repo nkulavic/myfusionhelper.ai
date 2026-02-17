@@ -19,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
+	appconfig "github.com/myfusionhelper/api/internal/config"
 	"github.com/myfusionhelper/api/internal/apiutil"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/services"
@@ -27,15 +28,96 @@ import (
 )
 
 const (
-	GroqAPIURL   = "https://api.groq.com/openai/v1/chat/completions"
-	GroqModel    = "llama-3.3-70b-versatile"
-	SystemPrompt = "You are a helpful AI assistant for MyFusionHelper, a CRM automation platform. You can help users query their CRM data, manage contacts, execute automation helpers, and answer questions about their data. Use the available tools to interact with the user's CRM data and helpers."
+	GroqAPIURL = "https://api.groq.com/openai/v1/chat/completions"
+	GroqModel  = "openai/gpt-oss-120b"
 )
 
 var (
 	conversationsTable = os.Getenv("CHAT_CONVERSATIONS_TABLE")
 	messagesTable      = os.Getenv("CHAT_MESSAGES_TABLE")
+	connectionsTable   = os.Getenv("CONNECTIONS_TABLE")
+	helpersTable       = os.Getenv("HELPERS_TABLE")
+	accountsTable      = os.Getenv("ACCOUNTS_TABLE")
 )
+
+// buildDynamicSystemPrompt creates a context-rich system prompt with user/account info
+func buildDynamicSystemPrompt(ctx context.Context, dbClient *dynamodb.Client, authCtx *apitypes.AuthContext) string {
+	var sb strings.Builder
+	sb.WriteString("You are an AI assistant for MyFusion Helper, a CRM automation platform.\n\n")
+
+	// Fetch account info
+	if accountsTable != "" && authCtx.AccountID != "" {
+		acctResult, err := dbClient.GetItem(ctx, &dynamodb.GetItemInput{
+			TableName: aws.String(accountsTable),
+			Key: map[string]ddbtypes.AttributeValue{
+				"account_id": &ddbtypes.AttributeValueMemberS{Value: authCtx.AccountID},
+			},
+		})
+		if err == nil && acctResult.Item != nil {
+			var acct apitypes.Account
+			if attributevalue.UnmarshalMap(acctResult.Item, &acct) == nil {
+				sb.WriteString(fmt.Sprintf("Current user: %s\n", authCtx.Email))
+				sb.WriteString(fmt.Sprintf("Account: %s (Plan: %s)\n", acct.Name, acct.Plan))
+			}
+		}
+	}
+
+	// Fetch connections
+	if connectionsTable != "" && authCtx.AccountID != "" {
+		connResult, err := dbClient.Query(ctx, &dynamodb.QueryInput{
+			TableName:              aws.String(connectionsTable),
+			IndexName:              aws.String("AccountIdIndex"),
+			KeyConditionExpression: aws.String("account_id = :account_id"),
+			ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+				":account_id": &ddbtypes.AttributeValueMemberS{Value: authCtx.AccountID},
+			},
+		})
+		if err == nil && len(connResult.Items) > 0 {
+			sb.WriteString(fmt.Sprintf("\nConnected platforms (%d):\n", len(connResult.Items)))
+			for _, item := range connResult.Items {
+				var conn apitypes.PlatformConnection
+				if attributevalue.UnmarshalMap(item, &conn) == nil {
+					name := conn.Name
+					if conn.ExternalAppName != "" {
+						name = conn.ExternalAppName
+					}
+					sb.WriteString(fmt.Sprintf("- %s (ID: %s, status: %s)\n", name, conn.ConnectionID, conn.Status))
+				}
+			}
+		} else {
+			sb.WriteString("\nNo CRM platforms connected yet.\n")
+		}
+	}
+
+	// Fetch helpers count
+	if helpersTable != "" && authCtx.AccountID != "" {
+		helperResult, err := dbClient.Query(ctx, &dynamodb.QueryInput{
+			TableName:              aws.String(helpersTable),
+			IndexName:              aws.String("AccountIdIndex"),
+			KeyConditionExpression: aws.String("account_id = :account_id"),
+			FilterExpression:       aws.String("#s <> :deleted"),
+			ExpressionAttributeNames: map[string]string{
+				"#s": "status",
+			},
+			ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+				":account_id": &ddbtypes.AttributeValueMemberS{Value: authCtx.AccountID},
+				":deleted":    &ddbtypes.AttributeValueMemberS{Value: "deleted"},
+			},
+			Select: ddbtypes.SelectCount,
+		})
+		if err == nil {
+			active := helperResult.Count
+			sb.WriteString(fmt.Sprintf("\nConfigured helpers: %d\n", active))
+		}
+	}
+
+	sb.WriteString("\nAvailable tools: You can query CRM data, list/get/execute helpers, view connections, and check execution history.")
+	sb.WriteString("\nWhen querying data, use the connection_id from the list above.")
+	sb.WriteString("\nAlways confirm before executing helpers or making changes to user data.")
+	sb.WriteString("\nBe concise and helpful. Format data results clearly.")
+
+	return sb.String()
+}
 
 // HandleSendWithAuth sends a new message and streams the response
 func HandleSendWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, authCtx *apitypes.AuthContext) (events.APIGatewayV2HTTPResponse, error) {
@@ -65,7 +147,7 @@ func HandleSendWithAuth(ctx context.Context, event events.APIGatewayV2HTTPReques
 	}
 
 	// Get Groq API key
-	groqAPIKey := getGroqAPIKey()
+	groqAPIKey := getGroqAPIKey(ctx)
 	if groqAPIKey == "" {
 		return authMiddleware.CreateErrorResponse(500, "Groq API key not configured"), nil
 	}
@@ -116,8 +198,11 @@ func HandleSendWithAuth(ctx context.Context, event events.APIGatewayV2HTTPReques
 		return authMiddleware.CreateErrorResponse(500, fmt.Sprintf("Failed to save message: %v", err)), nil
 	}
 
+	// Build dynamic system prompt with user context
+	systemPrompt := buildDynamicSystemPrompt(ctx, dbClient, authCtx)
+
 	// Process streaming response
-	sseData, err := processStreaming(ctx, dbClient, groqAPIKey, accessToken, conversationID, messages, req.Content)
+	sseData, err := processStreaming(ctx, dbClient, groqAPIKey, accessToken, conversationID, systemPrompt, messages, req.Content)
 	if err != nil {
 		return authMiddleware.CreateErrorResponse(500, fmt.Sprintf("Failed to process message: %v", err)), nil
 	}
@@ -223,12 +308,12 @@ func saveMessage(ctx context.Context, dbClient *dynamodb.Client, message *types.
 }
 
 // processStreaming handles the streaming LLM response
-func processStreaming(ctx context.Context, dbClient *dynamodb.Client, groqAPIKey, accessToken, conversationID string, history []types.ChatMessage, userContent string) (string, error) {
+func processStreaming(ctx context.Context, dbClient *dynamodb.Client, groqAPIKey, accessToken, conversationID, systemPrompt string, history []types.ChatMessage, userContent string) (string, error) {
 	var sseData strings.Builder
 	mcpService := services.NewMCPService(ctx)
 
 	// Build Groq messages
-	groqMessages := buildGroqMessages(history, userContent)
+	groqMessages := buildGroqMessages(systemPrompt, history, userContent)
 	tools := mcpService.GetToolDefinitions()
 
 	httpClient := &http.Client{Timeout: 60 * time.Second}
@@ -312,8 +397,8 @@ func processStreaming(ctx context.Context, dbClient *dynamodb.Client, groqAPIKey
 }
 
 // buildGroqMessages converts history to Groq format
-func buildGroqMessages(history []types.ChatMessage, newUserMessage string) []types.GroqMessage {
-	messages := []types.GroqMessage{{Role: "system", Content: SystemPrompt}}
+func buildGroqMessages(systemPrompt string, history []types.ChatMessage, newUserMessage string) []types.GroqMessage {
+	messages := []types.GroqMessage{{Role: "system", Content: systemPrompt}}
 
 	for _, msg := range history {
 		groqMsg := types.GroqMessage{Role: msg.Role, Content: msg.Content}
@@ -407,21 +492,11 @@ func callGroqAPI(ctx context.Context, httpClient *http.Client, groqAPIKey string
 	return fullContent.String(), toolCalls, nil
 }
 
-// getGroqAPIKey retrieves the Groq API key from environment
-func getGroqAPIKey() string {
-	secretsJSON := os.Getenv("INTERNAL_SECRETS")
-	if secretsJSON == "" {
-		return ""
-	}
-
-	type InternalSecrets struct {
-		Groq struct {
-			APIKey string `json:"api_key"`
-		} `json:"groq"`
-	}
-
-	var secrets InternalSecrets
-	if err := json.Unmarshal([]byte(secretsJSON), &secrets); err != nil {
+// getGroqAPIKey retrieves the Groq API key from SSM secrets
+func getGroqAPIKey(ctx context.Context) string {
+	secrets, err := appconfig.LoadSecrets(ctx)
+	if err != nil {
+		fmt.Printf("Failed to load secrets: %v\n", err)
 		return ""
 	}
 	return secrets.Groq.APIKey

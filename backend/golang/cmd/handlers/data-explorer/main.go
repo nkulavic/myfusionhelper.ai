@@ -10,12 +10,14 @@ import (
 
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 
+	aggregateClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/aggregate"
 	catalogClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/catalog"
 	exportClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/export"
 	healthClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/health"
 	queryClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/query"
 	recordClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/record"
 	syncClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/sync"
+	timeseriesClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/timeseries"
 
 	// Register all connectors via init()
 	_ "github.com/myfusionhelper/api/internal/connectors"
@@ -60,6 +62,14 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	// Export
 	case path == "/data/export" && method == "POST":
 		return routeToProtectedHandler(ctx, event, exportClient.HandleWithAuth)
+
+	// Aggregate (for Studio charts)
+	case path == "/data/aggregate" && method == "POST":
+		return routeToProtectedHandler(ctx, event, aggregateClient.HandleWithAuth)
+
+	// Time series (for Studio line/area charts)
+	case path == "/data/timeseries" && method == "POST":
+		return routeToProtectedHandler(ctx, event, timeseriesClient.HandleWithAuth)
 
 	// Sync
 	case path == "/data/sync" && method == "POST":

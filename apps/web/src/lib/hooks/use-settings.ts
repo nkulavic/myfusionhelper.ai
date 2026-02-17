@@ -60,6 +60,10 @@ export function useUpdateAccount() {
     }) => settingsApi.updateAccount(accountId, input),
     onSuccess: (_, { accountId }) => {
       queryClient.invalidateQueries({ queryKey: ['account', accountId] })
+      toast.success('Workspace updated')
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to update workspace')
     },
   })
 }

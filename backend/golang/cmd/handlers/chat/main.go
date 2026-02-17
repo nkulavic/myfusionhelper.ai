@@ -2,10 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log"
-	"os"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -16,52 +13,6 @@ import (
 	"github.com/myfusionhelper/api/cmd/handlers/chat/clients/health"
 	"github.com/myfusionhelper/api/cmd/handlers/chat/clients/messages"
 )
-
-// InternalSecrets holds the structure of the unified secrets JSON
-type InternalSecrets struct {
-	JWT struct {
-		Secret        string `json:"secret"`
-		RefreshSecret string `json:"refresh_secret"`
-	} `json:"jwt"`
-	Stripe struct {
-		SecretKey      string `json:"secret_key"`
-		PublishableKey string `json:"publishable_key"`
-		WebhookSecret  string `json:"webhook_secret"`
-	} `json:"stripe"`
-	Cognito struct {
-		ClientID     string `json:"client_id"`
-		ClientSecret string `json:"client_secret"`
-		Issuer       string `json:"issuer"`
-		JwksURI      string `json:"jwks_uri"`
-		Region       string `json:"region"`
-		UserPoolID   string `json:"user_pool_id"`
-	} `json:"cognito"`
-	Groq struct {
-		APIKey string `json:"api_key"`
-	} `json:"groq"`
-}
-
-var (
-	secrets    InternalSecrets
-	groqAPIKey string
-)
-
-func init() {
-	// Parse the unified secrets JSON from environment variable
-	secretsJSON := os.Getenv("INTERNAL_SECRETS")
-	if secretsJSON == "" {
-		fmt.Println("Warning: INTERNAL_SECRETS environment variable not set")
-	} else {
-		if err := json.Unmarshal([]byte(secretsJSON), &secrets); err != nil {
-			fmt.Printf("Warning: failed to parse INTERNAL_SECRETS: %v\n", err)
-		} else {
-			groqAPIKey = secrets.Groq.APIKey
-			if groqAPIKey == "" {
-				fmt.Println("Warning: Groq API key not found in secrets")
-			}
-		}
-	}
-}
 
 func handler(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	method := event.RequestContext.HTTP.Method

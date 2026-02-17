@@ -35,9 +35,28 @@ interface AuthResponse {
   account: Account
 }
 
+export interface MfaChallengeResponse {
+  mfaRequired: true
+  challengeName: 'SMS_MFA' | 'SOFTWARE_TOKEN_MFA'
+  session: string
+}
+
+export interface MfaStatusResponse {
+  enabled: boolean
+  method: 'totp' | 'sms' | null
+  phoneVerified: boolean
+}
+
+export interface TotpSetupResponse {
+  secret: string
+  qrCodeUri: string
+}
+
+export type LoginResponse = AuthResponse | MfaChallengeResponse
+
 export const authApi = {
   login: (input: LoginInput) =>
-    apiClient.post<AuthResponse>('/auth/login', input),
+    apiClient.post<LoginResponse>('/auth/login', input),
 
   register: (input: RegisterInput) =>
     apiClient.post<AuthResponse>('/auth/register', input),
@@ -58,4 +77,23 @@ export const authApi = {
 
   resetPassword: (input: ResetPasswordInput) =>
     apiClient.post<void>('/auth/reset-password', input),
+
+  // MFA
+  submitMfaChallenge: (input: { session: string; code: string; challengeName: string }) =>
+    apiClient.post<AuthResponse>('/auth/mfa-challenge', input),
+
+  getMfaStatus: () =>
+    apiClient.get<MfaStatusResponse>('/auth/mfa/status'),
+
+  setupTotp: () =>
+    apiClient.post<TotpSetupResponse>('/auth/mfa/setup-totp'),
+
+  verifyTotp: (input: { code: string }) =>
+    apiClient.post<void>('/auth/mfa/verify-totp', input),
+
+  enableSmsMfa: () =>
+    apiClient.post<void>('/auth/mfa/enable-sms'),
+
+  disableMfa: () =>
+    apiClient.post<void>('/auth/mfa/disable'),
 }

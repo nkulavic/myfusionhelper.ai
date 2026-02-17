@@ -79,6 +79,10 @@ provider:
             - cognito-idp:AdminUserGlobalSignOut
             - cognito-idp:GetUser
             - cognito-idp:ChangePassword
+            - cognito-idp:AssociateSoftwareToken
+            - cognito-idp:VerifySoftwareToken
+            - cognito-idp:AdminSetUserMFAPreference
+            - cognito-idp:SetUserMFAPreference
             - cognito-idp:ConfirmSignUp
             - cognito-idp:ForgotPassword
             - cognito-idp:ConfirmForgotPassword
@@ -197,6 +201,118 @@ functions:
           method: put
           authorizer:
             id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  auth-mfa-status:
+    handler: cmd/handlers/auth/main.go
+    description: "Get MFA status for user"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-mfa-status
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-mfa-status
+      ENDPOINT_PATH: /auth/mfa/status
+    events:
+      - httpApi:
+          path: /auth/mfa/status
+          method: get
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  auth-mfa-setup-totp:
+    handler: cmd/handlers/auth/main.go
+    description: "Initiate TOTP setup"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-mfa-setup-totp
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-mfa-setup-totp
+      ENDPOINT_PATH: /auth/mfa/setup-totp
+    events:
+      - httpApi:
+          path: /auth/mfa/setup-totp
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  auth-mfa-verify-totp:
+    handler: cmd/handlers/auth/main.go
+    description: "Verify TOTP code and enable MFA"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-mfa-verify-totp
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-mfa-verify-totp
+      ENDPOINT_PATH: /auth/mfa/verify-totp
+    events:
+      - httpApi:
+          path: /auth/mfa/verify-totp
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  auth-mfa-enable-sms:
+    handler: cmd/handlers/auth/main.go
+    description: "Enable SMS MFA"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-mfa-enable-sms
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-mfa-enable-sms
+      ENDPOINT_PATH: /auth/mfa/enable-sms
+    events:
+      - httpApi:
+          path: /auth/mfa/enable-sms
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  auth-mfa-disable:
+    handler: cmd/handlers/auth/main.go
+    description: "Disable MFA"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-mfa-disable
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-mfa-disable
+      ENDPOINT_PATH: /auth/mfa/disable
+    events:
+      - httpApi:
+          path: /auth/mfa/disable
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  auth-mfa-challenge:
+    handler: cmd/handlers/auth/main.go
+    description: "Submit MFA challenge code during login"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-mfa-challenge
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-mfa-challenge
+      ENDPOINT_PATH: /auth/mfa-challenge
+    events:
+      - httpApi:
+          path: /auth/mfa-challenge
+          method: post
 
   auth-refresh:
     handler: cmd/handlers/auth/main.go

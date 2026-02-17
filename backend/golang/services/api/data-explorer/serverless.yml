@@ -185,6 +185,44 @@ functions:
           authorizer:
             id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
 
+  data-aggregate:
+    handler: cmd/handlers/data-explorer/main.go
+    description: "Aggregate data for Studio charts (bar, pie, scorecard, table)"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: data-aggregate
+    memorySize: 1024
+    timeout: 29
+    environment:
+      FUNCTION_NAME: data-aggregate
+      ENDPOINT_PATH: /data/aggregate
+    events:
+      - httpApi:
+          path: /data/aggregate
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
+  data-timeseries:
+    handler: cmd/handlers/data-explorer/main.go
+    description: "Time-bucketed aggregation for Studio line/area charts"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: data-timeseries
+    memorySize: 1024
+    timeout: 29
+    environment:
+      FUNCTION_NAME: data-timeseries
+      ENDPOINT_PATH: /data/timeseries
+    events:
+      - httpApi:
+          path: /data/timeseries
+          method: post
+          authorizer:
+            id: ${cf:mfh-api-gateway-${self:provider.stage}.CognitoAuthorizerId}
+
   data-health:
     handler: cmd/handlers/data-explorer/main.go
     description: "Health check endpoint"

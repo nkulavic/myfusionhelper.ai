@@ -17,6 +17,7 @@ import {
   Mail,
   MessageSquare,
   Database,
+  LayoutPanelTop,
   Menu,
   X,
   Search,
@@ -42,6 +43,7 @@ const navigation = [
   { name: 'Insights', href: '/insights', icon: Sparkles },
   { name: 'Data Explorer', href: '/data-explorer', icon: Database },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
+  { name: 'Studio', href: '/studio', icon: LayoutPanelTop },
   { name: 'Emails', href: '/emails', icon: Mail },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
