@@ -95,7 +95,7 @@ function PlanGateContent() {
     createCheckout.mutate(
       {
         plan: planId as 'start' | 'grow' | 'deliver',
-        returnUrl: '/onboarding/plan',
+        returnUrl: `${window.location.origin}/onboarding/plan`,
         billingPeriod: isAnnual ? 'annual' : 'monthly',
       },
       {
