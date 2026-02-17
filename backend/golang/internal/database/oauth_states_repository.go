@@ -29,9 +29,8 @@ func (r *OAuthStatesRepository) Create(ctx context.Context, state *types.OAuthSt
 // GetAndDelete retrieves an OAuth state by its state ID and then deletes it (one-time use).
 // Returns (nil, nil) if the state is not found.
 func (r *OAuthStatesRepository) GetAndDelete(ctx context.Context, stateID string) (*types.OAuthState, error) {
-	// Note: the OAuthState PK attribute in DynamoDB is "state" per the serverless.yml KeySchema,
-	// but the struct tag maps State -> "state_id". The DynamoDB table uses "state" as the
-	// attribute name in KeySchema. We need to use the DynamoDB attribute name here.
+	// The OAuthState PK attribute in DynamoDB is "state" per the KeySchema,
+	// matching the struct's dynamodbav:"state" tag.
 	key := map[string]ddbtypes.AttributeValue{
 		"state": stringVal(stateID),
 	}

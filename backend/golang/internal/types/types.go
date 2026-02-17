@@ -267,7 +267,7 @@ type PlatformConnectionAuth struct {
 
 // OAuthState represents a temporary OAuth state token for CSRF protection
 type OAuthState struct {
-	State      string                 `json:"state" dynamodbav:"state_id"`
+	State      string                 `json:"state" dynamodbav:"state"`
 	UserID     string                 `json:"user_id" dynamodbav:"user_id"`
 	AccountID  string                 `json:"account_id" dynamodbav:"account_id"`
 	PlatformID string                 `json:"platform_id" dynamodbav:"platform_id"`
