@@ -35,7 +35,7 @@ import { Button } from '@/components/ui/button'
 import { useBillingInfo } from '@/lib/hooks/use-settings'
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Helpers', href: '/helpers', icon: Blocks },
   { name: 'Connections', href: '/connections', icon: Link2 },
   { name: 'Executions', href: '/executions', icon: History },
@@ -97,7 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <Link href="/" className="flex items-center">
+        <Link href="/dashboard" className="flex items-center">
           <Image src="/logo.png" alt="MyFusion Helper" width={140} height={18} className="dark:brightness-0 dark:invert" />
         </Link>
       </div>
@@ -121,7 +121,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex h-full flex-col">
           {/* Logo */}
           <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
-            <Link href="/" className="flex items-center gap-2 font-bold text-sidebar-foreground">
+            <Link href="/dashboard" className="flex items-center gap-2 font-bold text-sidebar-foreground">
               <Image src="/logo.png" alt="MyFusion Helper" width={160} height={20} className="brightness-0 invert" />
             </Link>
             <Button

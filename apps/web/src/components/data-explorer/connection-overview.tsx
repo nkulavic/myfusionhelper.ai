@@ -54,7 +54,7 @@ export function ConnectionOverview() {
         if (!res.ok) throw new Error(`Failed to fetch catalog: ${res.status}`)
         const data = await res.json()
         if (!cancelled) {
-          setCatalog(data)
+          setCatalog(Array.isArray(data) ? data : data.sources ?? [])
         }
       } catch (err) {
         if (!cancelled) {
