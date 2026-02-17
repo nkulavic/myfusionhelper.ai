@@ -1,60 +1,30 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { ArrowLeft, AlertCircle, ChevronRight } from 'lucide-react'
-import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn } from '@/lib/utils'
 import { useDataExplorerStore } from '@/lib/stores/data-explorer-store'
 import { JsonViewer } from '@/components/data-explorer/json-viewer'
+import { useDataRecord } from '@/lib/hooks/use-data-explorer'
 
 export function RecordDetail() {
   const { selection, selectObjectType, selectConnection, selectPlatform } =
     useDataExplorerStore()
 
-  const [record, setRecord] = useState<unknown>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const {
+    data: recordData,
+    isLoading: loading,
+    error: queryError,
+  } = useDataRecord(
+    selection.connectionId,
+    selection.objectType,
+    selection.recordId,
+  )
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchRecord() {
-      if (
-        !selection.connectionId ||
-        !selection.objectType ||
-        !selection.recordId
-      ) {
-        setLoading(false)
-        setError('Missing record identifiers')
-        return
-      }
-
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await fetch(
-          `/api/data/record/${encodeURIComponent(selection.connectionId)}/${encodeURIComponent(selection.objectType)}/${encodeURIComponent(selection.recordId)}`
-        )
-        if (!res.ok) throw new Error(`Failed to fetch record: ${res.status}`)
-        const data = await res.json()
-        if (!cancelled) {
-          setRecord(data)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load record')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    fetchRecord()
-    return () => { cancelled = true }
-  }, [selection.connectionId, selection.objectType, selection.recordId])
+  const record = recordData?.record ?? null
+  const error = queryError instanceof Error ? queryError.message : queryError ? 'Failed to load record' : null
 
   const handleBackToObjectType = useCallback(() => {
     if (

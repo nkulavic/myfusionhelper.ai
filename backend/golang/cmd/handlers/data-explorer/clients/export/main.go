@@ -30,8 +30,8 @@ var (
 
 // ExportRequest is the expected POST body.
 type ExportRequest struct {
-	ConnectionID string `json:"connectionId"`
-	ObjectType   string `json:"objectType"`
+	ConnectionID string `json:"connection_id"`
+	ObjectType   string `json:"object_type"`
 	Format       string `json:"format"` // "csv" or "json"
 }
 
@@ -85,7 +85,7 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		return authMiddleware.CreateErrorResponse(403, "Access denied"), nil
 	}
 
-	parquetPath := fmt.Sprintf("s3://%s/%s/%s/%s/data.parquet", analyticsBucket, authCtx.AccountID, req.ConnectionID, req.ObjectType)
+	parquetPath := fmt.Sprintf("s3://%s/%s/%s/%s/chunk_*.parquet", analyticsBucket, authCtx.AccountID, req.ConnectionID, req.ObjectType)
 
 	// Open DuckDB in-memory
 	db, err := sql.Open("duckdb", "")

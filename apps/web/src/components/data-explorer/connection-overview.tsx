@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useMemo, useCallback } from 'react'
 import {
   Users,
   Tag,
@@ -8,9 +8,14 @@ import {
   FileText,
   Layers,
   AlertCircle,
+  RefreshCw,
+  Loader2,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
@@ -18,16 +23,8 @@ import { useDataExplorerStore } from '@/lib/stores/data-explorer-store'
 import { usePlatforms } from '@/lib/hooks/use-connections'
 import type { PlatformDefinition } from '@/lib/api/connections'
 import { PlatformLogo } from '@/components/platform-logo'
-
-interface CatalogEntry {
-  platformId: string
-  platformName: string
-  connectionId: string
-  connectionName: string
-  objectType: string
-  objectTypeLabel: string
-  recordCount: number
-}
+import type { CatalogObjectType } from '@/lib/api/data-explorer'
+import { useDataCatalog, useTriggerSync } from '@/lib/hooks/use-data-explorer'
 
 function getObjectTypeIcon(objectType: string) {
   const lower = objectType.toLowerCase()
@@ -37,42 +34,45 @@ function getObjectTypeIcon(objectType: string) {
   return FileText
 }
 
+function formatRelativeTime(dateString: string): string {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMins / 60)
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 export function ConnectionOverview() {
   const { selection, selectObjectType } = useDataExplorerStore()
-  const [catalog, setCatalog] = useState<CatalogEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data: catalogData, isLoading: loading, error: queryError } = useDataCatalog()
+  const triggerSync = useTriggerSync()
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchCatalog() {
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await fetch('/api/data/catalog')
-        if (!res.ok) throw new Error(`Failed to fetch catalog: ${res.status}`)
-        const data = await res.json()
-        if (!cancelled) {
-          setCatalog(Array.isArray(data) ? data : data.sources ?? [])
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load catalog')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    fetchCatalog()
-    return () => { cancelled = true }
-  }, [])
+  const catalog = catalogData?.sources ?? []
+  const error = queryError instanceof Error ? queryError.message : queryError ? 'Failed to load catalog' : null
 
   const connectionEntries = useMemo(
-    () => catalog.filter((e) => e.connectionId === selection.connectionId),
+    () => catalog.filter((e) => e.connection_id === selection.connectionId),
     [catalog, selection.connectionId]
   )
+
+  // Sync status derived from catalog entries for this connection
+  const syncInfo = useMemo(() => {
+    const entry = connectionEntries[0]
+    if (!entry) return null
+    return {
+      status: entry.sync_status,
+      lastSyncedAt: entry.last_synced_at,
+    }
+  }, [connectionEntries])
+
+  const isSyncing = syncInfo?.status === 'syncing' || triggerSync.isPending
 
   const { data: allPlatforms } = usePlatforms()
   const platform = useMemo(
@@ -84,7 +84,7 @@ export function ConnectionOverview() {
   )
 
   const handleSelectObjectType = useCallback(
-    (entry: CatalogEntry) => {
+    (entry: CatalogObjectType) => {
       if (
         !selection.platformId ||
         !selection.platformName ||
@@ -97,8 +97,8 @@ export function ConnectionOverview() {
         selection.platformName,
         selection.connectionId,
         selection.connectionName,
-        entry.objectType,
-        entry.objectTypeLabel
+        entry.object_type,
+        entry.label
       )
     },
     [
@@ -109,6 +109,11 @@ export function ConnectionOverview() {
       selectObjectType,
     ]
   )
+
+  const handleSync = useCallback(() => {
+    if (!selection.connectionId || isSyncing) return
+    triggerSync.mutate(selection.connectionId)
+  }, [selection.connectionId, isSyncing, triggerSync])
 
   if (loading) {
     return (
@@ -142,16 +147,49 @@ export function ConnectionOverview() {
     <ScrollArea className="h-full">
       <div className="p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="text-2xl font-bold tracking-tight">
-            {selection.connectionName ?? 'Connection'}
-          </h2>
-          {platform && (
-            <Badge variant="secondary" className="flex items-center gap-1.5">
-              <PlatformLogo definition={platform} size={20} />
-              <span>{platform.name}</span>
-            </Badge>
-          )}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="text-2xl font-bold tracking-tight">
+              {selection.connectionName ?? 'Connection'}
+            </h2>
+            {platform && (
+              <Badge variant="secondary" className="flex items-center gap-1.5">
+                <PlatformLogo definition={platform} size={20} />
+                <span>{platform.name}</span>
+              </Badge>
+            )}
+          </div>
+
+          {/* Sync controls */}
+          <div className="flex items-center gap-3">
+            {/* Sync status */}
+            {syncInfo?.lastSyncedAt && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                {isSyncing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                )}
+                <Clock className="h-3 w-3" />
+                <span>{formatRelativeTime(syncInfo.lastSyncedAt)}</span>
+              </div>
+            )}
+
+            {/* Sync button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSync}
+              disabled={isSyncing}
+            >
+              {isSyncing ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              {isSyncing ? 'Syncing...' : 'Sync Now'}
+            </Button>
+          </div>
         </div>
 
         {/* Object type cards */}
@@ -165,10 +203,10 @@ export function ConnectionOverview() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {connectionEntries.map((entry) => {
-              const Icon = getObjectTypeIcon(entry.objectType)
+              const Icon = getObjectTypeIcon(entry.object_type)
               return (
                 <Card
-                  key={entry.objectType}
+                  key={entry.object_type}
                   className={cn(
                     'relative overflow-hidden cursor-pointer',
                     'p-4 transition-all duration-200',
@@ -183,12 +221,19 @@ export function ConnectionOverview() {
                   <div className="pl-3 space-y-2">
                     <div className="flex items-center gap-2">
                       <Icon className="h-5 w-5 text-muted-foreground" />
-                      <span className="font-medium">{entry.objectTypeLabel}</span>
+                      <span className="font-medium">{entry.label}</span>
                     </div>
                     <p className="text-2xl font-bold tabular-nums">
-                      {(entry.recordCount ?? 0).toLocaleString()}
+                      {(entry.record_count ?? 0).toLocaleString()}
                     </p>
-                    <p className="text-xs text-muted-foreground">records</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">records</p>
+                      {entry.last_synced_at && (
+                        <p className="text-[10px] text-muted-foreground/70">
+                          {formatRelativeTime(entry.last_synced_at)}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </Card>
               )

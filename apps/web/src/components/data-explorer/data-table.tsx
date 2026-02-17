@@ -30,7 +30,7 @@ import {
   type FilterCondition,
   type FilterOperator,
 } from '@/lib/stores/data-explorer-store'
-import type { DataQueryResponse } from '@/lib/api/data-explorer'
+import { dataExplorerApi, type DataQueryResponse } from '@/lib/api/data-explorer'
 import { downloadCsv, downloadJson } from '@/components/data-explorer/export-utils'
 
 import {
@@ -361,29 +361,19 @@ export function DataTable() {
     setError(null)
 
     try {
-      const response = await fetch('/api/data/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          connectionId,
-          objectType,
-          page: pagination.page,
-          pageSize: pagination.pageSize,
-          sortBy: sorting.sortBy,
-          sortOrder: sorting.sortOrder,
-          filterConditions,
-          nlQuery,
-          search: debouncedSearch || undefined,
-        }),
+      const result = await dataExplorerApi.query({
+        connectionId,
+        objectType,
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        sortBy: sorting.sortBy ?? undefined,
+        sortOrder: sorting.sortOrder,
+        filterConditions,
+        search: debouncedSearch || undefined,
       })
 
-      if (!response.ok) {
-        throw new Error(`Query failed: ${response.status} ${response.statusText}`)
-      }
-
-      const result: DataQueryResponse = await response.json()
       setData(result)
-      setTotal(result.totalRecords)
+      setTotal(result.total_records)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while fetching data')
       setData(null)
@@ -398,7 +388,6 @@ export function DataTable() {
     sorting.sortBy,
     sorting.sortOrder,
     filterConditions,
-    nlQuery,
     debouncedSearch,
     setTotal,
   ])
@@ -447,7 +436,7 @@ export function DataTable() {
   const table = useReactTable({
     data: data?.records ?? [],
     columns,
-    pageCount: data?.totalPages ?? -1,
+    pageCount: data?.total_pages ?? -1,
     state: {
       sorting: tableSorting,
       pagination: tablePagination,
@@ -525,7 +514,7 @@ export function DataTable() {
   // Computed values
   // -------------------------------------------------------------------------
 
-  const totalPages = data?.totalPages ?? 0
+  const totalPages = data?.total_pages ?? 0
   const currentPage = pagination.page
   const startRecord = data?.records?.length
     ? (currentPage - 1) * pagination.pageSize + 1
@@ -774,7 +763,7 @@ export function DataTable() {
               variant="outline"
               size="sm"
               className="h-8 w-8 p-0"
-              disabled={!data.hasPrevPage}
+              disabled={!data.has_prev_page}
               onClick={() => setPage(currentPage - 1)}
             >
               <ChevronLeft className="h-3.5 w-3.5" />
@@ -805,7 +794,7 @@ export function DataTable() {
               variant="outline"
               size="sm"
               className="h-8 w-8 p-0"
-              disabled={!data.hasNextPage}
+              disabled={!data.has_next_page}
               onClick={() => setPage(currentPage + 1)}
             >
               <ChevronRight className="h-3.5 w-3.5" />
@@ -824,7 +813,7 @@ export function DataTable() {
 
           {/* Query time */}
           <div className="text-xs text-muted-foreground">
-            {data.queryTimeMs != null && `${data.queryTimeMs}ms`}
+            {data.query_time_ms != null && `${data.query_time_ms}ms`}
           </div>
         </div>
       )}

@@ -666,14 +666,14 @@ export function getMockCatalog(): CatalogObjectType[] {
     for (const connection of platform.connections) {
       for (const obj of connection.objects) {
         sources.push({
-          objectType: obj.objectType,
+          object_type: obj.objectType,
           label: obj.label,
           icon: obj.icon,
-          recordCount: obj.recordCount,
-          connectionId: connection.connectionId,
-          connectionName: connection.connectionName,
-          platformId: platform.platformId,
-          platformName: platform.platformName,
+          record_count: obj.recordCount,
+          connection_id: connection.connectionId,
+          connection_name: connection.connectionName,
+          platform_id: platform.platformId,
+          platform_name: platform.platformName,
         })
       }
     }

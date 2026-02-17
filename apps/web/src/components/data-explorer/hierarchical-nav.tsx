@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useMemo, useCallback } from 'react'
 import {
   Search,
   X,
@@ -41,21 +41,8 @@ import { useDataExplorerStore } from '@/lib/stores/data-explorer-store'
 import { PlatformLogo } from '@/components/platform-logo'
 import { usePlatforms } from '@/lib/hooks/use-connections'
 import type { PlatformDefinition } from '@/lib/api/connections'
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface CatalogObjectType {
-  objectType: string
-  label: string
-  icon: string
-  recordCount?: number
-  connectionId: string
-  connectionName: string
-  platformId: string
-  platformName: string
-}
+import type { CatalogObjectType } from '@/lib/api/data-explorer'
+import { useDataCatalog } from '@/lib/hooks/use-data-explorer'
 
 interface ObjectTypeNode {
   objectType: string
@@ -122,35 +109,35 @@ function buildTree(sources: CatalogObjectType[]): PlatformNode[] {
   const platformMap = new Map<string, PlatformNode>()
 
   for (const source of sources) {
-    let platform = platformMap.get(source.platformId)
+    let platform = platformMap.get(source.platform_id)
     if (!platform) {
       platform = {
-        platformId: source.platformId,
-        platformName: source.platformName,
+        platformId: source.platform_id,
+        platformName: source.platform_name,
         connections: [],
       }
-      platformMap.set(source.platformId, platform)
+      platformMap.set(source.platform_id, platform)
     }
 
     let connection = platform.connections.find(
-      (c) => c.connectionId === source.connectionId
+      (c) => c.connectionId === source.connection_id
     )
     if (!connection) {
       connection = {
-        connectionId: source.connectionId,
-        connectionName: source.connectionName,
-        platformId: source.platformId,
-        platformName: source.platformName,
+        connectionId: source.connection_id,
+        connectionName: source.connection_name,
+        platformId: source.platform_id,
+        platformName: source.platform_name,
         objectTypes: [],
       }
       platform.connections.push(connection)
     }
 
     connection.objectTypes.push({
-      objectType: source.objectType,
+      objectType: source.object_type,
       label: source.label,
       icon: source.icon,
-      recordCount: source.recordCount,
+      recordCount: source.record_count,
     })
   }
 
@@ -211,9 +198,10 @@ function filterTree(tree: PlatformNode[], query: string): PlatformNode[] {
 // ---------------------------------------------------------------------------
 
 export function HierarchicalNav() {
-  const [catalog, setCatalog] = useState<CatalogObjectType[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data: catalogData, isLoading: loading, error: queryError } = useDataCatalog()
+
+  const catalog = catalogData?.sources ?? []
+  const error = queryError instanceof Error ? queryError.message : queryError ? 'Failed to load catalog' : null
 
   const {
     selection,
@@ -227,38 +215,6 @@ export function HierarchicalNav() {
     selectObjectType,
     setSearchQuery,
   } = useDataExplorerStore()
-
-  // -- Fetch catalog on mount -------------------------------------------------
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchCatalog() {
-      try {
-        setLoading(true)
-        setError(null)
-        const res = await fetch('/api/data/catalog')
-        if (!res.ok) throw new Error(`Failed to fetch catalog: ${res.status}`)
-        const data = await res.json()
-        if (!cancelled) {
-          setCatalog(data.sources ?? [])
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load catalog')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    fetchCatalog()
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   // -- Build and filter tree --------------------------------------------------
 

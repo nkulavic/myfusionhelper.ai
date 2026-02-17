@@ -76,7 +76,7 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		return authMiddleware.CreateErrorResponse(403, "Access denied"), nil
 	}
 
-	parquetPath := fmt.Sprintf("s3://%s/%s/%s/%s/data.parquet", analyticsBucket, authCtx.AccountID, connectionID, objectType)
+	parquetPath := fmt.Sprintf("s3://%s/%s/%s/%s/chunk_*.parquet", analyticsBucket, authCtx.AccountID, connectionID, objectType)
 
 	// Open DuckDB in-memory
 	db, err := sql.Open("duckdb", "")

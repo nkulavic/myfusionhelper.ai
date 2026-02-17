@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useMemo, useCallback } from 'react'
 import { Link2, Layers, Hash, AlertCircle } from 'lucide-react'
 import {
   Card,
@@ -11,56 +11,21 @@ import {
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cn } from '@/lib/utils'
 import { useDataExplorerStore } from '@/lib/stores/data-explorer-store'
 import { usePlatforms } from '@/lib/hooks/use-connections'
 import type { PlatformDefinition } from '@/lib/api/connections'
 import { PlatformLogo } from '@/components/platform-logo'
-
-interface CatalogEntry {
-  platformId: string
-  platformName: string
-  connectionId: string
-  connectionName: string
-  objectType: string
-  objectTypeLabel: string
-  recordCount: number
-}
+import { useDataCatalog } from '@/lib/hooks/use-data-explorer'
 
 export function PlatformOverview() {
   const { selection, selectConnection } = useDataExplorerStore()
-  const [catalog, setCatalog] = useState<CatalogEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data: catalogData, isLoading: loading, error: queryError } = useDataCatalog()
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchCatalog() {
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await fetch('/api/data/catalog')
-        if (!res.ok) throw new Error(`Failed to fetch catalog: ${res.status}`)
-        const data = await res.json()
-        if (!cancelled) {
-          setCatalog(Array.isArray(data) ? data : data.sources ?? [])
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load catalog')
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    fetchCatalog()
-    return () => { cancelled = true }
-  }, [])
+  const catalog = catalogData?.sources ?? []
+  const error = queryError instanceof Error ? queryError.message : queryError ? 'Failed to load catalog' : null
 
   const platformEntries = useMemo(
-    () => catalog.filter((e) => e.platformId === selection.platformId),
+    () => catalog.filter((e) => e.platform_id === selection.platformId),
     [catalog, selection.platformId]
   )
 
@@ -74,9 +39,9 @@ export function PlatformOverview() {
   )
 
   const stats = useMemo(() => {
-    const connectionIds = new Set(platformEntries.map((e) => e.connectionId))
-    const objectTypes = new Set(platformEntries.map((e) => e.objectType))
-    const totalRecords = platformEntries.reduce((sum, e) => sum + (e.recordCount ?? 0), 0)
+    const connectionIds = new Set(platformEntries.map((e) => e.connection_id))
+    const objectTypes = new Set(platformEntries.map((e) => e.object_type))
+    const totalRecords = platformEntries.reduce((sum, e) => sum + (e.record_count ?? 0), 0)
     return {
       connections: connectionIds.size,
       objectTypes: objectTypes.size,
@@ -87,13 +52,13 @@ export function PlatformOverview() {
   const connections = useMemo(() => {
     const map = new Map<string, { id: string; name: string; objectTypeCount: number }>()
     for (const entry of platformEntries) {
-      const existing = map.get(entry.connectionId)
+      const existing = map.get(entry.connection_id)
       if (existing) {
         existing.objectTypeCount += 1
       } else {
-        map.set(entry.connectionId, {
-          id: entry.connectionId,
-          name: entry.connectionName,
+        map.set(entry.connection_id, {
+          id: entry.connection_id,
+          name: entry.connection_name,
           objectTypeCount: 1,
         })
       }

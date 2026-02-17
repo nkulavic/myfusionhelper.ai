@@ -33,13 +33,13 @@ var (
 
 // QueryRequest is the expected POST body for data queries.
 type QueryRequest struct {
-	ConnectionID     string            `json:"connectionId"`
-	ObjectType       string            `json:"objectType"`
+	ConnectionID     string            `json:"connection_id"`
+	ObjectType       string            `json:"object_type"`
 	Page             int               `json:"page"`
-	PageSize         int               `json:"pageSize"`
-	SortBy           string            `json:"sortBy"`
-	SortOrder        string            `json:"sortOrder"`
-	FilterConditions []FilterCondition `json:"filterConditions"`
+	PageSize         int               `json:"page_size"`
+	SortBy           string            `json:"sort_by"`
+	SortOrder        string            `json:"sort_order"`
+	FilterConditions []FilterCondition `json:"filter_conditions"`
 	Search           string            `json:"search"`
 }
 
@@ -159,7 +159,7 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	}
 
 	// Build parquet path
-	parquetPath := fmt.Sprintf("s3://%s/%s/%s/%s/data.parquet", analyticsBucket, authCtx.AccountID, req.ConnectionID, req.ObjectType)
+	parquetPath := fmt.Sprintf("s3://%s/%s/%s/%s/chunk_*.parquet", analyticsBucket, authCtx.AccountID, req.ConnectionID, req.ObjectType)
 
 	// Open DuckDB in-memory
 	db, err := sql.Open("duckdb", "")

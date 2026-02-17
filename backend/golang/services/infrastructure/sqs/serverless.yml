@@ -170,6 +170,42 @@ resources:
           - Key: ParentQueue
             Value: DataSyncQueue
 
+    # Data sync continuation queue - for chunked sync resumption
+    DataSyncContinuationQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-data-sync-continuation-${self:provider.stage}
+        VisibilityTimeout: 960  # > Lambda timeout (900s)
+        MessageRetentionPeriod: 1209600  # 14 days
+        ReceiveMessageWaitTimeSeconds: 20
+        RedrivePolicy:
+          deadLetterTargetArn: {"Fn::GetAtt": ["DataSyncContinuationDeadLetterQueue", "Arn"]}
+          maxReceiveCount: 3
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: Priority
+            Value: Medium
+          - Key: JobType
+            Value: DataSyncContinuation
+
+    DataSyncContinuationDeadLetterQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: mfh-data-sync-continuation-dlq-${self:provider.stage}
+        MessageRetentionPeriod: 1209600  # 14 days
+        Tags:
+          - Key: Service
+            Value: ${self:service}
+          - Key: Stage
+            Value: ${self:provider.stage}
+          - Key: QueueType
+            Value: DeadLetter
+          - Key: ParentQueue
+            Value: DataSyncContinuationQueue
+
   # CloudFormation Outputs
   Outputs:
     # Helper Execution Queue
@@ -271,3 +307,28 @@ resources:
       Value: {"Fn::GetAtt": ["DataSyncDeadLetterQueue", "Arn"]}
       Export:
         Name: ${self:service}-${self:provider.stage}-DataSyncDeadLetterQueueArn
+
+    # Data Sync Continuation Queue
+    DataSyncContinuationQueueUrl:
+      Description: Data sync continuation queue URL
+      Value: {"Ref": "DataSyncContinuationQueue"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DataSyncContinuationQueueUrl
+
+    DataSyncContinuationQueueArn:
+      Description: Data sync continuation queue ARN
+      Value: {"Fn::GetAtt": ["DataSyncContinuationQueue", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DataSyncContinuationQueueArn
+
+    DataSyncContinuationDeadLetterQueueUrl:
+      Description: Data sync continuation dead letter queue URL
+      Value: {"Ref": "DataSyncContinuationDeadLetterQueue"}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DataSyncContinuationDeadLetterQueueUrl
+
+    DataSyncContinuationDeadLetterQueueArn:
+      Description: Data sync continuation dead letter queue ARN
+      Value: {"Fn::GetAtt": ["DataSyncContinuationDeadLetterQueue", "Arn"]}
+      Export:
+        Name: ${self:service}-${self:provider.stage}-DataSyncContinuationDeadLetterQueueArn

@@ -143,6 +143,62 @@ async function request<T>(
   return data
 }
 
+// Raw request — handles auth + token refresh but skips key transformation.
+// Use for endpoints that return dynamic/user-defined keys (e.g. data explorer
+// records where column names like "first_name" must stay as-is).
+async function requestRaw<T>(
+  path: string,
+  options: RequestInit = {},
+  isRetry = false
+): Promise<T> {
+  const token = getAccessToken()
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...((options.headers as Record<string, string>) || {}),
+  }
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  })
+
+  if (response.status === 401 && !isRetry && !path.includes('/auth/')) {
+    const refreshed = await attemptTokenRefresh()
+    if (refreshed) {
+      return requestRaw<T>(path, options, true)
+    }
+    clearTokens()
+  }
+
+  if (!response.ok) {
+    let errorData: { error?: { code?: string; message?: string } } = {}
+    try {
+      errorData = await response.json()
+    } catch {
+      // response may not be JSON
+    }
+    throw new APIError(
+      response.status,
+      errorData.error?.code || 'UNKNOWN_ERROR',
+      errorData.error?.message || `Request failed (${response.status})`
+    )
+  }
+
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  const raw = await response.json()
+
+  // Return data from the API response wrapper without key transformation
+  return (raw.data ?? raw) as T
+}
+
 export const apiClient = {
   get: <T>(path: string) => request<T>(path, { method: 'GET' }),
 
@@ -165,6 +221,15 @@ export const apiClient = {
     }),
 
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+
+  // Raw methods — skip key transformation for endpoints with dynamic keys.
+  getRaw: <T>(path: string) => requestRaw<T>(path, { method: 'GET' }),
+
+  postRaw: <T>(path: string, body?: unknown) =>
+    requestRaw<T>(path, {
+      method: 'POST',
+      body: body ? JSON.stringify(body) : undefined,
+    }),
 }
 
 export { APIError }

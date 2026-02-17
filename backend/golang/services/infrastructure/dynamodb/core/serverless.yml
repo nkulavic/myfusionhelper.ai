@@ -496,6 +496,37 @@ resources:
             Projection:
               ProjectionType: ALL
 
+    # Sync Executions Table (chunked continuation state for data sync)
+    SyncExecutionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: mfh-${self:provider.stage}-sync-executions
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        PointInTimeRecoverySpecification:
+          PointInTimeRecoveryEnabled: true
+        AttributeDefinitions:
+          - AttributeName: execution_id
+            AttributeType: S
+          - AttributeName: status
+            AttributeType: S
+          - AttributeName: started_at
+            AttributeType: S
+        KeySchema:
+          - AttributeName: execution_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: StatusIndex
+            KeySchema:
+              - AttributeName: status
+                KeyType: HASH
+              - AttributeName: started_at
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
     # Email Verifications Table (email verification tokens with TTL)
     EmailVerificationsTable:
       Type: AWS::DynamoDB::Table
@@ -700,3 +731,12 @@ resources:
       Value: !GetAtt EmailVerificationsTable.Arn
       Export:
         Name: ${self:service}-${self:provider.stage}-EmailVerificationsTableArn
+
+    SyncExecutionsTableName:
+      Value: !Ref SyncExecutionsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SyncExecutionsTableName
+    SyncExecutionsTableArn:
+      Value: !GetAtt SyncExecutionsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-SyncExecutionsTableArn

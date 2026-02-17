@@ -27,7 +27,7 @@ var (
 
 // SyncRequest is the expected POST body.
 type SyncRequest struct {
-	ConnectionID string `json:"connectionId"`
+	ConnectionID string `json:"connection_id"`
 }
 
 // SyncMessage is the message sent to the data sync SQS queue.

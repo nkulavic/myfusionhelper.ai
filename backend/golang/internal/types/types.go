@@ -227,6 +227,10 @@ type PlatformConnection struct {
 	LastSyncedAt        *time.Time             `json:"last_synced_at,omitempty" dynamodbav:"last_synced_at,omitempty"`
 	SyncStatus          string                 `json:"sync_status,omitempty" dynamodbav:"sync_status,omitempty"`
 	SyncRecordCounts    map[string]int         `json:"sync_record_counts,omitempty" dynamodbav:"sync_record_counts,omitempty"`
+	SyncFrequency       string                 `json:"sync_frequency,omitempty" dynamodbav:"sync_frequency,omitempty"`           // "1h","6h","12h","24h","manual"
+	NextScheduledSync   *time.Time             `json:"next_scheduled_sync,omitempty" dynamodbav:"next_scheduled_sync,omitempty"`
+	SyncStartedAt       *time.Time             `json:"sync_started_at,omitempty" dynamodbav:"sync_started_at,omitempty"`
+	SyncErrorMessage    string                 `json:"sync_error_message,omitempty" dynamodbav:"sync_error_message,omitempty"`
 }
 
 // PlatformConnectionAuth represents authentication credentials for a platform connection
@@ -417,6 +421,31 @@ type FunctionCall struct {
 type ToolResult struct {
 	ToolCallID string `json:"tool_call_id" dynamodbav:"tool_call_id"`
 	Result     string `json:"result" dynamodbav:"result"`
+}
+
+// ========== SYNC EXECUTION TYPES ==========
+
+// SyncExecution tracks the state of a data sync job for chunked continuation.
+// When a sync Lambda is about to time out, it saves cursor state here and queues
+// a continuation message. The next invocation resumes from the saved position.
+type SyncExecution struct {
+	ExecutionID          string         `json:"execution_id" dynamodbav:"execution_id"`
+	ConnectionID         string         `json:"connection_id" dynamodbav:"connection_id"`
+	AccountID            string         `json:"account_id" dynamodbav:"account_id"`
+	Status               string         `json:"status" dynamodbav:"status"` // pending, syncing, completed, failed
+	StartedAt            string         `json:"started_at" dynamodbav:"started_at"`
+	ObjectTypes          []string       `json:"object_types" dynamodbav:"object_types"`
+	CurrentObjectType    string         `json:"current_object_type,omitempty" dynamodbav:"current_object_type,omitempty"`
+	ObjectTypeIndex      int            `json:"object_type_index" dynamodbav:"object_type_index"`
+	Cursor               string         `json:"cursor,omitempty" dynamodbav:"cursor,omitempty"`
+	Offset               int            `json:"offset" dynamodbav:"offset"`
+	ChunkNumber          int            `json:"chunk_number" dynamodbav:"chunk_number"`
+	RecordsSoFar         int            `json:"records_so_far" dynamodbav:"records_so_far"`
+	CompletedObjectTypes map[string]int `json:"completed_object_types,omitempty" dynamodbav:"completed_object_types,omitempty"`
+	UpdatedAt            string         `json:"updated_at" dynamodbav:"updated_at"`
+	CompletedAt          string         `json:"completed_at,omitempty" dynamodbav:"completed_at,omitempty"`
+	ErrorMessage         string         `json:"error_message,omitempty" dynamodbav:"error_message,omitempty"`
+	TTL                  int64          `json:"ttl,omitempty" dynamodbav:"ttl,omitempty"`
 }
 
 // ========== PLAN TYPES ==========

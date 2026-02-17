@@ -45,6 +45,7 @@ type CatalogSource struct {
 	PlatformID     string `json:"platform_id"`
 	PlatformName   string `json:"platform_name"`
 	LastSyncedAt   string `json:"last_synced_at,omitempty"`
+	SyncStatus     string `json:"sync_status,omitempty"`
 }
 
 // HandleWithAuth returns the data catalog for the authenticated account.
@@ -142,6 +143,7 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 				PlatformID:     conn.PlatformID,
 				PlatformName:   platformName,
 				LastSyncedAt:   lastSynced,
+				SyncStatus:     conn.SyncStatus,
 			})
 		}
 	}
