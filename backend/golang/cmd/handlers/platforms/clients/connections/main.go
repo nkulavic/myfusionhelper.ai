@@ -851,8 +851,8 @@ func oauthCallback(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 		}
 	}
 
-	// Check for existing connection
-	existingConn, _ := findExistingConnection(ctx, db, oauthState.AccountID, oauthState.PlatformID, externalUserID)
+	// Check for existing connection (one connection per platform per account)
+	existingConn, _ := findExistingConnection(ctx, db, oauthState.AccountID, oauthState.PlatformID)
 
 	now := time.Now().UTC()
 	var connectionID string
@@ -905,6 +905,10 @@ func oauthCallback(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 		if externalUserEmail != "" {
 			updateParts = append(updateParts, "external_user_email = :eue")
 			updateValues[":eue"] = &ddbtypes.AttributeValueMemberS{Value: externalUserEmail}
+			// Update name to include email for better identification
+			updateParts = append(updateParts, "#n = :name")
+			updateNames["#n"] = "name"
+			updateValues[":name"] = &ddbtypes.AttributeValueMemberS{Value: fmt.Sprintf("%s (%s)", platform.Name, externalUserEmail)}
 		}
 
 		_, _ = db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
@@ -952,6 +956,9 @@ func oauthCallback(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 		}
 
 		connectionName := fmt.Sprintf("%s Connection", platform.Name)
+		if externalUserEmail != "" {
+			connectionName = fmt.Sprintf("%s (%s)", platform.Name, externalUserEmail)
+		}
 
 		connection := apitypes.PlatformConnection{
 			ConnectionID:      connectionID,
@@ -1117,20 +1124,15 @@ func loadOAuthCredentials(ctx context.Context, ssmClient *ssm.Client, stage, slu
 	return oauthConfig.ClientID, oauthConfig.ClientSecret, nil
 }
 
-func findExistingConnection(ctx context.Context, db *dynamodb.Client, accountID, platformID, externalUserID string) (*apitypes.PlatformConnection, error) {
-	if externalUserID == "" {
-		return nil, nil
-	}
-
+func findExistingConnection(ctx context.Context, db *dynamodb.Client, accountID, platformID string) (*apitypes.PlatformConnection, error) {
 	result, err := db.Query(ctx, &dynamodb.QueryInput{
 		TableName:              aws.String(connectionsTable),
 		IndexName:              aws.String("AccountIdIndex"),
 		KeyConditionExpression: aws.String("account_id = :account_id"),
-		FilterExpression:       aws.String("platform_id = :platform_id AND external_user_id = :external_user_id"),
+		FilterExpression:       aws.String("platform_id = :platform_id"),
 		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
-			":account_id":       &ddbtypes.AttributeValueMemberS{Value: accountID},
-			":platform_id":      &ddbtypes.AttributeValueMemberS{Value: platformID},
-			":external_user_id": &ddbtypes.AttributeValueMemberS{Value: externalUserID},
+			":account_id":  &ddbtypes.AttributeValueMemberS{Value: accountID},
+			":platform_id": &ddbtypes.AttributeValueMemberS{Value: platformID},
 		},
 	})
 	if err != nil {
