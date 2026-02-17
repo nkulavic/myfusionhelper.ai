@@ -13,6 +13,8 @@
     "auth_url": "https://accounts.infusionsoft.com/app/oauth/authorize",
     "token_url": "https://api.infusionsoft.com/token",
     "user_info_url": "https://api.infusionsoft.com/crm/rest/v2/oauth/connect/userinfo",
+    "account_info_url": "https://api.infusionsoft.com/crm/rest/v1/account/profile",
+    "account_name_field": "name",
     "scopes": ["full"],
     "response_type": "code"
   },

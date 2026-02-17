@@ -143,11 +143,13 @@ type Platform struct {
 
 // OAuthConfiguration represents OAuth settings for a platform
 type OAuthConfiguration struct {
-	AuthURL      string   `json:"auth_url" dynamodbav:"auth_url"`
-	TokenURL     string   `json:"token_url" dynamodbav:"token_url"`
-	UserInfoURL  string   `json:"user_info_url" dynamodbav:"user_info_url"`
-	Scopes       []string `json:"scopes" dynamodbav:"scopes"`
-	ResponseType string   `json:"response_type" dynamodbav:"response_type"`
+	AuthURL          string   `json:"auth_url" dynamodbav:"auth_url"`
+	TokenURL         string   `json:"token_url" dynamodbav:"token_url"`
+	UserInfoURL      string   `json:"user_info_url" dynamodbav:"user_info_url"`
+	AccountInfoURL   string   `json:"account_info_url,omitempty" dynamodbav:"account_info_url,omitempty"`
+	AccountNameField string   `json:"account_name_field,omitempty" dynamodbav:"account_name_field,omitempty"`
+	Scopes           []string `json:"scopes" dynamodbav:"scopes"`
+	ResponseType     string   `json:"response_type" dynamodbav:"response_type"`
 }
 
 // DisplayConfig holds UI metadata for rendering a platform in the frontend

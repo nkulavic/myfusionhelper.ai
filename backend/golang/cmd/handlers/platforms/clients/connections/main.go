@@ -851,8 +851,8 @@ func oauthCallback(ctx context.Context, event events.APIGatewayV2HTTPRequest) (e
 		}
 	}
 
-	// Fetch the CRM account/app name (platform-specific)
-	externalAppName = fetchAppName(ctx, platform.Slug, tokens.AccessToken)
+	// Fetch the CRM account/app name (driven by platform config)
+	externalAppName = fetchAppName(ctx, platform.OAuth, tokens.AccessToken)
 	if externalAppName != "" {
 		log.Printf("Fetched app name: %s", externalAppName)
 	}
@@ -1138,18 +1138,15 @@ func fetchUserInfo(ctx context.Context, userInfoURL, accessToken string) (*OAuth
 	return userInfo, nil
 }
 
-// fetchAppName fetches the CRM account/app name using the access token.
-// Platform-specific: each CRM has a different endpoint for this.
-func fetchAppName(ctx context.Context, slug, accessToken string) string {
-	var profileURL string
-	switch slug {
-	case "keap":
-		profileURL = "https://api.infusionsoft.com/crm/rest/v1/account/profile"
-	default:
+// fetchAppName fetches the CRM account/app name using the platform's OAuth config.
+// Uses account_info_url and account_name_field from the platform definition — no
+// platform-specific logic needed. Returns empty string if not configured or on error.
+func fetchAppName(ctx context.Context, oauth *apitypes.OAuthConfiguration, accessToken string) string {
+	if oauth == nil || oauth.AccountInfoURL == "" || oauth.AccountNameField == "" {
 		return ""
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", profileURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", oauth.AccountInfoURL, nil)
 	if err != nil {
 		return ""
 	}
@@ -1172,7 +1169,18 @@ func fetchAppName(ctx context.Context, slug, accessToken string) string {
 		return ""
 	}
 
-	if name, ok := raw["name"].(string); ok && name != "" {
+	// Support nested field paths like "account.name" via dot notation
+	fields := strings.Split(oauth.AccountNameField, ".")
+	var current interface{} = raw
+	for _, field := range fields {
+		m, ok := current.(map[string]interface{})
+		if !ok {
+			return ""
+		}
+		current = m[field]
+	}
+
+	if name, ok := current.(string); ok && name != "" {
 		return name
 	}
 	return ""
