@@ -56,7 +56,7 @@ export default function LoginPage() {
     setError('')
     loginMutation.mutate(values, {
       onSuccess: () => {
-        router.push(onboardingComplete ? '/' : '/onboarding')
+        router.push(onboardingComplete ? '/' : '/onboarding/plan')
       },
       onError: (err) => {
         if (err instanceof APIError) {

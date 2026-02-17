@@ -169,7 +169,7 @@ export default function RegisterPage() {
     setError('')
     registerMutation.mutate(values, {
       onSuccess: () => {
-        router.push('/onboarding')
+        router.push('/onboarding/plan')
       },
       onError: (err) => {
         if (err instanceof APIError) {

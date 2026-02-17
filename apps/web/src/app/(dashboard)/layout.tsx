@@ -63,10 +63,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Register global keyboard shortcuts
   useGlobalKeyboardShortcuts()
 
-  // Redirect to onboarding if not completed (wait for hydration first)
+  // Redirect to plan gate if not subscribed, or onboarding if not completed
   useEffect(() => {
     if (_hasHydrated && !onboardingComplete) {
-      router.replace('/onboarding')
+      router.replace('/onboarding/plan')
     }
   }, [_hasHydrated, onboardingComplete, router])
 
@@ -274,28 +274,6 @@ function UpgradeBanner() {
   const handleDismiss = () => {
     setDismissed(true)
     sessionStorage.setItem('mfh_banner_dismissed', '1')
-  }
-
-  // Sandbox upgrade banner
-  if (billing.plan === 'free') {
-    return (
-      <div className="flex items-center justify-between gap-4 border-b bg-primary/5 px-4 py-2 sm:px-6">
-        <p className="text-sm text-foreground">
-          You&apos;re on the free sandbox (1 helper, 100 executions).{' '}
-          <Link href="/settings?tab=billing" className="font-medium text-primary hover:underline">
-            Choose a plan
-          </Link>{' '}
-          to unlock full features.
-        </p>
-        <button
-          onClick={handleDismiss}
-          className="shrink-0 text-muted-foreground hover:text-foreground"
-          aria-label="Dismiss"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-    )
   }
 
   // Trial countdown (< 7 days remaining)

@@ -6,19 +6,16 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useWorkspaceStore } from '@/lib/stores/workspace-store'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useCompleteOnboarding } from '@/lib/hooks/use-auth'
-import { WelcomeStep } from './_components/welcome-step'
+import { useBillingInfo } from '@/lib/hooks/use-settings'
 import { ConnectCRMStep } from './_components/connect-crm-step'
-import { PlanStep } from './_components/plan-step'
 import { PickHelperStep } from './_components/pick-helper-step'
 import { QuickTourStep } from './_components/quick-tour-step'
 
-const STEPS = ['welcome', 'connect', 'plan', 'helper', 'tour'] as const
+const STEPS = ['connect', 'helper', 'tour'] as const
 type Step = (typeof STEPS)[number]
 
 const stepLabels: Record<Step, string> = {
-  welcome: 'Welcome',
   connect: 'Connect CRM',
-  plan: 'Pick Plan',
   helper: 'First Helper',
   tour: 'Quick Tour',
 }
@@ -55,13 +52,14 @@ function OnboardingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuthStore()
-  const { completeOnboarding, onboardingComplete } = useWorkspaceStore()
+  const { completeOnboarding, onboardingComplete, _hasHydrated } = useWorkspaceStore()
   const completeOnboardingMutation = useCompleteOnboarding()
+  const { data: billing, isLoading: billingLoading } = useBillingInfo()
 
-  // Resume at correct step when returning from Stripe Checkout
+  // Resume at correct step when returning
   const stepParam = searchParams.get('step') as Step | null
   const initialStep: Step =
-    stepParam && STEPS.includes(stepParam as Step) ? (stepParam as Step) : 'welcome'
+    stepParam && STEPS.includes(stepParam as Step) ? (stepParam as Step) : 'connect'
 
   const [currentStep, setCurrentStep] = useState<Step>(initialStep)
   const [direction, setDirection] = useState(0)
@@ -71,12 +69,19 @@ function OnboardingContent() {
 
   useEffect(() => { setMounted(true) }, [])
 
-  // If onboarding is already complete (from localStorage or user record), redirect
+  // If onboarding is already complete, redirect to dashboard
   useEffect(() => {
-    if (mounted && (onboardingComplete || user?.onboardingComplete)) {
-      router.replace('/helpers')
+    if (mounted && _hasHydrated && (onboardingComplete || user?.onboardingComplete)) {
+      router.replace('/')
     }
-  }, [mounted, onboardingComplete, user?.onboardingComplete, router])
+  }, [mounted, _hasHydrated, onboardingComplete, user?.onboardingComplete, router])
+
+  // If user has no subscription, redirect to plan selection
+  useEffect(() => {
+    if (mounted && !billingLoading && billing && billing.plan === 'free') {
+      router.replace('/onboarding/plan')
+    }
+  }, [mounted, billingLoading, billing, router])
 
   const goToStep = useCallback(
     (step: Step) => {
@@ -102,16 +107,14 @@ function OnboardingContent() {
   const finish = useCallback(() => {
     completeOnboarding()
     completeOnboardingMutation.mutate()
-    router.push('/helpers')
+    router.push('/')
   }, [completeOnboarding, completeOnboardingMutation, router])
 
   const skip = useCallback(() => {
     completeOnboarding()
     completeOnboardingMutation.mutate()
-    router.push('/helpers')
+    router.push('/')
   }, [completeOnboarding, completeOnboardingMutation, router])
-
-  const firstName = user?.name?.split(' ')[0] || 'there'
 
   if (!mounted) {
     return null
@@ -190,14 +193,8 @@ function OnboardingContent() {
             exit="exit"
             transition={transition}
           >
-            {currentStep === 'welcome' && (
-              <WelcomeStep firstName={firstName} onNext={next} onSkip={skip} />
-            )}
             {currentStep === 'connect' && (
-              <ConnectCRMStep onNext={next} onBack={back} onSkip={skip} />
-            )}
-            {currentStep === 'plan' && (
-              <PlanStep onNext={next} onBack={back} onSkip={next} />
+              <ConnectCRMStep onNext={next} onBack={() => router.push('/onboarding/plan')} onSkip={skip} />
             )}
             {currentStep === 'helper' && (
               <PickHelperStep onNext={next} onBack={back} onSkip={skip} />
