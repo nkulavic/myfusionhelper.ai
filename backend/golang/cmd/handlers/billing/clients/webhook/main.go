@@ -128,20 +128,19 @@ func handleSubscriptionUpdate(ctx context.Context, event stripe.Event) (events.A
 		return authMiddleware.CreateErrorResponse(500, "Failed to process event"), nil
 	}
 
-	// Sync Cognito plan group for the owner user
+	// Sync Cognito plan group and send billing email synchronously.
+	// NOTE: These must NOT use goroutines in Lambda -- the context gets cancelled
+	// when the handler returns, causing all background goroutines to fail.
 	if ownerUserID != "" {
-		go syncCognitoPlanGroup(ctx, ownerUserID, plan)
-	}
+		syncCognitoPlanGroup(ctx, ownerUserID, plan)
 
-	// Send billing email notification asynchronously
-	if ownerUserID != "" {
 		cfg, _ := config.LoadDefaultConfig(ctx)
 		dbClient := dynamodb.NewFromConfig(cfg)
 		eventType := "subscription_created"
 		if event.Type == "customer.subscription.updated" {
-			eventType = "subscription_created" // same template for update
+			eventType = "subscription_created"
 		}
-		go sendBillingEmail(ctx, dbClient, ownerUserID, eventType, plan)
+		sendBillingEmail(ctx, dbClient, ownerUserID, eventType, plan)
 	}
 
 	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
@@ -166,10 +165,10 @@ func handleSubscriptionCancelled(ctx context.Context, event stripe.Event) (event
 	}
 
 	if ownerUserID != "" {
-		go syncCognitoPlanGroup(ctx, ownerUserID, "free")
+		syncCognitoPlanGroup(ctx, ownerUserID, "free")
 		cfg, _ := config.LoadDefaultConfig(ctx)
 		dbClient := dynamodb.NewFromConfig(cfg)
-		go sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_cancelled", "free")
+		sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_cancelled", "free")
 	}
 
 	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
@@ -294,8 +293,8 @@ func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event, str
 	}
 
 	if ownerUserID != "" {
-		go syncCognitoPlanGroup(ctx, ownerUserID, plan)
-		go sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_created", plan)
+		syncCognitoPlanGroup(ctx, ownerUserID, plan)
+		sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_created", plan)
 	}
 
 	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -142,8 +143,15 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 
 	// Allow caller to specify a return URL (e.g., onboarding flow)
 	if req.ReturnURL != "" {
-		successURL = baseURL + req.ReturnURL + "?session_id={CHECKOUT_SESSION_ID}"
-		cancelURL = baseURL + req.ReturnURL + "&billing=cancelled"
+		returnPath := req.ReturnURL
+		// Use correct query separator based on whether ReturnURL already has query params
+		if strings.Contains(returnPath, "?") {
+			successURL = baseURL + returnPath + "&session_id={CHECKOUT_SESSION_ID}"
+			cancelURL = baseURL + returnPath + "&billing=cancelled"
+		} else {
+			successURL = baseURL + returnPath + "?session_id={CHECKOUT_SESSION_ID}"
+			cancelURL = baseURL + returnPath + "?billing=cancelled"
+		}
 	}
 
 	params := &stripe.CheckoutSessionParams{

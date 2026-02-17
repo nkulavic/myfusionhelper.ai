@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { Suspense, useState, useCallback, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useWorkspaceStore } from '@/lib/stores/workspace-store'
@@ -44,10 +44,18 @@ const transition = {
 }
 
 export default function OnboardingPage() {
+  return (
+    <Suspense fallback={null}>
+      <OnboardingContent />
+    </Suspense>
+  )
+}
+
+function OnboardingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuthStore()
-  const { completeOnboarding, onboardingComplete, _hasHydrated } = useWorkspaceStore()
+  const { completeOnboarding, onboardingComplete } = useWorkspaceStore()
   const completeOnboardingMutation = useCompleteOnboarding()
 
   // Resume at correct step when returning from Stripe Checkout
@@ -57,19 +65,18 @@ export default function OnboardingPage() {
 
   const [currentStep, setCurrentStep] = useState<Step>(initialStep)
   const [direction, setDirection] = useState(0)
+  const [mounted, setMounted] = useState(false)
+
+  const currentIndex = STEPS.indexOf(currentStep)
+
+  useEffect(() => { setMounted(true) }, [])
 
   // If onboarding is already complete (from localStorage or user record), redirect
   useEffect(() => {
-    if (_hasHydrated && (onboardingComplete || user?.onboardingComplete)) {
+    if (mounted && (onboardingComplete || user?.onboardingComplete)) {
       router.replace('/helpers')
     }
-  }, [_hasHydrated, onboardingComplete, user?.onboardingComplete, router])
-
-  if (!_hasHydrated || onboardingComplete || user?.onboardingComplete) {
-    return null
-  }
-
-  const currentIndex = STEPS.indexOf(currentStep)
+  }, [mounted, onboardingComplete, user?.onboardingComplete, router])
 
   const goToStep = useCallback(
     (step: Step) => {
@@ -105,6 +112,10 @@ export default function OnboardingPage() {
   }, [completeOnboarding, completeOnboardingMutation, router])
 
   const firstName = user?.name?.split(' ')[0] || 'there'
+
+  if (!mounted) {
+    return null
+  }
 
   return (
     <div className="space-y-8">

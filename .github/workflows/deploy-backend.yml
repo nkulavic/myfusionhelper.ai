@@ -170,6 +170,26 @@ jobs:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
+  # 2a-stripe. Setup Stripe Webhooks (after infra, before API services)
+  # Creates/updates webhook endpoint and stores signing secret in SSM
+  # ──────────────────────────────────────────────
+  setup-stripe-webhooks:
+    name: Setup Stripe Webhooks
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
+          aws-region: us-west-2
+
+      - name: Setup Stripe webhook endpoints
+        working-directory: backend/golang/scripts
+        run: bash setup-stripe-webhooks.sh ${{ env.DEPLOY_STAGE }} us-west-2
+
+  # ──────────────────────────────────────────────
   # 2a. Detect Changed Helper Workers (for intelligent deployment)
   # ──────────────────────────────────────────────
   detect-changed-helpers:
