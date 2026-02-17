@@ -118,7 +118,7 @@ export function ConnectCRMStep({ onNext, onBack, onSkip }: ConnectCRMStepProps) 
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {platforms?.map((platform: PlatformDefinition) => {
+            {platforms?.filter((p: PlatformDefinition) => p.types?.includes('crm')).map((platform: PlatformDefinition) => {
               const isConnected = connections?.some(
                 (c: PlatformConnection) => c.platformId === platform.platformId || c.platformId === platform.slug
               )

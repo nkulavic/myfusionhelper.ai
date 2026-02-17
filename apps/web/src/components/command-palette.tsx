@@ -32,7 +32,7 @@ import { useConnections } from '@/lib/hooks/use-connections'
 import type { PlatformConnection } from '@myfusionhelper/types'
 
 const navigationItems = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, keywords: 'home overview' },
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard, keywords: 'home overview' },
   { name: 'Helpers', href: '/helpers', icon: Blocks, keywords: 'automations' },
   { name: 'Connections', href: '/connections', icon: Link2, keywords: 'crm platforms' },
   { name: 'Executions', href: '/executions', icon: History, keywords: 'runs logs' },

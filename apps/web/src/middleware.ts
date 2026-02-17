@@ -12,13 +12,23 @@ export function middleware(request: NextRequest) {
     (route) => pathname === route || pathname.startsWith(route + '/')
   )
 
+  // Check for auth indicator cookie (set by auth-client when tokens are stored)
+  const isAuthenticated = request.cookies.has('mfh_authenticated')
+
+  // Authenticated users: rewrite / to dashboard (URL stays /), redirect away from login/register
+  if (isAuthenticated) {
+    if (pathname === '/') {
+      return NextResponse.rewrite(new URL('/dashboard', request.url))
+    }
+    if (pathname === '/login' || pathname === '/register') {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+  }
+
   // Allow public routes
   if (isPublicRoute) {
     return NextResponse.next()
   }
-
-  // Check for auth indicator cookie (set by auth-client when tokens are stored)
-  const isAuthenticated = request.cookies.has('mfh_authenticated')
 
   // If not authenticated and trying to access protected route, redirect to login
   if (!isAuthenticated) {
