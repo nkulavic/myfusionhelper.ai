@@ -1,8 +1,8 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  Zap,
   ArrowRight,
   CheckCircle,
   XCircle,
@@ -12,12 +12,14 @@ import {
   Activity,
   TrendingUp,
   Plus,
-  AlertTriangle,
 } from 'lucide-react'
 import { useHelpers, useExecutions } from '@/lib/hooks/use-helpers'
 import { useConnections } from '@/lib/hooks/use-connections'
 import type { PlatformConnection } from '@myfusionhelper/types'
 import { Skeleton } from '@/components/ui/skeleton'
+import { GettingStartedCard } from './_components/getting-started-card'
+
+const GS_DISMISSED_KEY = 'mfh_getting_started_dismissed'
 
 const quickActions = [
   { label: 'Create Helper', href: '/helpers?view=new', icon: Plus },
@@ -68,6 +70,17 @@ export default function DashboardPage() {
   const { data: connections, isLoading: connectionsLoading } = useConnections()
   const { data: executions, isLoading: executionsLoading } = useExecutions({ limit: 5 })
 
+  const [gsDismissed, setGsDismissed] = useState(true) // default true to avoid flash
+
+  useEffect(() => {
+    setGsDismissed(localStorage.getItem(GS_DISMISSED_KEY) === '1')
+  }, [])
+
+  const handleDismissGs = () => {
+    setGsDismissed(true)
+    localStorage.setItem(GS_DISMISSED_KEY, '1')
+  }
+
   const activeHelpers = helpers?.filter((h) => h.status === 'active').length ?? 0
   const activeConnections = connections?.filter((c) => c.status === 'active') ?? []
   const todayExecutions = executions?.length ?? 0
@@ -76,6 +89,12 @@ export default function DashboardPage() {
     : '0'
 
   const statsLoading = helpersLoading || connectionsLoading || executionsLoading
+
+  const hasConnections = (connections?.length ?? 0) > 0
+  const hasHelpers = (helpers?.length ?? 0) > 0
+  const hasExecutions = (executions?.length ?? 0) > 0
+  const allSetupComplete = hasConnections && hasHelpers && hasExecutions
+  const showGettingStarted = !gsDismissed && !allSetupComplete
 
   const stats = [
     {
@@ -113,6 +132,17 @@ export default function DashboardPage() {
           Overview of your CRM automation activity
         </p>
       </div>
+
+      {/* Getting Started */}
+      {(statsLoading || showGettingStarted) && !gsDismissed && (
+        <GettingStartedCard
+          connections={connections}
+          helpers={helpers}
+          executions={executions}
+          isLoading={statsLoading}
+          onDismiss={handleDismissGs}
+        />
+      )}
 
       {/* Stats Grid */}
       {statsLoading ? (
