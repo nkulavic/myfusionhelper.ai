@@ -29,12 +29,7 @@ export function useConversations() {
 export function useConversation(conversationId: string | null) {
   return useQuery({
     queryKey: ['conversation', conversationId],
-    queryFn: () => {
-      if (!conversationId) {
-        return Promise.resolve({ conversation: null, messages: [] })
-      }
-      return chatApi.getConversation(conversationId)
-    },
+    queryFn: () => chatApi.getConversation(conversationId!),
     enabled: !!conversationId,
   })
 }

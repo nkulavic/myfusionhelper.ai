@@ -20,6 +20,8 @@ import {
 import { cn } from '@/lib/utils'
 import { useHelpers, useExecutions } from '@/lib/hooks/use-helpers'
 import { useConnections, usePlatforms } from '@/lib/hooks/use-connections'
+import type { PlatformDefinition } from '@/lib/api/connections'
+import type { PlatformConnection } from '@myfusionhelper/types'
 import { useInsights, type AIInsight } from '@/lib/hooks/use-insights'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PlatformLogo } from '@/components/platform-logo'
@@ -549,8 +551,8 @@ export default function InsightsPage() {
             </div>
             {connections && connections.length > 0 ? (
               <div className="space-y-3">
-                {connections.map((conn) => {
-                  const platform = platforms?.find((p) => p.platformId === conn.platformId || p.slug === conn.platformId)
+                {connections.map((conn: PlatformConnection) => {
+                  const platform = platforms?.find((p: PlatformDefinition) => p.platformId === conn.platformId || p.slug === conn.platformId)
                   return (
                     <div
                       key={conn.connectionId}

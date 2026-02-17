@@ -29,6 +29,7 @@ import {
 import { useUIStore } from '@/lib/stores/ui-store'
 import { useHelpers } from '@/lib/hooks/use-helpers'
 import { useConnections } from '@/lib/hooks/use-connections'
+import type { PlatformConnection } from '@myfusionhelper/types'
 
 const navigationItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, keywords: 'home overview' },
@@ -152,7 +153,7 @@ export function CommandPalette() {
           <>
             <CommandSeparator />
             <CommandGroup heading="Connections">
-              {recentConnections.map((conn) => (
+              {recentConnections.map((conn: PlatformConnection) => (
                 <CommandItem
                   key={conn.connectionId}
                   value={`connection ${conn.name} ${conn.platformId}`}

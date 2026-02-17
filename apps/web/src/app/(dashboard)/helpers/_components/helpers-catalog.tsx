@@ -23,6 +23,7 @@ import {
 } from '@/lib/helpers-catalog'
 import { useHelperTypes } from '@/lib/hooks/use-helpers'
 import { usePlatforms } from '@/lib/hooks/use-connections'
+import type { PlatformDefinition } from '@/lib/api/connections'
 import { CRMBadges } from '@/components/crm-badges'
 
 /** Merged view: backend type data + static catalog metadata (icon, popular, status) */
@@ -208,7 +209,7 @@ export function HelpersCatalog({ onSelectHelper, onNewHelper, crmFilter }: Helpe
           className="h-10 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <option value="all">All Platforms</option>
-          {platforms?.map((p) => (
+          {platforms?.map((p: PlatformDefinition) => (
             <option key={p.slug} value={p.slug}>{p.name}</option>
           ))}
         </select>
@@ -320,7 +321,7 @@ function CatalogCard({
   const { data: allPlatforms } = usePlatforms()
   const accentPlatform =
     item.supportedCRMs.length > 0
-      ? allPlatforms?.find((p) => p.slug === item.supportedCRMs[0] || p.platformId === item.supportedCRMs[0])
+      ? allPlatforms?.find((p: PlatformDefinition) => p.slug === item.supportedCRMs[0] || p.platformId === item.supportedCRMs[0])
       : null
 
   // Fallback icon from static catalog

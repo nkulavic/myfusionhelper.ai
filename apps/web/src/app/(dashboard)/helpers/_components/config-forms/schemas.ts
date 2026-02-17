@@ -281,7 +281,7 @@ export type IpNotificationsConfig = z.infer<typeof ipNotificationsSchema>
 
 export const ipRedirectsSchema = z.object({
   ip_address: requiredField,
-  country_urls: z.record(z.string()).optional().default({}),
+  country_urls: z.record(z.string(), z.string()).optional().default({}),
   default_url: optionalString,
   save_redirect_to: optionalField,
 })
@@ -869,7 +869,7 @@ export const trelloItSchema = z.object({
       trello: optionalString,
     })
     .optional()
-    .default({}),
+    .default({ trello: '' }),
 })
 export type TrelloItConfig = z.infer<typeof trelloItSchema>
 
@@ -882,7 +882,7 @@ export const donorSearchSchema = z.object({
       donorlead: optionalString,
     })
     .optional()
-    .default({}),
+    .default({ donorlead: '' }),
 })
 export type DonorSearchConfig = z.infer<typeof donorSearchSchema>
 

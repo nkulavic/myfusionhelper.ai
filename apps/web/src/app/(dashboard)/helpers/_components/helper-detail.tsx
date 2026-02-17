@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { CRMBadges } from '@/components/crm-badges'
 import { useConnections } from '@/lib/hooks/use-connections'
+import type { PlatformConnection } from '@myfusionhelper/types'
 import { ScheduleConfig } from './schedule-config'
 
 interface HelperDetailProps {
@@ -99,7 +100,7 @@ export function HelperDetail({ helperId, onBack }: HelperDetailProps) {
 
   const { data: connections } = useConnections()
   const helperConnection = useMemo(
-    () => helper?.connectionId ? connections?.find((c) => c.connectionId === helper.connectionId) : undefined,
+    () => helper?.connectionId ? connections?.find((c: PlatformConnection) => c.connectionId === helper.connectionId) : undefined,
     [helper?.connectionId, connections]
   )
 

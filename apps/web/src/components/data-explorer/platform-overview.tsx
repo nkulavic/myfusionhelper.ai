@@ -14,6 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { useDataExplorerStore } from '@/lib/stores/data-explorer-store'
 import { usePlatforms } from '@/lib/hooks/use-connections'
+import type { PlatformDefinition } from '@/lib/api/connections'
 import { PlatformLogo } from '@/components/platform-logo'
 
 interface CatalogEntry {
@@ -67,7 +68,7 @@ export function PlatformOverview() {
   const platform = useMemo(
     () =>
       selection.platformId
-        ? allPlatforms?.find((p) => p.slug === selection.platformId || p.platformId === selection.platformId)
+        ? allPlatforms?.find((p: PlatformDefinition) => p.slug === selection.platformId || p.platformId === selection.platformId)
         : undefined,
     [selection.platformId, allPlatforms]
   )

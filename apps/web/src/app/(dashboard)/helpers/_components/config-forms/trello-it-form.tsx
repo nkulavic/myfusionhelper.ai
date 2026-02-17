@@ -70,7 +70,6 @@ export function TrelloItForm({ config, onChange, disabled, platformId, connectio
           onChange={(value) => updateConfig({ apply_tag: value[0] || '' })}
           placeholder="Tag to apply after card creation..."
           disabled={disabled}
-          multiple={false}
         />
         <p className="text-xs text-muted-foreground">
           Tag to apply to the contact after the Trello card is created

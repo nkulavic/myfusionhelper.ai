@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils'
 import { useDataExplorerStore } from '@/lib/stores/data-explorer-store'
 import { PlatformLogo } from '@/components/platform-logo'
 import { usePlatforms } from '@/lib/hooks/use-connections'
+import type { PlatformDefinition } from '@/lib/api/connections'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -516,7 +517,7 @@ const PlatformRow = React.memo(function PlatformRow({
 }: PlatformRowProps) {
   const { data: allPlatforms } = usePlatforms()
   const apiPlatform = allPlatforms?.find(
-    (p) => p.slug === platform.platformId || p.platformId === platform.platformId
+    (p: PlatformDefinition) => p.slug === platform.platformId || p.platformId === platform.platformId
   )
 
   return (

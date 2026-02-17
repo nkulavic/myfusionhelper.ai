@@ -45,7 +45,7 @@ export function usePlanLimits() {
 
   function getLimit(resource: Resource): number {
     const key = RESOURCE_TO_LIMIT_KEY[resource]
-    return (limits as Record<string, number>)[key] ?? 0
+    return (limits as unknown as Record<string, number>)[key] ?? 0
   }
 
   function getUsage(resource: Resource): number {

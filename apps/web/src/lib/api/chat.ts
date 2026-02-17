@@ -75,7 +75,7 @@ export async function createConversation(
     status: string
     createdAt: string
   }>('/chat/conversations', input)
-  return response.data
+  return response.data!
 }
 
 /**
@@ -85,7 +85,7 @@ export async function listConversations(): Promise<ChatConversation[]> {
   const response = await apiClient.get<{ conversations: ChatConversation[] }>(
     '/chat/conversations'
   )
-  return response.data.conversations || []
+  return response.data?.conversations || []
 }
 
 /**
@@ -99,7 +99,7 @@ export async function getConversation(conversationId: string): Promise<{
     conversation: ChatConversation
     messages: ChatMessage[]
   }>(`/chat/conversations/${conversationId}`)
-  return response.data
+  return response.data!
 }
 
 /**
@@ -117,7 +117,7 @@ export async function getMessages(conversationId: string): Promise<ChatMessage[]
     conversationId: string
     messages: ChatMessage[]
   }>(`/chat/conversations/${conversationId}/messages`)
-  return response.data.messages || []
+  return response.data?.messages || []
 }
 
 /**

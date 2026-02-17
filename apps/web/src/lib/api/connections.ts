@@ -88,6 +88,7 @@ export interface PlatformDefinition {
     shortName?: string
   }
   credentialFields?: CredentialField[]
+  types?: string[]
   capabilities: string[]
   createdAt: string
   updatedAt: string
@@ -144,7 +145,7 @@ export const connectionsApi = {
 
   // List available platforms
   listPlatforms: () =>
-    apiClient.get<PlatformDefinition[]>('/platforms'),
+    apiClient.get<{ platforms: PlatformDefinition[]; total: number }>('/platforms'),
 
   // Get a single platform definition
   getPlatform: (platformId: string) =>

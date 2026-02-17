@@ -247,7 +247,7 @@ export function AIChatPanel({ onClose }: AIChatPanelProps) {
                         <div className="mt-2 space-y-1 border-t pt-2 text-xs opacity-75">
                           {toolCalls.map((tc, i) => (
                             <div key={i}>
-                              🔧 {tc.function.name}
+                              🔧 {tc?.function?.name}
                             </div>
                           ))}
                         </div>

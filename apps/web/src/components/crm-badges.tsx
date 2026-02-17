@@ -1,6 +1,7 @@
 'use client'
 
 import { usePlatforms } from '@/lib/hooks/use-connections'
+import type { PlatformDefinition } from '@/lib/api/connections'
 
 interface CRMBadgesProps {
   crmIds: string[]
@@ -11,13 +12,13 @@ export function CRMBadges({ crmIds, max = 3 }: CRMBadgesProps) {
   const { data: platforms } = usePlatforms()
 
   const findPlatform = (id: string) =>
-    platforms?.find((p) => p.slug === id || p.platformId === id)
+    platforms?.find((p: PlatformDefinition) => p.slug === id || p.platformId === id)
 
   if (crmIds.length === 0) {
     return (
       <div className="flex items-center gap-1.5">
         <div className="flex -space-x-1">
-          {platforms?.map((p) => (
+          {platforms?.map((p: PlatformDefinition) => (
             <div
               key={p.platformId}
               className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-card text-[9px] font-bold text-white"

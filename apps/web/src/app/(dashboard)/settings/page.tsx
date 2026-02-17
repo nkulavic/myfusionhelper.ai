@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
   User,
@@ -87,6 +87,14 @@ const tabs = [
 ]
 
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="animate-fade-in-up p-6"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+      <SettingsContent />
+    </Suspense>
+  )
+}
+
+function SettingsContent() {
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
   const validTabs = tabs.map((t) => t.id)

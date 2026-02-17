@@ -10,6 +10,7 @@ import {
   usePlatforms,
 } from '@/lib/hooks/use-connections'
 import type { PlatformDefinition } from '@/lib/api/connections'
+import type { PlatformConnection } from '@myfusionhelper/types'
 
 interface ConnectCRMStepProps {
   onNext: () => void
@@ -79,8 +80,8 @@ export function ConnectCRMStep({ onNext, onBack, onSkip }: ConnectCRMStepProps) 
       {/* Show existing connections */}
       {hasConnection && (
         <div className="space-y-2">
-          {connections.map((conn) => {
-            const platform = platforms?.find((p) => p.platformId === conn.platformId || p.slug === conn.platformId)
+          {connections.map((conn: PlatformConnection) => {
+            const platform = platforms?.find((p: PlatformDefinition) => p.platformId === conn.platformId || p.slug === conn.platformId)
             return (
               <div
                 key={conn.connectionId}
@@ -117,9 +118,9 @@ export function ConnectCRMStep({ onNext, onBack, onSkip }: ConnectCRMStepProps) 
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {platforms?.map((platform) => {
+            {platforms?.map((platform: PlatformDefinition) => {
               const isConnected = connections?.some(
-                (c) => c.platformId === platform.platformId || c.platformId === platform.slug
+                (c: PlatformConnection) => c.platformId === platform.platformId || c.platformId === platform.slug
               )
               return (
                 <button

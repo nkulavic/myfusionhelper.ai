@@ -17,6 +17,7 @@ import {
 } from '@/lib/helpers-catalog'
 import { useCreateHelper, useHelperTypes } from '@/lib/hooks/use-helpers'
 import { useConnections } from '@/lib/hooks/use-connections'
+import type { PlatformConnection } from '@myfusionhelper/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -360,7 +361,7 @@ function HelperConfigForm({
             >
               <option value="">Select a connection...</option>
               {connections && connections.length > 0 ? (
-                connections.map((conn) => (
+                connections.map((conn: PlatformConnection) => (
                   <option key={conn.connectionId} value={conn.connectionId}>
                     {conn.name || conn.platformId} ({conn.status})
                   </option>

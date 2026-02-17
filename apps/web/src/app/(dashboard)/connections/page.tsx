@@ -41,7 +41,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import type { PlatformDefinition } from '@/lib/api/connections'
+import type { PlatformDefinition, CredentialField } from '@/lib/api/connections'
+import type { PlatformConnection } from '@myfusionhelper/types'
 import { PlatformLogo } from '@/components/platform-logo'
 
 type ViewState = 'list' | 'add' | 'detail'
@@ -60,7 +61,7 @@ export default function ConnectionsPage() {
   const testConnection = useTestConnection()
   const startOAuth = useStartOAuth()
 
-  const selectedConnection = connections?.find((c) => c.connectionId === selectedConnectionId)
+  const selectedConnection = connections?.find((c: PlatformConnection) => c.connectionId === selectedConnectionId)
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -89,7 +90,7 @@ export default function ConnectionsPage() {
   }
 
   const getPlatformInfo = (platformId: string) =>
-    platforms?.find((p) => p.platformId === platformId || p.slug === platformId)
+    platforms?.find((p: PlatformDefinition) => p.platformId === platformId || p.slug === platformId)
 
   const handleConnect = async () => {
     if (!selectedPlatform) return
@@ -168,7 +169,7 @@ export default function ConnectionsPage() {
           ) : platforms && platforms.length > 0 ? (
             <>
               {/* CRM Platforms */}
-              {platforms.filter((p) => p.types?.includes('crm')).length > 0 && (
+              {platforms.filter((p: PlatformDefinition) => p.types?.includes('crm')).length > 0 && (
                 <div className="space-y-3">
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground">Primary CRM Platforms</h3>
@@ -176,8 +177,8 @@ export default function ConnectionsPage() {
                   </div>
                   <div className="animate-stagger-in grid gap-4 sm:grid-cols-2">
                     {platforms
-                      .filter((p) => p.types?.includes('crm'))
-                      .map((platform) => (
+                      .filter((p: PlatformDefinition) => p.types?.includes('crm'))
+                      .map((platform: PlatformDefinition) => (
                         <button
                           key={platform.platformId}
                           onClick={() => setSelectedPlatform(platform)}
@@ -186,7 +187,7 @@ export default function ConnectionsPage() {
                           <PlatformLogo definition={platform} size={48} className="mb-3" />
                           <h3 className="mb-1 font-semibold">{platform.name}</h3>
                           <div className="mb-3 flex flex-wrap gap-1">
-                            {platform.capabilities.slice(0, 3).map((cap) => (
+                            {platform.capabilities.slice(0, 3).map((cap: string) => (
                               <span key={cap} className="rounded bg-muted px-1.5 py-0.5 text-[10px] capitalize">
                                 {cap}
                               </span>
@@ -206,7 +207,7 @@ export default function ConnectionsPage() {
               )}
 
               {/* Integration Platforms */}
-              {platforms.filter((p) => p.types?.includes('integration')).length > 0 && (
+              {platforms.filter((p: PlatformDefinition) => p.types?.includes('integration')).length > 0 && (
                 <div className="space-y-3">
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground">Integration Platforms</h3>
@@ -214,8 +215,8 @@ export default function ConnectionsPage() {
                   </div>
                   <div className="animate-stagger-in grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {platforms
-                      .filter((p) => p.types?.includes('integration'))
-                      .map((platform) => (
+                      .filter((p: PlatformDefinition) => p.types?.includes('integration'))
+                      .map((platform: PlatformDefinition) => (
                         <button
                           key={platform.platformId}
                           onClick={() => setSelectedPlatform(platform)}
@@ -224,7 +225,7 @@ export default function ConnectionsPage() {
                           <PlatformLogo definition={platform} size={48} className="mb-3" />
                           <h3 className="mb-1 font-semibold">{platform.name}</h3>
                           <div className="mb-3 flex flex-wrap gap-1">
-                            {platform.capabilities.slice(0, 3).map((cap) => (
+                            {platform.capabilities.slice(0, 3).map((cap: string) => (
                               <span key={cap} className="rounded bg-muted px-1.5 py-0.5 text-[10px] capitalize">
                                 {cap}
                               </span>
@@ -269,7 +270,7 @@ export default function ConnectionsPage() {
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-1.5">
-                {selectedPlatform.capabilities.map((cap) => (
+                {selectedPlatform.capabilities.map((cap: string) => (
                   <span key={cap} className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium capitalize">
                     {cap}
                   </span>
@@ -289,7 +290,7 @@ export default function ConnectionsPage() {
               </div>
 
               {selectedPlatform.apiConfig.authType === 'api_key' &&
-                selectedPlatform.credentialFields?.map((field) => (
+                selectedPlatform.credentialFields?.map((field: CredentialField) => (
                   <div key={field.key}>
                     <label className="mb-2 block text-sm font-medium">{field.label}</label>
                     <Input
@@ -458,7 +459,7 @@ export default function ConnectionsPage() {
               <div className="rounded-lg border bg-card p-5 space-y-3">
                 <h3 className="font-semibold">Platform Capabilities</h3>
                 <div className="flex flex-wrap gap-2">
-                  {platform.capabilities.map((cap) => (
+                  {platform.capabilities.map((cap: string) => (
                     <span
                       key={cap}
                       className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium capitalize"
@@ -556,7 +557,7 @@ export default function ConnectionsPage() {
           </div>
         ) : connections && connections.length > 0 ? (
           <div className="animate-stagger-in space-y-3">
-            {connections.map((connection) => {
+            {connections.map((connection: PlatformConnection) => {
               const platform = getPlatformInfo(connection.platformId)
               return (
                 <button
@@ -617,14 +618,14 @@ export default function ConnectionsPage() {
       {platforms && platforms.length > 0 && (
         <div className="space-y-8">
           {/* CRM Platforms */}
-          {platforms.filter((p) => p.types?.includes('crm')).length > 0 && (
+          {platforms.filter((p: PlatformDefinition) => p.types?.includes('crm')).length > 0 && (
             <div>
               <h2 className="mb-4 text-lg font-semibold">Primary CRM Platforms</h2>
               <div className="animate-stagger-in grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {platforms
-                  .filter((p) => p.types?.includes('crm'))
-                  .map((platform) => {
-                    const connectedCount = connections?.filter((c) => c.platformId === platform.platformId).length || 0
+                  .filter((p: PlatformDefinition) => p.types?.includes('crm'))
+                  .map((platform: PlatformDefinition) => {
+                    const connectedCount = connections?.filter((c: PlatformConnection) => c.platformId === platform.platformId).length || 0
                     return (
                       <div
                         key={platform.platformId}
@@ -660,7 +661,7 @@ export default function ConnectionsPage() {
           )}
 
           {/* Integration Platforms */}
-          {platforms.filter((p) => p.types?.includes('integration')).length > 0 && (
+          {platforms.filter((p: PlatformDefinition) => p.types?.includes('integration')).length > 0 && (
             <div>
               <h2 className="mb-4 text-lg font-semibold">Integration Platforms</h2>
               <p className="mb-4 text-sm text-muted-foreground">
@@ -668,9 +669,9 @@ export default function ConnectionsPage() {
               </p>
               <div className="animate-stagger-in grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {platforms
-                  .filter((p) => p.types?.includes('integration'))
-                  .map((platform) => {
-                    const connectedCount = connections?.filter((c) => c.platformId === platform.platformId).length || 0
+                  .filter((p: PlatformDefinition) => p.types?.includes('integration'))
+                  .map((platform: PlatformDefinition) => {
+                    const connectedCount = connections?.filter((c: PlatformConnection) => c.platformId === platform.platformId).length || 0
                     return (
                       <div
                         key={platform.platformId}

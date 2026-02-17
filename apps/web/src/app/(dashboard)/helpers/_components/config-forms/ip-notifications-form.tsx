@@ -155,8 +155,8 @@ export function IpNotificationsForm({
         <TagPicker
           platformId={platformId ?? ''}
           connectionId={connectionId ?? ''}
-          value={applyTag}
-          onChange={(value) => updateConfig({ apply_tag: value })}
+          value={applyTag ? [applyTag] : []}
+          onChange={(value) => updateConfig({ apply_tag: value[0] || '' })}
           placeholder="Select tag to apply when location matches..."
           disabled={disabled}
         />

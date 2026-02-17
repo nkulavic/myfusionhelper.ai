@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useHelpers, useExecutions } from '@/lib/hooks/use-helpers'
 import { useConnections } from '@/lib/hooks/use-connections'
+import type { PlatformConnection } from '@myfusionhelper/types'
 import { Skeleton } from '@/components/ui/skeleton'
 
 const quickActions = [
@@ -227,7 +228,7 @@ export default function DashboardPage() {
               </div>
             ) : connections && connections.length > 0 ? (
               <div className="space-y-3">
-                {connections.map((conn) => (
+                {connections.map((conn: PlatformConnection) => (
                   <div key={conn.connectionId} className="flex items-center gap-3">
                     <div
                       className={`h-2 w-2 rounded-full ${

@@ -61,7 +61,6 @@ export function DonorSearchForm({ config, onChange, disabled, platformId, connec
           onChange={(value) => updateConfig({ apply_tag: value[0] || '' })}
           placeholder="Tag to apply when donor found..."
           disabled={disabled}
-          multiple={false}
         />
         <p className="text-xs text-muted-foreground">
           Tag to apply after a successful donor search
