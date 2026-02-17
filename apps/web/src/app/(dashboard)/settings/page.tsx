@@ -911,9 +911,20 @@ function BillingTab() {
   }
 
   const handleSelectPlan = (planId: 'start' | 'grow' | 'deliver') => {
+    // If user already has a paid subscription, route through Stripe Portal
+    // This preserves trial periods and handles proration correctly
+    if (currentPlan !== 'free') {
+      handleManageSubscription()
+      return
+    }
+    // Free users get a new checkout session
     setCheckoutPlan(planId)
     createCheckout.mutate(
-      { plan: planId, billingPeriod: isAnnual ? 'annual' : 'monthly' },
+      {
+        plan: planId,
+        returnUrl: '/settings?tab=billing',
+        billingPeriod: isAnnual ? 'annual' : 'monthly',
+      },
       {
         onSuccess: (res) => {
           if (res.data?.url) {
@@ -1103,6 +1114,20 @@ function BillingTab() {
                       <CheckCircle className="h-4 w-4" />
                       Current Plan
                     </Button>
+                  ) : currentPlan !== 'free' ? (
+                    <Button
+                      variant={plan.popular ? 'default' : 'outline'}
+                      className="w-full"
+                      onClick={handleManageSubscription}
+                      disabled={createPortal.isPending}
+                    >
+                      {createPortal.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                      <ExternalLink className="h-4 w-4" />
+                      {PAID_PLAN_IDS.indexOf(currentPlan as PlanId) <
+                        PAID_PLAN_IDS.indexOf(plan.id)
+                        ? 'Upgrade'
+                        : 'Downgrade'}
+                    </Button>
                   ) : (
                     <Button
                       variant={plan.popular ? 'default' : 'outline'}
@@ -1111,12 +1136,7 @@ function BillingTab() {
                       disabled={isPlanLoading || createCheckout.isPending}
                     >
                       {isPlanLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                      {currentPlan === 'free'
-                        ? 'Get Started'
-                        : PAID_PLAN_IDS.indexOf(currentPlan as PlanId) <
-                            PAID_PLAN_IDS.indexOf(plan.id)
-                          ? 'Upgrade'
-                          : 'Downgrade'}
+                      Get Started
                     </Button>
                   )}
                 </div>

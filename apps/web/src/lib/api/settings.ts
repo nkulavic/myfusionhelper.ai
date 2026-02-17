@@ -103,8 +103,10 @@ export const settingsApi = {
   getBillingInfo: () =>
     apiClient.get<BillingInfo>('/billing'),
 
-  createPortalSession: () =>
-    apiClient.post<{ url: string }>('/billing/portal-session'),
+  createPortalSession: (returnUrl?: string) =>
+    apiClient.post<{ url: string }>('/billing/portal-session', {
+      ...(returnUrl && { returnUrl }),
+    }),
 
   listInvoices: () =>
     apiClient.get<Invoice[]>('/billing/invoices'),

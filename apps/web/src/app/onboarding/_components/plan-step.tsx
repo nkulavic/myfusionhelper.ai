@@ -82,7 +82,7 @@ export function PlanStep({ onNext, onBack, onSkip }: PlanStepProps) {
     createCheckout.mutate(
       {
         plan: planId as 'start' | 'grow' | 'deliver',
-        returnUrl: `${window.location.origin}/onboarding?step=plan`,
+        returnUrl: '/onboarding?step=plan',
         billingPeriod: isAnnual ? 'annual' : 'monthly',
       },
       {

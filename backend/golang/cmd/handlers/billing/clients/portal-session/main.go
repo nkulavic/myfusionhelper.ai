@@ -2,6 +2,7 @@ package portalsession
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"os"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	appConfig "github.com/myfusionhelper/api/internal/config"
+	"github.com/myfusionhelper/api/internal/apiutil"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/types"
 	stripe "github.com/stripe/stripe-go/v82"
@@ -74,11 +76,22 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		return authMiddleware.CreateErrorResponse(400, "No billing account found. Please subscribe to a plan first."), nil
 	}
 
+	// Parse optional return URL from request body
+	var reqBody struct {
+		ReturnURL string `json:"return_url"`
+	}
+	if body := apiutil.GetBody(event); body != "" {
+		_ = json.Unmarshal([]byte(body), &reqBody)
+	}
+
 	baseURL := appURL
 	if baseURL == "" {
 		baseURL = "https://app.myfusionhelper.ai"
 	}
 	returnURL := baseURL + "/settings?tab=billing"
+	if reqBody.ReturnURL != "" {
+		returnURL = baseURL + reqBody.ReturnURL
+	}
 
 	stripe.Key = secrets.Stripe.SecretKey
 	params := &stripe.BillingPortalSessionParams{
