@@ -137,11 +137,17 @@ export const connectionsApi = {
       `/platforms/${platformId}/connections/${connectionId}/test`
     ),
 
-  // Start OAuth flow for a platform
-  startOAuth: (platformId: string) =>
-    apiClient.post<{ authorizationUrl: string; state: string; platformId: string; platformName: string; expiresIn: number }>(
-      `/platforms/${platformId}/oauth/start`
-    ),
+  // Start OAuth flow for a platform — passes current origin so OAuth redirects back here (supports localhost)
+  startOAuth: (platformId: string) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    return apiClient.post<{ authorizationUrl: string; state: string; platformId: string; platformName: string; expiresIn: number }>(
+      `/platforms/${platformId}/oauth/start`,
+      {
+        successRedirect: `${origin}/connections`,
+        failureRedirect: `${origin}/connections`,
+      }
+    )
+  },
 
   // List available platforms
   listPlatforms: () =>
