@@ -138,8 +138,8 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	// Guard: reject checkout if customer already has an active subscription
 	// Plan changes should go through the Stripe Customer Portal, not new checkouts
 	subListParams := &stripe.SubscriptionListParams{
-		Customer: customerID,
-		Status:   "all",
+		Customer: stripe.String(customerID),
+		Status:   stripe.String("all"),
 	}
 	subListParams.Filters.AddFilter("limit", "", "1")
 	subIter := subscription.List(subListParams)
