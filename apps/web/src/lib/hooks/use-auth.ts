@@ -77,10 +77,12 @@ export function useLogout() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => authApi.logout(),
-    onSuccess: () => {
+    onSettled: () => {
+      // Always clear local state and redirect, even if the API call fails
       clearAuth()
       reset()
       queryClient.clear()
+      window.location.href = '/login'
     },
   })
 }

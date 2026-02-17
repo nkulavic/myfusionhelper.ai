@@ -80,9 +80,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     : 'U'
 
   const handleLogout = () => {
-    logout.mutate(undefined, {
-      onSuccess: () => router.push('/'),
-    })
+    logout.mutate()
   }
 
   return (
