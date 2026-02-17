@@ -113,7 +113,7 @@ const legalTitles: Record<Exclude<LegalSection, null>, string> = {
   eula: 'End User License Agreement',
 }
 
-const legalComponents: Record<Exclude<LegalSection, null>, () => JSX.Element> = {
+const legalComponents: Record<Exclude<LegalSection, null>, () => React.JSX.Element> = {
   terms: TermsContent,
   privacy: PrivacyContent,
   eula: EULAContent,
