@@ -107,6 +107,7 @@ export const settingsApi = {
   createPortalSession: (returnUrl?: string) =>
     apiClient.post<{ url: string }>('/billing/portal-session', {
       ...(returnUrl && { returnUrl }),
+      origin: typeof window !== 'undefined' ? window.location.origin : undefined,
     }),
 
   listInvoices: () =>
@@ -121,6 +122,7 @@ export const settingsApi = {
       plan,
       ...(returnUrl && { returnUrl }),
       ...(billingPeriod && { billingPeriod }),
+      origin: typeof window !== 'undefined' ? window.location.origin : undefined,
     }),
 }
 

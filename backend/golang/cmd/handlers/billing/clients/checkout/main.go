@@ -33,6 +33,7 @@ type CreateCheckoutRequest struct {
 	Plan          string `json:"plan"`            // "start", "grow", or "deliver"
 	ReturnURL     string `json:"return_url"`      // optional: redirect back to this path after checkout (e.g., "/onboarding")
 	BillingPeriod string `json:"billing_period"`  // "monthly" or "annual" (default: "monthly")
+	Origin        string `json:"origin"`          // optional: client origin for localhost redirect support
 }
 
 // HandleWithAuth creates a Stripe Checkout session for a new subscription
@@ -154,6 +155,10 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	baseURL := appURL
 	if baseURL == "" {
 		baseURL = "https://app.myfusionhelper.ai"
+	}
+	// Use client-supplied origin so localhost redirects work during development
+	if req.Origin != "" {
+		baseURL = strings.TrimRight(req.Origin, "/")
 	}
 	successURL := baseURL + "/settings/billing/success?session_id={CHECKOUT_SESSION_ID}"
 	cancelURL := baseURL + "/settings?tab=billing&billing=cancelled"

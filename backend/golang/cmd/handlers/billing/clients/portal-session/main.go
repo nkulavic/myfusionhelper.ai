@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -76,9 +77,10 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		return authMiddleware.CreateErrorResponse(400, "No billing account found. Please subscribe to a plan first."), nil
 	}
 
-	// Parse optional return URL from request body
+	// Parse optional return URL and origin from request body
 	var reqBody struct {
 		ReturnURL string `json:"return_url"`
+		Origin    string `json:"origin"`
 	}
 	if body := apiutil.GetBody(event); body != "" {
 		_ = json.Unmarshal([]byte(body), &reqBody)
@@ -87,6 +89,10 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	baseURL := appURL
 	if baseURL == "" {
 		baseURL = "https://app.myfusionhelper.ai"
+	}
+	// Use client-supplied origin so localhost redirects work during development
+	if reqBody.Origin != "" {
+		baseURL = strings.TrimRight(reqBody.Origin, "/")
 	}
 	returnURL := baseURL + "/settings?tab=billing"
 	if reqBody.ReturnURL != "" {
