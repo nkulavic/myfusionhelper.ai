@@ -21,6 +21,8 @@ import {
   Menu,
   X,
   Search,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -33,6 +35,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { AIChatPanel } from '@/components/ai-chat-panel'
 import { CommandPalette } from '@/components/command-palette'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useBillingInfo } from '@/lib/hooks/use-settings'
 
 const navigation = [
@@ -56,6 +59,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const {
     sidebarCollapsed,
     setSidebarCollapsed,
+    sidebarMinimized,
+    toggleSidebarMinimized,
     aiChatOpen,
     setAIChatOpen,
     setCommandPaletteOpen,
@@ -113,15 +118,47 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-in-out',
+          'fixed inset-y-0 left-0 z-50 border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-200 ease-in-out',
           'lg:translate-x-0',
-          sidebarCollapsed ? '-translate-x-full' : 'translate-x-0'
+          sidebarCollapsed ? '-translate-x-full' : 'translate-x-0',
+          sidebarMinimized ? 'lg:w-16' : 'lg:w-64',
+          'w-64'
         )}
       >
         <div className="flex h-full flex-col">
           {/* Logo */}
           <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
-            <Link href="/" className="flex items-center gap-2 font-bold text-sidebar-foreground">
+            {/* Desktop minimized: expand button */}
+            {sidebarMinimized && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="mx-auto hidden h-8 w-8 text-sidebar-muted-foreground hover:bg-sidebar-accent lg:flex"
+                onClick={toggleSidebarMinimized}
+                aria-label="Expand sidebar"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </Button>
+            )}
+            {/* Desktop expanded: logo + collapse button */}
+            {!sidebarMinimized && (
+              <>
+                <Link href="/" className="hidden items-center gap-2 font-bold text-sidebar-foreground lg:flex">
+                  <Image src="/logo.png" alt="MyFusion Helper" width={160} height={20} className="brightness-0 invert" />
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden h-8 w-8 text-sidebar-muted-foreground hover:bg-sidebar-accent lg:flex"
+                  onClick={toggleSidebarMinimized}
+                  aria-label="Collapse sidebar"
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+            {/* Mobile: always full logo + close button */}
+            <Link href="/" className="flex items-center gap-2 font-bold text-sidebar-foreground lg:hidden">
               <Image src="/logo.png" alt="MyFusion Helper" width={160} height={20} className="brightness-0 invert" />
             </Link>
             <Button
@@ -135,8 +172,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Button>
           </div>
 
-          {/* Account Switcher */}
-          <div className="border-b border-sidebar-border p-4">
+          {/* Account Switcher - minimized (desktop only) */}
+          {sidebarMinimized && (
+            <div className="hidden border-b border-sidebar-border p-2 lg:block">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-md bg-sidebar-accent text-xs font-bold text-sidebar-foreground">
+                    {(currentAccount?.name || 'M')[0].toUpperCase()}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p className="font-medium">{currentAccount?.name || 'My Business'}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{currentAccount?.plan || 'Free'} Plan</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+          {/* Account Switcher - expanded (always on mobile, desktop when not minimized) */}
+          <div className={cn('border-b border-sidebar-border p-4', sidebarMinimized && 'lg:hidden')}>
             <button className="flex w-full items-center justify-between rounded-md border border-sidebar-border bg-sidebar-accent px-3 py-2 text-sm hover:bg-sidebar-accent/80">
               <div className="flex flex-col items-start">
                 <span className="font-medium text-sidebar-foreground">
@@ -150,8 +203,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
           </div>
 
-          {/* Search / Command Palette Trigger */}
-          <div className="px-4 pt-4">
+          {/* Search - minimized (desktop only) */}
+          {sidebarMinimized && (
+            <div className="hidden px-2 pt-3 lg:block">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setCommandPaletteOpen(true)}
+                    className="mx-auto flex h-9 w-9 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-accent/50 text-sidebar-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  >
+                    <Search className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Search (&#8984;K)</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+          {/* Search - expanded (always on mobile, desktop when not minimized) */}
+          <div className={cn('px-4 pt-4', sidebarMinimized && 'lg:hidden')}>
             <button
               onClick={() => setCommandPaletteOpen(true)}
               className="flex w-full items-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent/50 px-3 py-2 text-sm text-sidebar-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
@@ -165,65 +234,134 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 space-y-1 overflow-y-auto p-4">
+          <nav className={cn(
+            'flex-1 space-y-1 overflow-y-auto p-4',
+            sidebarMinimized && 'lg:p-2'
+          )}>
             {navigation.map((item) => {
               const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + '/'))
-              return (
+              const linkContent = (
                 <Link
                   key={item.name}
                   href={item.href}
                   onClick={() => setSidebarCollapsed(true)}
                   className={cn(
                     'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all active:scale-[0.97]',
+                    sidebarMinimized && 'lg:justify-center lg:gap-0 lg:px-0',
                     isActive
                       ? 'bg-sidebar-primary text-sidebar-primary-foreground'
                       : 'text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'
                   )}
                 >
-                  <item.icon className="h-4 w-4" />
-                  {item.name}
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  <span className={cn(sidebarMinimized && 'lg:hidden')}>{item.name}</span>
                 </Link>
               )
+
+              if (sidebarMinimized) {
+                return (
+                  <Tooltip key={item.name}>
+                    <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+                    <TooltipContent side="right" className="hidden lg:block">{item.name}</TooltipContent>
+                  </Tooltip>
+                )
+              }
+
+              return linkContent
             })}
           </nav>
 
           {/* User Menu */}
-          <div className="border-t border-sidebar-border p-4 space-y-3">
-            <div className="flex items-center justify-center gap-1">
-              <ThemeToggle variant="sidebar" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative h-9 w-9 hover:bg-sidebar-accent"
-                title="Notifications"
-              >
-                <Bell className="h-4 w-4 text-sidebar-muted-foreground" />
-                <span className="absolute right-1.5 top-1.5 flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sidebar-primary opacity-75" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sidebar-primary" />
-                </span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 hover:bg-sidebar-accent"
-                onClick={handleLogout}
-                title="Sign out"
-              >
-                <LogOut className="h-4 w-4 text-sidebar-muted-foreground" />
-              </Button>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-primary text-sm font-medium text-sidebar-primary-foreground">
-                {userInitials}
+          <div className={cn(
+            'border-t border-sidebar-border space-y-3 p-4',
+            sidebarMinimized && 'lg:p-2'
+          )}>
+            {/* Minimized user menu (desktop only) */}
+            {sidebarMinimized && (
+              <div className="hidden lg:block space-y-2">
+                <div className="flex flex-col items-center gap-1">
+                  <ThemeToggle variant="sidebar" />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="relative h-9 w-9 hover:bg-sidebar-accent"
+                      >
+                        <Bell className="h-4 w-4 text-sidebar-muted-foreground" />
+                        <span className="absolute right-1.5 top-1.5 flex h-1.5 w-1.5">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sidebar-primary opacity-75" />
+                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sidebar-primary" />
+                        </span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Notifications</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 hover:bg-sidebar-accent"
+                        onClick={handleLogout}
+                      >
+                        <LogOut className="h-4 w-4 text-sidebar-muted-foreground" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Sign out</TooltipContent>
+                  </Tooltip>
+                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-primary text-sm font-medium text-sidebar-primary-foreground">
+                      {userInitials}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p className="font-medium">{user?.name || 'User'}</p>
+                    <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate text-sidebar-foreground">
-                  {user?.name || 'User'}
-                </p>
-                <p className="text-xs text-sidebar-muted-foreground truncate">
-                  {user?.email || ''}
-                </p>
+            )}
+            {/* Full user menu (always on mobile, desktop when not minimized) */}
+            <div className={cn(sidebarMinimized && 'lg:hidden', 'space-y-3')}>
+              <div className="flex items-center justify-center gap-1">
+                <ThemeToggle variant="sidebar" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative h-9 w-9 hover:bg-sidebar-accent"
+                  title="Notifications"
+                >
+                  <Bell className="h-4 w-4 text-sidebar-muted-foreground" />
+                  <span className="absolute right-1.5 top-1.5 flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sidebar-primary opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sidebar-primary" />
+                  </span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 hover:bg-sidebar-accent"
+                  onClick={handleLogout}
+                  title="Sign out"
+                >
+                  <LogOut className="h-4 w-4 text-sidebar-muted-foreground" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sm font-medium text-sidebar-primary-foreground">
+                  {userInitials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate text-sidebar-foreground">
+                    {user?.name || 'User'}
+                  </p>
+                  <p className="text-xs text-sidebar-muted-foreground truncate">
+                    {user?.email || ''}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -231,7 +369,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main Content */}
-      <div className="flex flex-1 flex-col pt-14 lg:pt-0 lg:pl-64">
+      <div className={cn(
+        'flex flex-1 flex-col pt-14 transition-all duration-200 lg:pt-0',
+        sidebarMinimized ? 'lg:pl-16' : 'lg:pl-64'
+      )}>
         <UpgradeBanner />
         <main className="flex-1 p-4 sm:p-6">
           {children}
