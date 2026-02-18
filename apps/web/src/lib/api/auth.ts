@@ -39,6 +39,7 @@ export interface MfaChallengeResponse {
   mfaRequired: true
   challengeName: 'SMS_MFA' | 'SOFTWARE_TOKEN_MFA'
   session: string
+  username: string
 }
 
 export interface MfaStatusResponse {
@@ -79,7 +80,7 @@ export const authApi = {
     apiClient.post<void>('/auth/reset-password', input),
 
   // MFA
-  submitMfaChallenge: (input: { session: string; code: string; challengeName: string }) =>
+  submitMfaChallenge: (input: { session: string; code: string; challengeName: string; username: string }) =>
     apiClient.post<AuthResponse>('/auth/mfa-challenge', input),
 
   getMfaStatus: () =>

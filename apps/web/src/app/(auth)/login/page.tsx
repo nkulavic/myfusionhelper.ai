@@ -101,6 +101,7 @@ export default function LoginPage() {
         session: mfaChallenge.session,
         code: mfaCode.trim(),
         challengeName: mfaChallenge.challengeName,
+        username: mfaChallenge.username,
       })
       if (res.data) {
         setUser(res.data.user, res.data.token, res.data.refreshToken)

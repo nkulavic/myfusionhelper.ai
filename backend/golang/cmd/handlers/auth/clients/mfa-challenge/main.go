@@ -25,6 +25,7 @@ type MfaChallengeRequest struct {
 	Session       string `json:"session"`
 	Code          string `json:"code"`
 	ChallengeName string `json:"challenge_name"`
+	Username      string `json:"username"`
 }
 
 type User struct {
@@ -74,8 +75,8 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return authMiddleware.CreateErrorResponse(400, "Invalid JSON format"), nil
 	}
 
-	if req.Session == "" || req.Code == "" || req.ChallengeName == "" {
-		return authMiddleware.CreateErrorResponse(400, "session, code, and challenge_name are required"), nil
+	if req.Session == "" || req.Code == "" || req.ChallengeName == "" || req.Username == "" {
+		return authMiddleware.CreateErrorResponse(400, "session, code, challenge_name, and username are required"), nil
 	}
 
 	// Validate challenge name
@@ -111,7 +112,7 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		Session:       aws.String(req.Session),
 		ChallengeResponses: map[string]string{
 			codeKey:    req.Code,
-			"USERNAME": "", // Cognito fills this from the session
+			"USERNAME": req.Username,
 		},
 	})
 	if err != nil {
