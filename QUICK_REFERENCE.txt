@@ -1,0 +1,100 @@
+================================================================================
+                    MYFUSIONHELPER.AI - QUICK REFERENCE
+================================================================================
+
+PROJECT DASHBOARD (Project ID: 674054)
+======================================
+
+OVERALL STATUS
+--------------
+Total Tasks:              50
+Completion Rate:          ~3% (2 tasks at 75%)
+High Priority Tasks:      12
+Medium Priority Tasks:    9
+Low Priority Tasks:       6
+Unset Priority:          23 (mostly subtasks)
+
+TOP 3 BLOCKED ITEMS
+-------------------
+1. Task 44507919 - "Wire frontend email hooks to real backend" (BLOCKED)
+   Status: WAITING FOR email backend implementation
+
+IMMEDIATE ACTION ITEMS (P0)
+---------------------------
+1. Task 44507908 - Deploy API services (75% DONE)
+2. Task 44507909 - Deploy worker services (75% DONE)
+3. Task 44507910 - Seed platform data (NOT STARTED)
+   → Then proceed to smoke tests
+
+HIGH PRIORITY ITEMS (P0 - TESTING)
+----------------------------------
+44507911 - Test auth flow
+44507912 - Test onboarding flow
+44507913 - Test CRM connection lifecycle
+44507914 - Test helper creation + execution
+44507915 - Test billing flow with Stripe
+44507916 - Test Data Explorer
+44507917 - Test API key management
+
+TASK VOLUME BY LIST
+-------------------
+P1 - Helper Migration:        32 tasks (64% of work!)
+P0 - Smoke Testing:            7 tasks
+P0 - Infrastructure:           3 tasks
+P2 - Frontend Polish:          3 tasks
+P2 - Launch Prep:             3 tasks
+P1 - Backend Gaps:            2 tasks
+----------------------------------------
+Total:                        50 tasks
+
+HELPER MIGRATION BREAKDOWN (32 tasks)
+-------------------------------------
+email_scrub_it:              1 parent + 8 subtasks
+facebook_custom_audiences:   1 parent + 9 subtasks
+keap_backup:                 1 parent + 8 subtasks
+alexa_it (evaluation):       1 parent + 2 subtasks
+zoom-webhook:                1 parent + 1 subtask
+Total:                       5 parents + 28 subtasks = 33 tasks
+
+CRITICAL DEPENDENCIES
+---------------------
+P0 Infrastructure → P0 Testing → P1 Helpers + P2 Features → Launch Prep
+
+NEXT STEPS (RECOMMENDED)
+------------------------
+Week 1:  Finish P0 Infrastructure (1-2 days), run smoke tests
+Week 2:  Start P1 Helper Migration (long tail, 32 tasks)
+Week 3+: Parallel: continue helpers, build P2 features
+Final:   Launch prep → Production
+
+KEY CONTACTS / OWNERSHIP
+------------------------
+All tasks currently assigned to: "You" (498872 - Claude Code)
+
+DOCUMENT EXPORTS
+----------------
+TASK_REPORT.md          - Full detailed report
+QUICK_REFERENCE.txt     - This file
+full_task_list.md       - Markdown with all tasks + descriptions
+tasks_export.csv        - CSV for spreadsheet tools
+tasks_full.json         - JSON machine-readable format
+TASK_SUMMARY.txt        - Executive summary
+
+CRITICAL METRICS
+----------------
+Infrastructure Progress:      75% (2/3 tasks)
+Overall Project Progress:     ~3%
+Dependency Chain:             P0 → P0 → P1 → Launch
+Biggest Work Package:         Helper Migration (32 tasks)
+Est. Effort:                  High (depends on team capacity)
+
+ACCESS THESE FILES AT
+---------------------
+/Users/nickkulavic/Projects/myfusionhelper.ai/TASK_REPORT.md
+/tmp/full_task_list.md
+/tmp/tasks_export.csv
+/tmp/tasks_full.json
+
+================================================================================
+                          LAST UPDATED: 2026-02-14
+================================================================================

@@ -15,6 +15,11 @@ on:
         required: false
         default: 'dev'
         type: string
+      deploy_target:
+        description: 'Deploy target: auto (detect changes), all (everything), or comma-separated service names'
+        required: false
+        default: 'auto'
+        type: string
 
 env:
   AWS_REGION: us-west-2
@@ -78,31 +83,31 @@ jobs:
           FAILED=0
 
           if (( $(echo "$MIDDLEWARE_COV < $MIN_MIDDLEWARE" | bc -l) )); then
-            echo "❌ Middleware coverage ($MIDDLEWARE_COV%) is below threshold ($MIN_MIDDLEWARE%)"
+            echo "Middleware coverage ($MIDDLEWARE_COV%) is below threshold ($MIN_MIDDLEWARE%)"
             FAILED=1
           else
-            echo "✅ Middleware coverage: $MIDDLEWARE_COV%"
+            echo "Middleware coverage: $MIDDLEWARE_COV%"
           fi
 
           if (( $(echo "$DATABASE_COV < $MIN_DATABASE" | bc -l) )); then
-            echo "❌ Database coverage ($DATABASE_COV%) is below threshold ($MIN_DATABASE%)"
+            echo "Database coverage ($DATABASE_COV%) is below threshold ($MIN_DATABASE%)"
             FAILED=1
           else
-            echo "✅ Database coverage: $DATABASE_COV%"
+            echo "Database coverage: $DATABASE_COV%"
           fi
 
           if (( $(echo "$CONNECTORS_COV < $MIN_CONNECTORS" | bc -l) )); then
-            echo "❌ Connectors coverage ($CONNECTORS_COV%) is below threshold ($MIN_CONNECTORS%)"
+            echo "Connectors coverage ($CONNECTORS_COV%) is below threshold ($MIN_CONNECTORS%)"
             FAILED=1
           else
-            echo "✅ Connectors coverage: $CONNECTORS_COV%"
+            echo "Connectors coverage: $CONNECTORS_COV%"
           fi
 
           if (( $(echo "$HELPERS_COV < $MIN_HELPERS" | bc -l) )); then
-            echo "❌ Helpers coverage ($HELPERS_COV%) is below threshold ($MIN_HELPERS%)"
+            echo "Helpers coverage ($HELPERS_COV%) is below threshold ($MIN_HELPERS%)"
             FAILED=1
           else
-            echo "✅ Helpers coverage: $HELPERS_COV%"
+            echo "Helpers coverage: $HELPERS_COV%"
           fi
 
           exit $FAILED
@@ -119,28 +124,369 @@ jobs:
           retention-days: 30
 
   # ──────────────────────────────────────────────
-  # 2. Deploy Infrastructure (parallel matrix)
+  # 2. Detect Changes (selective deployment)
+  # ──────────────────────────────────────────────
+  detect-changes:
+    name: Detect Changed Services
+    needs: build-test
+    runs-on: ubuntu-latest
+    outputs:
+      infra_services: ${{ steps.detect.outputs.infra_services }}
+      has_infra: ${{ steps.detect.outputs.has_infra }}
+      pre_gateway_services: ${{ steps.detect.outputs.pre_gateway_services }}
+      has_pre_gateway: ${{ steps.detect.outputs.has_pre_gateway }}
+      deploy_gateway: ${{ steps.detect.outputs.deploy_gateway }}
+      deploy_route53: ${{ steps.detect.outputs.deploy_route53 }}
+      deploy_monitoring: ${{ steps.detect.outputs.deploy_monitoring }}
+      deploy_stripe_webhooks: ${{ steps.detect.outputs.deploy_stripe_webhooks }}
+      api_services: ${{ steps.detect.outputs.api_services }}
+      has_api: ${{ steps.detect.outputs.has_api }}
+      worker_services: ${{ steps.detect.outputs.worker_services }}
+      has_workers: ${{ steps.detect.outputs.has_workers }}
+      helpers: ${{ steps.detect.outputs.helpers }}
+      has_helper_changes: ${{ steps.detect.outputs.has_helper_changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed services
+        id: detect
+        run: |
+          # ── Helper function: space-separated list → JSON array ──
+          to_json() {
+            local input="$1"
+            if [ -z "$input" ]; then
+              echo "[]"
+            else
+              echo "$input" | xargs -n1 | grep -v '^$' | sort -u | jq -R -s -c 'split("\n") | map(select(length > 0))'
+            fi
+          }
+
+          # ── Manual dispatch: deploy specific services or all ──
+          DEPLOY_TARGET="${{ inputs.deploy_target }}"
+          if [ "$DEPLOY_TARGET" = "all" ] || [ "${{ github.event_name }}" = "workflow_dispatch" -a "$DEPLOY_TARGET" = "" ]; then
+            if [ "$DEPLOY_TARGET" = "all" ]; then
+              echo "Manual trigger: deploying ALL services"
+            fi
+          fi
+
+          if [ "$DEPLOY_TARGET" = "all" ]; then
+            echo "infra_services=$(to_json 'cognito dynamodb-core s3 sqs ses acm')" >> $GITHUB_OUTPUT
+            echo "has_infra=true" >> $GITHUB_OUTPUT
+            echo "pre_gateway_services=$(to_json 'api-key-authorizer scheduler executions-stream stream-router')" >> $GITHUB_OUTPUT
+            echo "has_pre_gateway=true" >> $GITHUB_OUTPUT
+            echo "deploy_gateway=true" >> $GITHUB_OUTPUT
+            echo "deploy_route53=true" >> $GITHUB_OUTPUT
+            echo "deploy_monitoring=true" >> $GITHUB_OUTPUT
+            echo "deploy_stripe_webhooks=true" >> $GITHUB_OUTPUT
+            echo "api_services=$(to_json 'auth accounts api-keys helpers platforms data-explorer billing chat emails studio internal-email')" >> $GITHUB_OUTPUT
+            echo "has_api=true" >> $GITHUB_OUTPUT
+            echo "worker_services=$(to_json 'helper-worker notification-worker data-sync')" >> $GITHUB_OUTPUT
+            echo "has_workers=true" >> $GITHUB_OUTPUT
+            # Helper workers: deploy all
+            ALL_HELPERS=$(find backend/golang/services/workers -maxdepth 1 -type d -name "*-worker" \
+              ! -name "helper-worker" \
+              ! -name "notification-worker" \
+              ! -name "data-sync" \
+              ! -name "executions-stream" \
+              ! -name "scheduler" \
+              ! -name "sms-chat-webhook" \
+              ! -name "alexa-webhook" \
+              ! -name "google-assistant-webhook" \
+              ! -name "zoom-webhook" \
+              2>/dev/null | xargs -I {} basename {} | sed 's/-worker$//' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            echo "helpers=$ALL_HELPERS" >> $GITHUB_OUTPUT
+            echo "has_helper_changes=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # ── Auto-detect changes from git diff ──
+          echo "Detecting changes..."
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "$DEPLOY_TARGET" != "auto" ] && [ -n "$DEPLOY_TARGET" ]; then
+            # Manual dispatch with specific comma-separated service names
+            # User specifies api-auth, api-billing, infra-cognito, etc.
+            echo "Manual trigger with specific services: $DEPLOY_TARGET"
+            # Parse the comma-separated list into service tiers
+            INFRA="" PRE_GW="" API="" WORKERS="" GW=false R53=false MON=false STRIPE=false
+            for svc in $(echo "$DEPLOY_TARGET" | tr ',' ' '); do
+              case "$svc" in
+                infra-*) INFRA="$INFRA ${svc#infra-}" ;;
+                api-key-authorizer|scheduler|executions-stream|stream-router) PRE_GW="$PRE_GW $svc" ;;
+                gateway) GW=true ;;
+                route53) R53=true ;;
+                monitoring) MON=true ;;
+                stripe-webhooks) STRIPE=true ;;
+                helper-worker|notification-worker|data-sync) WORKERS="$WORKERS $svc" ;;
+                *) API="$API $svc" ;;  # Assume API service
+              esac
+            done
+            echo "infra_services=$(to_json "$INFRA")" >> $GITHUB_OUTPUT
+            echo "has_infra=$([ -n "$(echo $INFRA | xargs)" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "pre_gateway_services=$(to_json "$PRE_GW")" >> $GITHUB_OUTPUT
+            echo "has_pre_gateway=$([ -n "$(echo $PRE_GW | xargs)" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "deploy_gateway=$GW" >> $GITHUB_OUTPUT
+            echo "deploy_route53=$R53" >> $GITHUB_OUTPUT
+            echo "deploy_monitoring=$MON" >> $GITHUB_OUTPUT
+            echo "deploy_stripe_webhooks=$STRIPE" >> $GITHUB_OUTPUT
+            echo "api_services=$(to_json "$API")" >> $GITHUB_OUTPUT
+            echo "has_api=$([ -n "$(echo $API | xargs)" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "worker_services=$(to_json "$WORKERS")" >> $GITHUB_OUTPUT
+            echo "has_workers=$([ -n "$(echo $WORKERS | xargs)" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "helpers=[]" >> $GITHUB_OUTPUT
+            echo "has_helper_changes=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # ── Git diff based detection ──
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }}..HEAD 2>/dev/null || git diff --name-only HEAD~1..HEAD)
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          echo ""
+
+          # ── Check for shared code changes that trigger broader redeployment ──
+          DEPLOY_ALL_API=false
+          DEPLOY_ALL_WORKERS=false
+
+          # Workflow file changed → deploy everything
+          if echo "$CHANGED_FILES" | grep -q "^\.github/workflows/deploy-backend\.yml$"; then
+            echo "Workflow file changed - deploying all services"
+            DEPLOY_ALL_API=true
+            DEPLOY_ALL_WORKERS=true
+          fi
+
+          # go.mod/go.sum changed → dependencies changed, deploy all Go services
+          if echo "$CHANGED_FILES" | grep -qE "^backend/golang/go\.(mod|sum)$"; then
+            echo "Go dependencies changed - deploying all Go services"
+            DEPLOY_ALL_API=true
+            DEPLOY_ALL_WORKERS=true
+          fi
+
+          # internal/middleware or internal/apiutil → all API services
+          if echo "$CHANGED_FILES" | grep -qE "^backend/golang/internal/(middleware|apiutil)/"; then
+            echo "Shared API code changed (middleware/apiutil) - deploying all API services"
+            DEPLOY_ALL_API=true
+          fi
+
+          # internal/database, internal/types, internal/config → all API + workers
+          if echo "$CHANGED_FILES" | grep -qE "^backend/golang/internal/(database|types|config)/"; then
+            echo "Shared core code changed (database/types/config) - deploying all services"
+            DEPLOY_ALL_API=true
+            DEPLOY_ALL_WORKERS=true
+          fi
+
+          # internal/worker, internal/connectors → all workers
+          if echo "$CHANGED_FILES" | grep -qE "^backend/golang/internal/(worker|connectors)/"; then
+            echo "Shared worker code changed - deploying all workers"
+            DEPLOY_ALL_WORKERS=true
+          fi
+
+          # internal/helpers → all helper workers
+          DEPLOY_ALL_HELPER_WORKERS=false
+          if echo "$CHANGED_FILES" | grep -qE "^backend/golang/internal/helpers/"; then
+            echo "Helper implementations changed - deploying all helper workers"
+            DEPLOY_ALL_HELPER_WORKERS=true
+            DEPLOY_ALL_WORKERS=true
+          fi
+
+          # ── Infrastructure services ──
+          INFRA=""
+          if echo "$CHANGED_FILES" | grep -q "^backend/golang/services/infrastructure/cognito/"; then
+            INFRA="$INFRA cognito"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "^backend/golang/services/infrastructure/dynamodb/core/"; then
+            INFRA="$INFRA dynamodb-core"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "^backend/golang/services/infrastructure/s3/"; then
+            INFRA="$INFRA s3"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "^backend/golang/services/infrastructure/sqs/"; then
+            INFRA="$INFRA sqs"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "^backend/golang/services/infrastructure/ses/"; then
+            INFRA="$INFRA ses"
+          fi
+          if echo "$CHANGED_FILES" | grep -q "^backend/golang/services/infrastructure/acm/"; then
+            INFRA="$INFRA acm"
+          fi
+
+          # ── Pre-gateway services ──
+          PRE_GW=""
+          if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/api/api-key-authorizer/|cmd/handlers/api-key-authorizer/)"; then
+            PRE_GW="$PRE_GW api-key-authorizer"
+          fi
+          if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/workers/scheduler/|cmd/handlers/scheduler/)"; then
+            PRE_GW="$PRE_GW scheduler"
+          fi
+          if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/workers/executions-stream/|cmd/handlers/executions-stream/)"; then
+            PRE_GW="$PRE_GW executions-stream"
+          fi
+          if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/workers/stream-router/)"; then
+            PRE_GW="$PRE_GW stream-router"
+          fi
+          # Shared code → deploy all pre-gateway
+          if $DEPLOY_ALL_API; then
+            PRE_GW="api-key-authorizer scheduler executions-stream stream-router"
+          fi
+
+          # ── Gateway ──
+          DEPLOY_GATEWAY=false
+          if echo "$CHANGED_FILES" | grep -q "^backend/golang/services/api/gateway/"; then
+            DEPLOY_GATEWAY=true
+          fi
+
+          # ── Route53 ──
+          DEPLOY_ROUTE53=false
+          if echo "$CHANGED_FILES" | grep -q "^backend/golang/services/infrastructure/route53/"; then
+            DEPLOY_ROUTE53=true
+          fi
+
+          # ── Monitoring ──
+          DEPLOY_MONITORING=false
+          if echo "$CHANGED_FILES" | grep -q "^backend/golang/services/infrastructure/monitoring/"; then
+            DEPLOY_MONITORING=true
+          fi
+
+          # ── Stripe webhooks ──
+          DEPLOY_STRIPE=false
+          if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(scripts/setup-stripe-webhooks|services/api/billing/)"; then
+            DEPLOY_STRIPE=true
+          fi
+
+          # ── API services ──
+          API=""
+          if $DEPLOY_ALL_API; then
+            API="auth accounts api-keys helpers platforms data-explorer billing chat emails studio internal-email"
+          else
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/api/auth/|cmd/handlers/auth/)"; then
+              API="$API auth"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/api/accounts/|cmd/handlers/accounts/)"; then
+              API="$API accounts"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/api/api-keys/|cmd/handlers/api-keys/)"; then
+              API="$API api-keys"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/api/helpers/|cmd/handlers/helpers/)"; then
+              API="$API helpers"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/api/platforms/|cmd/handlers/platforms/)"; then
+              API="$API platforms"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/api/data-explorer/|cmd/handlers/data-explorer/)"; then
+              API="$API data-explorer"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/api/billing/|cmd/handlers/billing/)"; then
+              API="$API billing"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/api/chat/|cmd/handlers/chat/)"; then
+              API="$API chat"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/api/emails/|cmd/handlers/emails/)"; then
+              API="$API emails"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/api/studio/|cmd/handlers/studio/)"; then
+              API="$API studio"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/api/internal-email/|cmd/handlers/internal-email/)"; then
+              API="$API internal-email"
+            fi
+          fi
+
+          # ── Core workers ──
+          WORKERS=""
+          if $DEPLOY_ALL_WORKERS; then
+            WORKERS="helper-worker notification-worker data-sync"
+          else
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/workers/helper-worker/|cmd/handlers/helper-worker/)"; then
+              WORKERS="$WORKERS helper-worker"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/workers/notification-worker/|cmd/handlers/notification-worker/)"; then
+              WORKERS="$WORKERS notification-worker"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/workers/data-sync/|cmd/handlers/data-sync/)"; then
+              WORKERS="$WORKERS data-sync"
+            fi
+          fi
+
+          # ── Helper workers (individual, same detection as before) ──
+          if $DEPLOY_ALL_HELPER_WORKERS; then
+            HELPERS=$(find backend/golang/services/workers -maxdepth 1 -type d -name "*-worker" \
+              ! -name "helper-worker" \
+              ! -name "notification-worker" \
+              ! -name "data-sync" \
+              ! -name "executions-stream" \
+              ! -name "scheduler" \
+              ! -name "sms-chat-webhook" \
+              ! -name "alexa-webhook" \
+              ! -name "google-assistant-webhook" \
+              ! -name "zoom-webhook" \
+              2>/dev/null | xargs -I {} basename {} | sed 's/-worker$//' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            HAS_HELPER_CHANGES=true
+          else
+            HELPERS=$(echo "$CHANGED_FILES" \
+              | grep '^backend/golang/services/workers/' \
+              | grep -oP 'services/workers/\K[^/]+(?=-worker/)' \
+              | grep -v -E '^(helper|notification|data-sync|executions-stream|scheduler|sms-chat-webhook|alexa-webhook|google-assistant-webhook|zoom-webhook)$' \
+              | sort -u \
+              | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            if [ "$HELPERS" = "[]" ] || [ -z "$HELPERS" ]; then
+              HAS_HELPER_CHANGES=false
+            else
+              HAS_HELPER_CHANGES=true
+            fi
+          fi
+
+          # ── Write outputs ──
+          echo "infra_services=$(to_json "$INFRA")" >> $GITHUB_OUTPUT
+          echo "has_infra=$([ -n "$(echo $INFRA | xargs)" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+
+          echo "pre_gateway_services=$(to_json "$PRE_GW")" >> $GITHUB_OUTPUT
+          echo "has_pre_gateway=$([ -n "$(echo $PRE_GW | xargs)" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+
+          echo "deploy_gateway=$DEPLOY_GATEWAY" >> $GITHUB_OUTPUT
+          echo "deploy_route53=$DEPLOY_ROUTE53" >> $GITHUB_OUTPUT
+          echo "deploy_monitoring=$DEPLOY_MONITORING" >> $GITHUB_OUTPUT
+          echo "deploy_stripe_webhooks=$DEPLOY_STRIPE" >> $GITHUB_OUTPUT
+
+          echo "api_services=$(to_json "$API")" >> $GITHUB_OUTPUT
+          echo "has_api=$([ -n "$(echo $API | xargs)" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+
+          echo "worker_services=$(to_json "$WORKERS")" >> $GITHUB_OUTPUT
+          echo "has_workers=$([ -n "$(echo $WORKERS | xargs)" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+
+          echo "helpers=${HELPERS:-[]}" >> $GITHUB_OUTPUT
+          echo "has_helper_changes=$HAS_HELPER_CHANGES" >> $GITHUB_OUTPUT
+
+          # ── Summary ──
+          echo ""
+          echo "=========================================="
+          echo "  Deployment Plan"
+          echo "=========================================="
+          echo "  Infrastructure: $(to_json "$INFRA")"
+          echo "  Pre-gateway:    $(to_json "$PRE_GW")"
+          echo "  Gateway:        $DEPLOY_GATEWAY"
+          echo "  Route53:        $DEPLOY_ROUTE53"
+          echo "  Monitoring:     $DEPLOY_MONITORING"
+          echo "  Stripe hooks:   $DEPLOY_STRIPE"
+          echo "  API services:   $(to_json "$API")"
+          echo "  Core workers:   $(to_json "$WORKERS")"
+          echo "  Helper workers: ${HELPERS:-[]}"
+          echo "=========================================="
+
+  # ──────────────────────────────────────────────
+  # 3. Deploy Infrastructure (only changed services)
   # ──────────────────────────────────────────────
   deploy-infra:
     name: "Deploy Infra: ${{ matrix.service }}"
-    needs: build-test
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_infra == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - service: cognito
-            path: services/infrastructure/cognito
-          - service: dynamodb-core
-            path: services/infrastructure/dynamodb/core
-          - service: s3
-            path: services/infrastructure/s3
-          - service: sqs
-            path: services/infrastructure/sqs
-          - service: ses
-            path: services/infrastructure/ses
-          - service: acm
-            path: services/infrastructure/acm
+        service: ${{ fromJson(needs.detect-changes.outputs.infra_services) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -163,19 +509,35 @@ jobs:
         env:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
+      - name: Resolve service path
+        id: path
+        run: |
+          case "${{ matrix.service }}" in
+            cognito)      echo "dir=services/infrastructure/cognito" >> $GITHUB_OUTPUT ;;
+            dynamodb-core) echo "dir=services/infrastructure/dynamodb/core" >> $GITHUB_OUTPUT ;;
+            s3)           echo "dir=services/infrastructure/s3" >> $GITHUB_OUTPUT ;;
+            sqs)          echo "dir=services/infrastructure/sqs" >> $GITHUB_OUTPUT ;;
+            ses)          echo "dir=services/infrastructure/ses" >> $GITHUB_OUTPUT ;;
+            acm)          echo "dir=services/infrastructure/acm" >> $GITHUB_OUTPUT ;;
+            *) echo "Unknown infra service: ${{ matrix.service }}"; exit 1 ;;
+          esac
+
       - name: "Deploy ${{ matrix.service }}"
-        working-directory: backend/golang/${{ matrix.path }}
+        working-directory: backend/golang/${{ steps.path.outputs.dir }}
         run: npx sls deploy --stage ${{ env.DEPLOY_STAGE }} --region us-west-2
         env:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
-  # 2a-stripe. Setup Stripe Webhooks (after infra, before API services)
-  # Creates/updates webhook endpoint and stores signing secret in SSM
+  # 3a. Setup Stripe Webhooks (after infra, before API services)
   # ──────────────────────────────────────────────
   setup-stripe-webhooks:
     name: Setup Stripe Webhooks
-    needs: deploy-infra
+    needs: [detect-changes, deploy-infra]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.deploy_stripe_webhooks == 'true' &&
+      (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -190,83 +552,20 @@ jobs:
         run: bash setup-stripe-webhooks.sh ${{ env.DEPLOY_STAGE }} us-west-2
 
   # ──────────────────────────────────────────────
-  # 2a. Detect Changed Helper Workers (for intelligent deployment)
-  # ──────────────────────────────────────────────
-  detect-changed-helpers:
-    name: Detect Changed Helper Workers
-    needs: build-test
-    runs-on: ubuntu-latest
-    outputs:
-      helpers: ${{ steps.detect.outputs.helpers }}
-      has_changes: ${{ steps.detect.outputs.has_changes }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed helper workers
-        id: detect
-        run: |
-          # Detect which helper workers have changes since last commit
-          # Excludes: helper-worker, notification-worker, data-sync, executions-stream, scheduler, voice assistant workers
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual trigger - deploy all helpers
-            echo "Manual trigger detected, will deploy all helper workers"
-            ALL_HELPERS=$(find backend/golang/services/workers -maxdepth 1 -type d -name "*-worker" \
-              ! -name "helper-worker" \
-              ! -name "notification-worker" \
-              ! -name "data-sync" \
-              ! -name "executions-stream" \
-              ! -name "scheduler" \
-              ! -name "sms-chat-webhook" \
-              ! -name "alexa-webhook" \
-              ! -name "google-assistant-webhook" \
-              ! -name "zoom-webhook" \
-              2>/dev/null | xargs -I {} basename {} | sed 's/-worker$//' | jq -R -s -c 'split("\n") | map(select(length > 0))')
-            echo "helpers=$ALL_HELPERS" >> $GITHUB_OUTPUT
-            if [ "$ALL_HELPERS" = "[]" ] || [ -z "$ALL_HELPERS" ]; then
-              echo "has_changes=false" >> $GITHUB_OUTPUT
-            else
-              echo "has_changes=true" >> $GITHUB_OUTPUT
-            fi
-          else
-            # Git-based detection for push events
-            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} \
-              | grep '^backend/golang/services/workers/' \
-              | grep -oP 'services/workers/\K[^/]+(?=-worker/)' \
-              | grep -v -E '^(helper|notification|data-sync|executions-stream|scheduler|sms-chat-webhook|alexa-webhook|google-assistant-webhook|zoom-webhook)$' \
-              | sort -u \
-              | jq -R -s -c 'split("\n") | map(select(length > 0))')
-            echo "Changed helper workers: $CHANGED"
-            echo "helpers=$CHANGED" >> $GITHUB_OUTPUT
-            if [ "$CHANGED" = "[]" ] || [ -z "$CHANGED" ]; then
-              echo "has_changes=false" >> $GITHUB_OUTPUT
-            else
-              echo "has_changes=true" >> $GITHUB_OUTPUT
-            fi
-          fi
-
-  # ──────────────────────────────────────────────
-  # 2b. Deploy Pre-Gateway Services (needed by gateway + API services)
-  # Includes executions-stream (DynamoDB stream router to SQS)
+  # 3b. Deploy Pre-Gateway Services (only changed)
   # ──────────────────────────────────────────────
   deploy-pre-gateway:
     name: "Deploy Pre-Gateway: ${{ matrix.service }}"
-    needs: deploy-infra
+    needs: [detect-changes, deploy-infra]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.has_pre_gateway == 'true' &&
+      (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - service: api-key-authorizer
-            path: services/api/api-key-authorizer
-          - service: scheduler
-            path: services/workers/scheduler
-          - service: executions-stream
-            path: services/workers/executions-stream
-          - service: stream-router
-            path: services/workers/stream-router
+        service: ${{ fromJson(needs.detect-changes.outputs.pre_gateway_services) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -293,20 +592,34 @@ jobs:
         working-directory: backend/golang
         run: npm install
 
+      - name: Resolve service path
+        id: path
+        run: |
+          case "${{ matrix.service }}" in
+            api-key-authorizer) echo "dir=services/api/api-key-authorizer" >> $GITHUB_OUTPUT ;;
+            scheduler)          echo "dir=services/workers/scheduler" >> $GITHUB_OUTPUT ;;
+            executions-stream)  echo "dir=services/workers/executions-stream" >> $GITHUB_OUTPUT ;;
+            stream-router)      echo "dir=services/workers/stream-router" >> $GITHUB_OUTPUT ;;
+            *) echo "Unknown pre-gateway service: ${{ matrix.service }}"; exit 1 ;;
+          esac
+
       - name: "Deploy ${{ matrix.service }}"
-        working-directory: backend/golang/${{ matrix.path }}
+        working-directory: backend/golang/${{ steps.path.outputs.dir }}
         run: npx sls deploy --stage ${{ env.DEPLOY_STAGE }} --region us-west-2
         env:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
-  # 3. Deploy API Gateway
+  # 4. Deploy API Gateway (only if changed)
   # ──────────────────────────────────────────────
   deploy-gateway:
     name: Deploy API Gateway
-    needs:
-      - deploy-infra
-      - deploy-pre-gateway
+    needs: [detect-changes, deploy-infra, deploy-pre-gateway]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.deploy_gateway == 'true' &&
+      (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped') &&
+      (needs.deploy-pre-gateway.result == 'success' || needs.deploy-pre-gateway.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -337,11 +650,15 @@ jobs:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
-  # 3b. Deploy Route53 DNS Records (after gateway creates custom domain)
+  # 4a. Deploy Route53 DNS Records (only if changed)
   # ──────────────────────────────────────────────
   deploy-route53:
     name: Deploy Route53 DNS
-    needs: deploy-gateway
+    needs: [detect-changes, deploy-gateway]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.deploy_route53 == 'true' &&
+      (needs.deploy-gateway.result == 'success' || needs.deploy-gateway.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -367,27 +684,21 @@ jobs:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
-  # 4. Deploy API Services (parallel matrix)
+  # 5. Deploy API Services (only changed services)
   # ──────────────────────────────────────────────
   deploy-api:
     name: "Deploy API: ${{ matrix.service }}"
-    needs: deploy-gateway
+    needs: [detect-changes, deploy-gateway]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.has_api == 'true' &&
+      (needs.deploy-gateway.result == 'success' || needs.deploy-gateway.result == 'skipped')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       max-parallel: 3
       matrix:
-        service:
-          - auth
-          - accounts
-          - api-keys
-          - helpers
-          - platforms
-          - data-explorer
-          - billing
-          - chat
-          - emails
-          - studio
+        service: ${{ fromJson(needs.detect-changes.outputs.api_services) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -437,11 +748,15 @@ jobs:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
-  # 4b. Deploy Monitoring (after gateway + infra, needs both DynamoDB and API Gateway outputs)
+  # 5a. Deploy Monitoring (only if changed)
   # ──────────────────────────────────────────────
   deploy-monitoring:
     name: Deploy Monitoring
-    needs: deploy-gateway
+    needs: [detect-changes, deploy-gateway]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.deploy_monitoring == 'true' &&
+      (needs.deploy-gateway.result == 'success' || needs.deploy-gateway.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -467,21 +782,21 @@ jobs:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
-  # 5. Deploy Helper Workers (intelligent parallel deployment)
-  # Only deploys helper workers that have changed (detected by git diff)
+  # 6. Deploy Helper Workers (only changed, detected by git diff)
   # ──────────────────────────────────────────────
   deploy-helpers:
     name: "Deploy Helper: ${{ matrix.helper }}-worker"
-    needs:
-      - detect-changed-helpers
-      - deploy-pre-gateway
-    if: needs.detect-changed-helpers.outputs.has_changes == 'true'
+    needs: [detect-changes, deploy-pre-gateway]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.has_helper_changes == 'true' &&
+      (needs.deploy-pre-gateway.result == 'success' || needs.deploy-pre-gateway.result == 'skipped')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       max-parallel: 10
       matrix:
-        helper: ${{ fromJson(needs.detect-changed-helpers.outputs.helpers) }}
+        helper: ${{ fromJson(needs.detect-changes.outputs.helpers) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -515,26 +830,20 @@ jobs:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
-  # 5b. Deploy Core Workers (non-helper workers)
-  # Excludes helper-specific workers (deployed by deploy-helpers job)
+  # 6b. Deploy Core Workers (only changed)
   # ──────────────────────────────────────────────
   deploy-workers:
     name: "Deploy Worker: ${{ matrix.service }}"
-    needs: deploy-infra
+    needs: [detect-changes, deploy-infra]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.has_workers == 'true' &&
+      (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - helper-worker
-          - notification-worker
-          - data-sync
-          # executions-stream moved to deploy-pre-gateway
-          # Voice assistant workers not yet implemented (from Voice Assistants plan)
-          # - sms-chat-webhook
-          # - alexa-webhook
-          # - google-assistant-webhook
-          # - zoom-webhook
+        service: ${{ fromJson(needs.detect-changes.outputs.worker_services) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -568,16 +877,15 @@ jobs:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
   # ──────────────────────────────────────────────
-  # 6. Post-Deploy (seed + verify)
-  # Waits for all deployments to complete (API + Workers + Helpers if any)
+  # 7. Post-Deploy Verification
   # ──────────────────────────────────────────────
   post-deploy:
     name: Post-Deploy Verification
     needs:
+      - detect-changes
       - deploy-api
       - deploy-workers
       - deploy-monitoring
-      - detect-changed-helpers
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
@@ -596,6 +904,25 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
           aws-region: us-west-2
+
+      - name: Deployment summary
+        run: |
+          echo "=========================================="
+          echo "  Deployment Summary"
+          echo "=========================================="
+          echo "  Stage:  ${{ env.DEPLOY_STAGE }}"
+          echo "  Branch: ${{ github.ref_name }}"
+          echo "  Commit: ${{ github.sha }}"
+          echo ""
+          echo "  Infrastructure: ${{ needs.detect-changes.outputs.infra_services }}"
+          echo "  Pre-gateway:    ${{ needs.detect-changes.outputs.pre_gateway_services }}"
+          echo "  Gateway:        ${{ needs.detect-changes.outputs.deploy_gateway }}"
+          echo "  Route53:        ${{ needs.detect-changes.outputs.deploy_route53 }}"
+          echo "  Monitoring:     ${{ needs.detect-changes.outputs.deploy_monitoring }}"
+          echo "  API services:   ${{ needs.detect-changes.outputs.api_services }}"
+          echo "  Core workers:   ${{ needs.detect-changes.outputs.worker_services }}"
+          echo "  Helper workers: ${{ needs.detect-changes.outputs.helpers }}"
+          echo "=========================================="
 
       - name: Verify deployment
         working-directory: backend/golang/scripts
