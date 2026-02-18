@@ -45,57 +45,134 @@ func NewKeapConnector(config ConnectorConfig) (CRMConnector, error) {
 	}, nil
 }
 
+// ========== Flexible JSON helpers ==========
+// The Keap API is inconsistent with types (e.g. id can be int or string).
+// We unmarshal into map[string]interface{} and extract values flexibly.
+
+// jsonStr extracts a string from a map, converting from other types if needed.
+func jsonStr(m map[string]interface{}, key string) string {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	case float64:
+		if val == float64(int(val)) {
+			return fmt.Sprintf("%d", int(val))
+		}
+		return fmt.Sprintf("%g", val)
+	case json.Number:
+		return val.String()
+	case bool:
+		if val {
+			return "true"
+		}
+		return "false"
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+// jsonArr extracts a JSON array as []interface{} from a map.
+func jsonArr(m map[string]interface{}, key string) []interface{} {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return nil
+	}
+	arr, ok := v.([]interface{})
+	if !ok {
+		return nil
+	}
+	return arr
+}
+
+// jsonObj extracts a nested object as map[string]interface{} from a map.
+func jsonObj(m map[string]interface{}, key string) map[string]interface{} {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return nil
+	}
+	obj, ok := v.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	return obj
+}
+
+// asMap converts an interface{} to map[string]interface{} if possible.
+func asMap(v interface{}) map[string]interface{} {
+	if v == nil {
+		return nil
+	}
+	m, ok := v.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	return m
+}
+
 // ========== CONTACTS ==========
 
 func (k *KeapConnector) GetContacts(ctx context.Context, opts QueryOptions) (*ContactList, error) {
-	params := url.Values{}
-	if opts.Limit > 0 {
-		params.Set("limit", fmt.Sprintf("%d", opts.Limit))
+	var raw map[string]interface{}
+
+	// If a cursor (full next URL) is provided, use it directly.
+	if opts.Cursor != "" && strings.HasPrefix(opts.Cursor, "http") {
+		if err := k.doRequestURL(ctx, "GET", opts.Cursor, nil, &raw); err != nil {
+			return nil, err
+		}
 	} else {
-		params.Set("limit", "25")
-	}
-	if opts.Offset > 0 {
-		params.Set("offset", fmt.Sprintf("%d", opts.Offset))
-	}
-	if opts.Email != "" {
-		params.Set("email", opts.Email)
+		params := url.Values{}
+		if opts.Limit > 0 {
+			params.Set("limit", fmt.Sprintf("%d", opts.Limit))
+		} else {
+			params.Set("limit", "25")
+		}
+		if opts.Offset > 0 {
+			params.Set("offset", fmt.Sprintf("%d", opts.Offset))
+		}
+		if opts.Email != "" {
+			params.Set("email", opts.Email)
+		}
+
+		endpoint := "/contacts"
+		if len(params) > 0 {
+			endpoint += "?" + params.Encode()
+		}
+
+		if err := k.doRequest(ctx, "GET", endpoint, nil, &raw); err != nil {
+			return nil, err
+		}
 	}
 
-	endpoint := "/contacts"
-	if len(params) > 0 {
-		endpoint += "?" + params.Encode()
+	contactsRaw := jsonArr(raw, "contacts")
+	contacts := make([]NormalizedContact, 0, len(contactsRaw))
+	for _, c := range contactsRaw {
+		cm := asMap(c)
+		if cm == nil {
+			continue
+		}
+		contacts = append(contacts, keapContactToNormalized(cm))
 	}
 
-	var result struct {
-		Contacts []keapContact `json:"contacts"`
-		Count    int           `json:"count"`
-		Next     string        `json:"next,omitempty"`
-	}
-
-	if err := k.doRequest(ctx, "GET", endpoint, nil, &result); err != nil {
-		return nil, err
-	}
-
-	contacts := make([]NormalizedContact, 0, len(result.Contacts))
-	for _, kc := range result.Contacts {
-		contacts = append(contacts, kc.toNormalized())
-	}
-
+	nextCursor := jsonStr(raw, "next")
 	return &ContactList{
 		Contacts:   contacts,
-		Total:      result.Count,
-		NextCursor: result.Next,
-		HasMore:    result.Next != "",
+		Total:      int(jsonFloat(raw, "count")),
+		NextCursor: nextCursor,
+		HasMore:    nextCursor != "",
 	}, nil
 }
 
 func (k *KeapConnector) GetContact(ctx context.Context, contactID string) (*NormalizedContact, error) {
-	var kc keapContact
-	if err := k.doRequest(ctx, "GET", "/contacts/"+contactID, nil, &kc); err != nil {
+	var raw map[string]interface{}
+	if err := k.doRequest(ctx, "GET", "/contacts/"+contactID, nil, &raw); err != nil {
 		return nil, err
 	}
 
-	contact := kc.toNormalized()
+	contact := keapContactToNormalized(raw)
 	return &contact, nil
 }
 
@@ -129,12 +206,12 @@ func (k *KeapConnector) CreateContact(ctx context.Context, input CreateContactIn
 		body["custom_fields"] = customFields
 	}
 
-	var kc keapContact
-	if err := k.doRequest(ctx, "POST", "/contacts", body, &kc); err != nil {
+	var raw map[string]interface{}
+	if err := k.doRequest(ctx, "POST", "/contacts", body, &raw); err != nil {
 		return nil, err
 	}
 
-	contact := kc.toNormalized()
+	contact := keapContactToNormalized(raw)
 	return &contact, nil
 }
 
@@ -168,12 +245,12 @@ func (k *KeapConnector) UpdateContact(ctx context.Context, contactID string, upd
 		body["custom_fields"] = customFields
 	}
 
-	var kc keapContact
-	if err := k.doRequest(ctx, "PATCH", "/contacts/"+contactID, body, &kc); err != nil {
+	var raw map[string]interface{}
+	if err := k.doRequest(ctx, "PATCH", "/contacts/"+contactID, body, &raw); err != nil {
 		return nil, err
 	}
 
-	contact := kc.toNormalized()
+	contact := keapContactToNormalized(raw)
 	return &contact, nil
 }
 
@@ -184,30 +261,27 @@ func (k *KeapConnector) DeleteContact(ctx context.Context, contactID string) err
 // ========== TAGS ==========
 
 func (k *KeapConnector) GetTags(ctx context.Context) ([]Tag, error) {
-	var result struct {
-		Tags []struct {
-			ID          int    `json:"id"`
-			Name        string `json:"name"`
-			Description string `json:"description"`
-			Category    struct {
-				ID   int    `json:"id"`
-				Name string `json:"name"`
-			} `json:"category"`
-		} `json:"tags"`
-	}
-
-	if err := k.doRequest(ctx, "GET", "/tags?limit=1000", nil, &result); err != nil {
+	var raw map[string]interface{}
+	if err := k.doRequest(ctx, "GET", "/tags?limit=1000", nil, &raw); err != nil {
 		return nil, err
 	}
 
-	tags := make([]Tag, 0, len(result.Tags))
-	for _, t := range result.Tags {
-		tags = append(tags, Tag{
-			ID:          fmt.Sprintf("%d", t.ID),
-			Name:        t.Name,
-			Description: t.Description,
-			Category:    t.Category.Name,
-		})
+	tagsRaw := jsonArr(raw, "tags")
+	tags := make([]Tag, 0, len(tagsRaw))
+	for _, t := range tagsRaw {
+		tm := asMap(t)
+		if tm == nil {
+			continue
+		}
+		tag := Tag{
+			ID:          jsonStr(tm, "id"),
+			Name:        jsonStr(tm, "name"),
+			Description: jsonStr(tm, "description"),
+		}
+		if cat := jsonObj(tm, "category"); cat != nil {
+			tag.Category = jsonStr(cat, "name")
+		}
+		tags = append(tags, tag)
 	}
 	return tags, nil
 }
@@ -226,27 +300,23 @@ func (k *KeapConnector) RemoveTag(ctx context.Context, contactID string, tagID s
 // ========== CUSTOM FIELDS ==========
 
 func (k *KeapConnector) GetCustomFields(ctx context.Context) ([]CustomField, error) {
-	var result struct {
-		CustomFields []struct {
-			ID        int    `json:"id"`
-			FieldName string `json:"field_name"`
-			Label     string `json:"label"`
-			FieldType string `json:"field_type"`
-			GroupID   int    `json:"group_id"`
-		} `json:"custom_fields"`
-	}
-
-	if err := k.doRequest(ctx, "GET", "/contacts/model", nil, &result); err != nil {
+	var raw map[string]interface{}
+	if err := k.doRequest(ctx, "GET", "/contacts/model", nil, &raw); err != nil {
 		return nil, err
 	}
 
-	fields := make([]CustomField, 0, len(result.CustomFields))
-	for _, f := range result.CustomFields {
+	fieldsRaw := jsonArr(raw, "custom_fields")
+	fields := make([]CustomField, 0, len(fieldsRaw))
+	for _, f := range fieldsRaw {
+		fm := asMap(f)
+		if fm == nil {
+			continue
+		}
 		fields = append(fields, CustomField{
-			ID:        fmt.Sprintf("%d", f.ID),
-			Key:       f.FieldName,
-			Label:     f.Label,
-			FieldType: f.FieldType,
+			ID:        jsonStr(fm, "id"),
+			Key:       jsonStr(fm, "field_name"),
+			Label:     jsonStr(fm, "label"),
+			FieldType: jsonStr(fm, "field_type"),
 		})
 	}
 	return fields, nil
@@ -258,7 +328,6 @@ func (k *KeapConnector) GetContactFieldValue(ctx context.Context, contactID stri
 		return nil, err
 	}
 
-	// Check standard fields first
 	switch fieldKey {
 	case "first_name", "given_name":
 		return contact.FirstName, nil
@@ -272,7 +341,6 @@ func (k *KeapConnector) GetContactFieldValue(ctx context.Context, contactID stri
 		return contact.Company, nil
 	}
 
-	// Check custom fields
 	if val, ok := contact.CustomFields[fieldKey]; ok {
 		return val, nil
 	}
@@ -297,7 +365,6 @@ func (k *KeapConnector) SetContactFieldValue(ctx context.Context, contactID stri
 		v := fmt.Sprintf("%v", value)
 		updates.Phone = &v
 	default:
-		// Treat as custom field
 		updates.CustomFields = map[string]interface{}{
 			fieldKey: value,
 		}
@@ -310,7 +377,6 @@ func (k *KeapConnector) SetContactFieldValue(ctx context.Context, contactID stri
 // ========== AUTOMATIONS ==========
 
 func (k *KeapConnector) TriggerAutomation(ctx context.Context, contactID string, automationID string) error {
-	// Keap v2 API: Add contact to a campaign sequence
 	body := map[string]interface{}{
 		"contact_id": contactID,
 	}
@@ -318,7 +384,6 @@ func (k *KeapConnector) TriggerAutomation(ctx context.Context, contactID string,
 }
 
 func (k *KeapConnector) AchieveGoal(ctx context.Context, contactID string, goalName string, integration string) error {
-	// Keap goal achievement via legacy API endpoint
 	if integration == "" {
 		integration = "mfh"
 	}
@@ -334,10 +399,6 @@ func (k *KeapConnector) AchieveGoal(ctx context.Context, contactID string, goalN
 // ========== MARKETING ==========
 
 func (k *KeapConnector) SetOptInStatus(ctx context.Context, contactID string, optIn bool, reason string) error {
-	// Keap's email status field: https://developer.infusionsoft.com/docs/rest/#!/Contact/updatePropertiesOnContactUsingPATCH
-	// email_status values: Single Opt In, Double Opt In, Confirmed, UnMarketable, NonMarketable
-	// For simple opt-in automation, we use: Single Opt In (opted in) or UnMarketable (opted out)
-
 	status := "UnMarketable"
 	if optIn {
 		status = "Single Opt In"
@@ -347,7 +408,6 @@ func (k *KeapConnector) SetOptInStatus(ctx context.Context, contactID string, op
 		"email_status": status,
 	}
 
-	// Add reason to notes if provided
 	if reason != "" {
 		updates["notes"] = fmt.Sprintf("Opt-in status updated: %s. Reason: %s", status, reason)
 	}
@@ -383,71 +443,70 @@ func (k *KeapConnector) GetCapabilities() []Capability {
 	}
 }
 
-// ========== INTERNAL TYPES ==========
+// ========== Contact normalization ==========
 
-type keapContact struct {
-	ID          int    `json:"id"`
-	GivenName   string `json:"given_name"`
-	FamilyName  string `json:"family_name"`
-	CompanyName string `json:"company_name,omitempty"`
-	JobTitle    string `json:"job_title,omitempty"`
-	Emails      []struct {
-		Email string `json:"email"`
-		Field string `json:"field"`
-	} `json:"email_addresses"`
-	Phones []struct {
-		Number string `json:"number"`
-		Field  string `json:"field"`
-	} `json:"phone_numbers"`
-	Tags []struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	} `json:"tag_ids"`
-	CustomFields []struct {
-		ID      int         `json:"id"`
-		Content interface{} `json:"content"`
-	} `json:"custom_fields"`
-	DateCreated string `json:"date_created"`
-	LastUpdated string `json:"last_updated"`
-}
-
-func (kc *keapContact) toNormalized() NormalizedContact {
+// keapContactToNormalized builds a NormalizedContact from a raw Keap JSON map.
+// This is type-safe against API inconsistencies (int vs string fields, etc.).
+func keapContactToNormalized(m map[string]interface{}) NormalizedContact {
+	id := jsonStr(m, "id")
 	contact := NormalizedContact{
-		ID:           fmt.Sprintf("%d", kc.ID),
-		FirstName:    kc.GivenName,
-		LastName:     kc.FamilyName,
-		Company:      kc.CompanyName,
-		JobTitle:     kc.JobTitle,
+		ID:           id,
+		FirstName:    jsonStr(m, "given_name"),
+		LastName:     jsonStr(m, "family_name"),
+		Company:      jsonStr(m, "company_name"),
+		JobTitle:     jsonStr(m, "job_title"),
 		SourceCRM:    keapSlug,
-		SourceID:     fmt.Sprintf("%d", kc.ID),
+		SourceID:     id,
 		CustomFields: make(map[string]interface{}),
 	}
 
-	if len(kc.Emails) > 0 {
-		contact.Email = kc.Emails[0].Email
-	}
-	if len(kc.Phones) > 0 {
-		contact.Phone = kc.Phones[0].Number
-	}
-
-	for _, tag := range kc.Tags {
-		contact.Tags = append(contact.Tags, TagRef{
-			ID:   fmt.Sprintf("%d", tag.ID),
-			Name: tag.Name,
-		})
+	// Email: first entry in email_addresses array
+	if emails := jsonArr(m, "email_addresses"); len(emails) > 0 {
+		if em := asMap(emails[0]); em != nil {
+			contact.Email = jsonStr(em, "email")
+		}
 	}
 
-	for _, cf := range kc.CustomFields {
-		contact.CustomFields[fmt.Sprintf("%d", cf.ID)] = cf.Content
+	// Phone: first entry in phone_numbers array
+	if phones := jsonArr(m, "phone_numbers"); len(phones) > 0 {
+		if pm := asMap(phones[0]); pm != nil {
+			contact.Phone = jsonStr(pm, "number")
+		}
 	}
 
-	if kc.DateCreated != "" {
-		if t, err := time.Parse(time.RFC3339, kc.DateCreated); err == nil {
+	// Tags
+	if tags := jsonArr(m, "tag_ids"); len(tags) > 0 {
+		for _, t := range tags {
+			tm := asMap(t)
+			if tm == nil {
+				continue
+			}
+			contact.Tags = append(contact.Tags, TagRef{
+				ID:   jsonStr(tm, "id"),
+				Name: jsonStr(tm, "name"),
+			})
+		}
+	}
+
+	// Custom fields
+	if cfs := jsonArr(m, "custom_fields"); len(cfs) > 0 {
+		for _, cf := range cfs {
+			cfm := asMap(cf)
+			if cfm == nil {
+				continue
+			}
+			contact.CustomFields[jsonStr(cfm, "id")] = cfm["content"]
+		}
+	}
+
+	// Timestamps
+	if dateCreated := jsonStr(m, "date_created"); dateCreated != "" {
+		if t, err := time.Parse(time.RFC3339, dateCreated); err == nil {
 			contact.CreatedAt = &t
 		}
 	}
-	if kc.LastUpdated != "" {
-		if t, err := time.Parse(time.RFC3339, kc.LastUpdated); err == nil {
+	if lastUpdated := jsonStr(m, "last_updated"); lastUpdated != "" {
+		if t, err := time.Parse(time.RFC3339, lastUpdated); err == nil {
 			contact.UpdatedAt = &t
 		}
 	}
@@ -455,9 +514,142 @@ func (kc *keapContact) toNormalized() NormalizedContact {
 	return contact
 }
 
-// ========== HTTP HELPER ==========
+// jsonFloat extracts a float64 from a map (handles int, float64, string).
+func jsonFloat(m map[string]interface{}, key string) float64 {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return 0
+	}
+	switch val := v.(type) {
+	case float64:
+		return val
+	case int:
+		return float64(val)
+	case string:
+		var f float64
+		fmt.Sscanf(val, "%f", &f)
+		return f
+	case json.Number:
+		f, _ := val.Float64()
+		return f
+	default:
+		return 0
+	}
+}
 
+// ========== Raw Data Provider (for data sync pipeline) ==========
+
+// GetRawPage implements RawDataProvider. Returns raw API records as maps
+// to capture ALL fields for dynamic parquet writing.
+func (k *KeapConnector) GetRawPage(ctx context.Context, objectType string, opts QueryOptions) (*RawPageResult, error) {
+	switch objectType {
+	case "contacts":
+		return k.getRawContacts(ctx, opts)
+	case "tags":
+		return k.getRawTags(ctx, opts)
+	case "custom_fields":
+		return k.getRawCustomFields(ctx, opts)
+	default:
+		return nil, fmt.Errorf("unsupported object type: %s", objectType)
+	}
+}
+
+func (k *KeapConnector) getRawContacts(ctx context.Context, opts QueryOptions) (*RawPageResult, error) {
+	var raw map[string]interface{}
+
+	if opts.Cursor != "" && strings.HasPrefix(opts.Cursor, "http") {
+		if err := k.doRequestURL(ctx, "GET", opts.Cursor, nil, &raw); err != nil {
+			return nil, err
+		}
+	} else {
+		params := url.Values{}
+		if opts.Limit > 0 {
+			params.Set("limit", fmt.Sprintf("%d", opts.Limit))
+		} else {
+			params.Set("limit", "25")
+		}
+		if opts.Offset > 0 {
+			params.Set("offset", fmt.Sprintf("%d", opts.Offset))
+		}
+
+		endpoint := "/contacts"
+		if len(params) > 0 {
+			endpoint += "?" + params.Encode()
+		}
+
+		if err := k.doRequest(ctx, "GET", endpoint, nil, &raw); err != nil {
+			return nil, err
+		}
+	}
+
+	contactsRaw := jsonArr(raw, "contacts")
+	records := make([]map[string]interface{}, 0, len(contactsRaw))
+	for _, c := range contactsRaw {
+		if cm := asMap(c); cm != nil {
+			records = append(records, cm)
+		}
+	}
+
+	nextCursor := jsonStr(raw, "next")
+	return &RawPageResult{
+		Records:    records,
+		NextCursor: nextCursor,
+		HasMore:    nextCursor != "",
+		Total:      int(jsonFloat(raw, "count")),
+	}, nil
+}
+
+func (k *KeapConnector) getRawTags(ctx context.Context, _ QueryOptions) (*RawPageResult, error) {
+	var raw map[string]interface{}
+	if err := k.doRequest(ctx, "GET", "/tags?limit=1000", nil, &raw); err != nil {
+		return nil, err
+	}
+
+	tagsRaw := jsonArr(raw, "tags")
+	records := make([]map[string]interface{}, 0, len(tagsRaw))
+	for _, t := range tagsRaw {
+		if tm := asMap(t); tm != nil {
+			records = append(records, tm)
+		}
+	}
+
+	return &RawPageResult{
+		Records: records,
+		HasMore: false,
+		Total:   len(records),
+	}, nil
+}
+
+func (k *KeapConnector) getRawCustomFields(ctx context.Context, _ QueryOptions) (*RawPageResult, error) {
+	var raw map[string]interface{}
+	if err := k.doRequest(ctx, "GET", "/contacts/model", nil, &raw); err != nil {
+		return nil, err
+	}
+
+	fieldsRaw := jsonArr(raw, "custom_fields")
+	records := make([]map[string]interface{}, 0, len(fieldsRaw))
+	for _, f := range fieldsRaw {
+		if fm := asMap(f); fm != nil {
+			records = append(records, fm)
+		}
+	}
+
+	return &RawPageResult{
+		Records: records,
+		HasMore: false,
+		Total:   len(records),
+	}, nil
+}
+
+// ========== HTTP helpers ==========
+
+// doRequest makes an HTTP request to a relative path under the Keap base URL.
 func (k *KeapConnector) doRequest(ctx context.Context, method, path string, body interface{}, result interface{}) error {
+	return k.doRequestURL(ctx, method, k.baseURL+path, body, result)
+}
+
+// doRequestURL makes an HTTP request to an absolute URL.
+func (k *KeapConnector) doRequestURL(ctx context.Context, method, fullURL string, body interface{}, result interface{}) error {
 	var bodyReader io.Reader
 	if body != nil {
 		bodyJSON, err := json.Marshal(body)
@@ -467,8 +659,7 @@ func (k *KeapConnector) doRequest(ctx context.Context, method, path string, body
 		bodyReader = strings.NewReader(string(bodyJSON))
 	}
 
-	apiURL := k.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, apiURL, bodyReader)
+	req, err := http.NewRequestWithContext(ctx, method, fullURL, bodyReader)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

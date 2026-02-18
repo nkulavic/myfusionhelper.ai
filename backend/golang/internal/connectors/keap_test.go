@@ -630,67 +630,113 @@ func TestKeapConnector_TestConnection(t *testing.T) {
 	})
 }
 
-// TestKeapContact_toNormalized tests contact normalization
-func TestKeapContact_toNormalized(t *testing.T) {
-	kc := keapContact{
-		ID:        123,
-		GivenName: "John",
-		FamilyName: "Doe",
-		Emails: []struct {
-			Email string `json:"email"`
-			Field string `json:"field"`
-		}{
-			{Email: "john@example.com", Field: "EMAIL1"},
-		},
-		Phones: []struct {
-			Number string `json:"number"`
-			Field  string `json:"field"`
-		}{
-			{Number: "+1234567890", Field: "PHONE1"},
-		},
-		Tags: []struct {
-			ID   int    `json:"id"`
-			Name string `json:"name"`
-		}{
-			{ID: 1, Name: "VIP"},
-		},
-		CustomFields: []struct {
-			ID      int         `json:"id"`
-			Content interface{} `json:"content"`
-		}{
-			{ID: 5, Content: "Premium"},
-		},
-		DateCreated: "2024-01-01T00:00:00Z",
-		LastUpdated: "2024-01-15T12:30:00Z",
-	}
+// TestKeapContactToNormalized tests contact normalization from raw JSON map
+func TestKeapContactToNormalized(t *testing.T) {
+	t.Run("with int IDs", func(t *testing.T) {
+		raw := map[string]interface{}{
+			"id":           float64(123), // json.Unmarshal into interface{} produces float64
+			"given_name":   "John",
+			"family_name":  "Doe",
+			"company_name": "ACME",
+			"job_title":    "Engineer",
+			"email_addresses": []interface{}{
+				map[string]interface{}{"email": "john@example.com", "field": "EMAIL1"},
+			},
+			"phone_numbers": []interface{}{
+				map[string]interface{}{"number": "+1234567890", "field": "PHONE1"},
+			},
+			"tag_ids": []interface{}{
+				map[string]interface{}{"id": float64(1), "name": "VIP"},
+			},
+			"custom_fields": []interface{}{
+				map[string]interface{}{"id": float64(5), "content": "Premium"},
+			},
+			"date_created": "2024-01-01T00:00:00Z",
+			"last_updated": "2024-01-15T12:30:00Z",
+		}
 
-	normalized := kc.toNormalized()
+		normalized := keapContactToNormalized(raw)
 
-	if normalized.ID != "123" {
-		t.Errorf("Expected ID '123', got '%s'", normalized.ID)
-	}
-	if normalized.FirstName != "John" {
-		t.Errorf("Expected first name 'John', got '%s'", normalized.FirstName)
-	}
-	if normalized.LastName != "Doe" {
-		t.Errorf("Expected last name 'Doe', got '%s'", normalized.LastName)
-	}
-	if normalized.Email != "john@example.com" {
-		t.Errorf("Expected email 'john@example.com', got '%s'", normalized.Email)
-	}
-	if normalized.Phone != "+1234567890" {
-		t.Errorf("Expected phone '+1234567890', got '%s'", normalized.Phone)
-	}
-	if len(normalized.Tags) != 1 || normalized.Tags[0].Name != "VIP" {
-		t.Error("Expected VIP tag")
-	}
-	if normalized.CustomFields["5"] != "Premium" {
-		t.Error("Expected Premium custom field")
-	}
-	if normalized.CreatedAt == nil {
-		t.Error("Expected CreatedAt timestamp")
-	}
-	if normalized.UpdatedAt == nil {
-		t.Error("Expected UpdatedAt timestamp")
-	}
+		if normalized.ID != "123" {
+			t.Errorf("Expected ID '123', got '%s'", normalized.ID)
+		}
+		if normalized.FirstName != "John" {
+			t.Errorf("Expected first name 'John', got '%s'", normalized.FirstName)
+		}
+		if normalized.LastName != "Doe" {
+			t.Errorf("Expected last name 'Doe', got '%s'", normalized.LastName)
+		}
+		if normalized.Email != "john@example.com" {
+			t.Errorf("Expected email 'john@example.com', got '%s'", normalized.Email)
+		}
+		if normalized.Phone != "+1234567890" {
+			t.Errorf("Expected phone '+1234567890', got '%s'", normalized.Phone)
+		}
+		if len(normalized.Tags) != 1 || normalized.Tags[0].Name != "VIP" {
+			t.Error("Expected VIP tag")
+		}
+		if normalized.CustomFields["5"] != "Premium" {
+			t.Errorf("Expected Premium custom field, got %v", normalized.CustomFields["5"])
+		}
+		if normalized.CreatedAt == nil {
+			t.Error("Expected CreatedAt timestamp")
+		}
+		if normalized.UpdatedAt == nil {
+			t.Error("Expected UpdatedAt timestamp")
+		}
+	})
+
+	t.Run("with string IDs (Keap API inconsistency)", func(t *testing.T) {
+		raw := map[string]interface{}{
+			"id":          "456",
+			"given_name":  "Jane",
+			"family_name": "Smith",
+			"email_addresses": []interface{}{
+				map[string]interface{}{"email": "jane@example.com", "field": "EMAIL1"},
+			},
+			"tag_ids": []interface{}{
+				map[string]interface{}{"id": "99", "name": "Lead"},
+			},
+			"custom_fields": []interface{}{
+				map[string]interface{}{"id": "10", "content": "Gold"},
+			},
+		}
+
+		normalized := keapContactToNormalized(raw)
+
+		if normalized.ID != "456" {
+			t.Errorf("Expected ID '456', got '%s'", normalized.ID)
+		}
+		if normalized.FirstName != "Jane" {
+			t.Errorf("Expected first name 'Jane', got '%s'", normalized.FirstName)
+		}
+		if len(normalized.Tags) != 1 || normalized.Tags[0].ID != "99" {
+			t.Errorf("Expected tag ID '99', got %+v", normalized.Tags)
+		}
+		if normalized.CustomFields["10"] != "Gold" {
+			t.Errorf("Expected Gold custom field, got %v", normalized.CustomFields["10"])
+		}
+	})
+
+	t.Run("with missing fields", func(t *testing.T) {
+		raw := map[string]interface{}{
+			"id":         float64(1),
+			"given_name": "Solo",
+		}
+
+		normalized := keapContactToNormalized(raw)
+
+		if normalized.ID != "1" {
+			t.Errorf("Expected ID '1', got '%s'", normalized.ID)
+		}
+		if normalized.FirstName != "Solo" {
+			t.Errorf("Expected first name 'Solo', got '%s'", normalized.FirstName)
+		}
+		if normalized.Email != "" {
+			t.Error("Expected empty email for missing field")
+		}
+		if len(normalized.Tags) != 0 {
+			t.Error("Expected no tags")
+		}
+	})
 }

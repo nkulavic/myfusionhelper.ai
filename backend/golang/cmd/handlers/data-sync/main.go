@@ -105,11 +105,20 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 func processSync(ctx context.Context, db *dynamodb.Client, s3Client *s3.Client, sqsClient *sqs.Client, msg SyncMessage) error {
 	startTime := time.Now()
 
-	// Load the CRM connector with field translation
-	connector, err := loader.LoadConnectorWithTranslation(ctx, db, msg.ConnectionID, msg.AccountID)
+	// Load the raw CRM connector (not wrapped with translation layer)
+	// since we want the unmodified API data for parquet writing.
+	connector, err := loader.LoadConnector(ctx, db, msg.ConnectionID, msg.AccountID)
 	if err != nil {
 		return fmt.Errorf("failed to load connector: %w", err)
 	}
+
+	// The connector must implement RawDataProvider for the dynamic parquet pipeline
+	rawProvider, ok := connector.(connectors.RawDataProvider)
+	if !ok {
+		return fmt.Errorf("connector %s does not implement RawDataProvider", connector.GetMetadata().PlatformSlug)
+	}
+
+	platformSlug := connector.GetMetadata().PlatformSlug
 
 	// Determine which capabilities the connector supports
 	capabilities := connector.GetCapabilities()
@@ -202,9 +211,10 @@ func processSync(ctx context.Context, db *dynamodb.Client, s3Client *s3.Client, 
 			chunkNum = 0 // Reset chunk numbering for new object types
 		}
 
-		count, newChunkNum, timedOut, err := syncObjectType(
-			ctx, connector, s3Client, msg.AccountID, msg.ConnectionID,
-			objectType, cursor, chunkNum, startTime, capSet,
+		count, newChunkNum, lastCursor, timedOut, err := syncObjectTypeRaw(
+			ctx, rawProvider, s3Client,
+			msg.AccountID, msg.ConnectionID, objectType, platformSlug,
+			cursor, chunkNum, startTime,
 		)
 		if err != nil {
 			return fmt.Errorf("%s sync failed: %w", objectType, err)
@@ -218,6 +228,7 @@ func processSync(ctx context.Context, db *dynamodb.Client, s3Client *s3.Client, 
 			exec.ChunkNumber = newChunkNum
 			exec.ObjectTypeIndex = i
 			exec.CurrentObjectType = objectType
+			exec.Cursor = lastCursor
 			exec.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 			if err := updateSyncExecution(ctx, db, &exec); err != nil {
 				log.Printf("Failed to save sync execution state: %v", err)
@@ -230,7 +241,7 @@ func processSync(ctx context.Context, db *dynamodb.Client, s3Client *s3.Client, 
 				IsContinuation:  true,
 				ExecutionID:     exec.ExecutionID,
 				ObjectTypeIndex: i,
-				Cursor:          exec.Cursor,
+				Cursor:          lastCursor,
 				ChunkNumber:     newChunkNum,
 				RecordsSoFar:    exec.RecordsSoFar,
 			}
@@ -246,9 +257,6 @@ func processSync(ctx context.Context, db *dynamodb.Client, s3Client *s3.Client, 
 		// Object type fully synced — update completed tracking
 		exec.CompletedObjectTypes[objectType] = recordCounts[objectType]
 		exec.ChunkNumber = 0 // Reset for next object type
-
-		// Write schema.json for this object type
-		// (schema is written after each object type completes, even mid-continuation)
 	}
 
 	// All object types completed
@@ -267,42 +275,20 @@ func processSync(ctx context.Context, db *dynamodb.Client, s3Client *s3.Client, 
 	return nil
 }
 
-// syncObjectType syncs a single object type with chunked parquet output and time-limit checks.
-// Returns (recordCount, chunkNumber, timedOut, error).
-func syncObjectType(
+// syncObjectTypeRaw syncs a single object type using the RawDataProvider interface
+// and writes dynamic-schema parquet files. All object types (contacts, tags,
+// custom_fields) go through the same path: GetRawPage → WriteDynamicParquet.
+//
+// Returns (recordCount, chunkNumber, lastCursor, timedOut, error).
+func syncObjectTypeRaw(
 	ctx context.Context,
-	connector connectors.CRMConnector,
+	rawProvider connectors.RawDataProvider,
 	s3Client *s3.Client,
-	accountID, connectionID, objectType, startCursor string,
+	accountID, connectionID, objectType, platformSlug, startCursor string,
 	startChunkNum int,
 	startTime time.Time,
-	capSet map[connectors.Capability]bool,
-) (int, int, bool, error) {
-	switch objectType {
-	case "contacts":
-		return syncContactsChunked(ctx, connector, s3Client, accountID, connectionID, startCursor, startChunkNum, startTime)
-	case "tags":
-		count, err := syncTags(ctx, connector, s3Client, accountID, connectionID, startChunkNum)
-		return count, startChunkNum + 1, false, err
-	case "custom_fields":
-		count, err := syncCustomFields(ctx, connector, s3Client, accountID, connectionID, startChunkNum)
-		return count, startChunkNum + 1, false, err
-	default:
-		return 0, startChunkNum, false, nil
-	}
-}
-
-// syncContactsChunked fetches contacts page-by-page, writing chunk parquet files every chunkSize records.
-// If the Lambda is running out of time, it returns timedOut=true with the current cursor saved in the execution.
-func syncContactsChunked(
-	ctx context.Context,
-	connector connectors.CRMConnector,
-	s3Client *s3.Client,
-	accountID, connectionID, startCursor string,
-	startChunkNum int,
-	startTime time.Time,
-) (int, int, bool, error) {
-	var batch []connectors.NormalizedContact
+) (int, int, string, bool, error) {
+	var batch []map[string]interface{}
 	cursor := startCursor
 	chunkNum := startChunkNum
 	totalCount := 0
@@ -313,124 +299,87 @@ func syncContactsChunked(
 			Cursor: cursor,
 		}
 
-		result, err := connector.GetContacts(ctx, opts)
+		result, err := rawProvider.GetRawPage(ctx, objectType, opts)
 		if err != nil {
 			// If we have accumulated records, flush them before returning error
 			if len(batch) > 0 {
-				s3Key := fmt.Sprintf("%s/%s/contacts/chunk_%03d.parquet", accountID, connectionID, chunkNum)
-				if _, flushErr := parquet.WriteContactsParquet(ctx, s3Client, analyticsBucket, s3Key, batch); flushErr != nil {
-					log.Printf("Failed to flush contacts chunk on error: %v", flushErr)
+				s3Key := fmt.Sprintf("%s/%s/%s/chunk_%03d.parquet", accountID, connectionID, objectType, chunkNum)
+				if _, flushErr := parquet.WriteDynamicParquet(ctx, s3Client, analyticsBucket, s3Key, batch, platformSlug); flushErr != nil {
+					log.Printf("Failed to flush %s chunk on error: %v", objectType, flushErr)
 				}
 			}
-			return totalCount, chunkNum, false, fmt.Errorf("failed to get contacts page: %w", err)
+			return totalCount, chunkNum, cursor, false, fmt.Errorf("failed to get %s page: %w", objectType, err)
 		}
 
-		batch = append(batch, result.Contacts...)
-		totalCount += len(result.Contacts)
-		log.Printf("Fetched %d contacts (total so far: %d, has_more: %v)",
-			len(result.Contacts), totalCount, result.HasMore)
+		batch = append(batch, result.Records...)
+		totalCount += len(result.Records)
+		log.Printf("Fetched %d %s records (total so far: %d, has_more: %v)",
+			len(result.Records), objectType, totalCount, result.HasMore)
 
 		// Flush chunk when batch is big enough
 		if len(batch) >= chunkSize {
-			s3Key := fmt.Sprintf("%s/%s/contacts/chunk_%03d.parquet", accountID, connectionID, chunkNum)
-			schemaInfo, err := parquet.WriteContactsParquet(ctx, s3Client, analyticsBucket, s3Key, batch)
-			if err != nil {
-				return totalCount, chunkNum, false, fmt.Errorf("failed to write contacts chunk %d: %w", chunkNum, err)
-			}
-			// Write schema alongside chunk
-			schemaInfo.ConnectionID = connectionID
-			schemaKey := fmt.Sprintf("%s/%s/contacts/schema.json", accountID, connectionID)
-			if err := parquet.WriteSchema(ctx, s3Client, analyticsBucket, schemaKey, schemaInfo); err != nil {
-				log.Printf("Failed to write contacts schema: %v", err)
+			if err := writeChunkAndSchema(ctx, s3Client, analyticsBucket, accountID, connectionID, objectType, platformSlug, batch, chunkNum); err != nil {
+				return totalCount, chunkNum, cursor, false, fmt.Errorf("failed to write %s chunk %d: %w", objectType, chunkNum, err)
 			}
 			chunkNum++
 			batch = batch[:0] // Reset
+		}
+
+		// Update cursor for next page
+		if result.NextCursor != "" {
+			cursor = result.NextCursor
 		}
 
 		// Check time limit before next page
 		if time.Since(startTime) > maxDuration {
 			// Flush remaining records
 			if len(batch) > 0 {
-				s3Key := fmt.Sprintf("%s/%s/contacts/chunk_%03d.parquet", accountID, connectionID, chunkNum)
-				schemaInfo, err := parquet.WriteContactsParquet(ctx, s3Client, analyticsBucket, s3Key, batch)
-				if err != nil {
-					return totalCount, chunkNum, false, fmt.Errorf("failed to flush contacts chunk %d on timeout: %w", chunkNum, err)
-				}
-				schemaInfo.ConnectionID = connectionID
-				schemaKey := fmt.Sprintf("%s/%s/contacts/schema.json", accountID, connectionID)
-				if err := parquet.WriteSchema(ctx, s3Client, analyticsBucket, schemaKey, schemaInfo); err != nil {
-					log.Printf("Failed to write contacts schema: %v", err)
+				if err := writeChunkAndSchema(ctx, s3Client, analyticsBucket, accountID, connectionID, objectType, platformSlug, batch, chunkNum); err != nil {
+					return totalCount, chunkNum, cursor, false, fmt.Errorf("failed to flush %s chunk %d on timeout: %w", objectType, chunkNum, err)
 				}
 				chunkNum++
 			}
 			log.Printf("Time limit reached after %v, saving cursor for continuation", time.Since(startTime))
-			return totalCount, chunkNum, true, nil
+			return totalCount, chunkNum, cursor, true, nil
 		}
 
 		if !result.HasMore || result.NextCursor == "" {
 			break
 		}
-		cursor = result.NextCursor
 	}
 
 	// Flush remaining records
 	if len(batch) > 0 {
-		s3Key := fmt.Sprintf("%s/%s/contacts/chunk_%03d.parquet", accountID, connectionID, chunkNum)
-		schemaInfo, err := parquet.WriteContactsParquet(ctx, s3Client, analyticsBucket, s3Key, batch)
-		if err != nil {
-			return totalCount, chunkNum, false, fmt.Errorf("failed to write final contacts chunk %d: %w", chunkNum, err)
-		}
-		schemaInfo.ConnectionID = connectionID
-		schemaKey := fmt.Sprintf("%s/%s/contacts/schema.json", accountID, connectionID)
-		if err := parquet.WriteSchema(ctx, s3Client, analyticsBucket, schemaKey, schemaInfo); err != nil {
-			log.Printf("Failed to write contacts schema: %v", err)
+		if err := writeChunkAndSchema(ctx, s3Client, analyticsBucket, accountID, connectionID, objectType, platformSlug, batch, chunkNum); err != nil {
+			return totalCount, chunkNum, cursor, false, fmt.Errorf("failed to write final %s chunk %d: %w", objectType, chunkNum, err)
 		}
 		chunkNum++
 	}
 
-	return totalCount, chunkNum, false, nil
+	return totalCount, chunkNum, cursor, false, nil
 }
 
-func syncTags(ctx context.Context, connector connectors.CRMConnector, s3Client *s3.Client, accountID, connectionID string, chunkNum int) (int, error) {
-	tags, err := connector.GetTags(ctx)
+// writeChunkAndSchema writes a batch of raw records to a parquet chunk and updates schema.json.
+func writeChunkAndSchema(
+	ctx context.Context,
+	s3Client *s3.Client,
+	bucket, accountID, connectionID, objectType, platformSlug string,
+	records []map[string]interface{},
+	chunkNum int,
+) error {
+	s3Key := fmt.Sprintf("%s/%s/%s/chunk_%03d.parquet", accountID, connectionID, objectType, chunkNum)
+	schemaInfo, err := parquet.WriteDynamicParquet(ctx, s3Client, bucket, s3Key, records, platformSlug)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get tags: %w", err)
+		return err
 	}
 
-	s3Key := fmt.Sprintf("%s/%s/tags/chunk_%03d.parquet", accountID, connectionID, chunkNum)
-	schemaInfo, err := parquet.WriteTagsParquet(ctx, s3Client, analyticsBucket, s3Key, tags)
-	if err != nil {
-		return 0, fmt.Errorf("failed to write tags parquet: %w", err)
+	// Write schema alongside chunk
+	schemaKey := fmt.Sprintf("%s/%s/%s/schema.json", accountID, connectionID, objectType)
+	if err := parquet.WriteDynamicSchema(ctx, s3Client, bucket, schemaKey, schemaInfo); err != nil {
+		log.Printf("Failed to write %s schema: %v", objectType, err)
 	}
 
-	schemaInfo.ConnectionID = connectionID
-	schemaKey := fmt.Sprintf("%s/%s/tags/schema.json", accountID, connectionID)
-	if err := parquet.WriteSchema(ctx, s3Client, analyticsBucket, schemaKey, schemaInfo); err != nil {
-		return 0, fmt.Errorf("failed to write tags schema: %w", err)
-	}
-
-	return len(tags), nil
-}
-
-func syncCustomFields(ctx context.Context, connector connectors.CRMConnector, s3Client *s3.Client, accountID, connectionID string, chunkNum int) (int, error) {
-	fields, err := connector.GetCustomFields(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get custom fields: %w", err)
-	}
-
-	s3Key := fmt.Sprintf("%s/%s/custom_fields/chunk_%03d.parquet", accountID, connectionID, chunkNum)
-	schemaInfo, err := parquet.WriteCustomFieldsParquet(ctx, s3Client, analyticsBucket, s3Key, fields)
-	if err != nil {
-		return 0, fmt.Errorf("failed to write custom_fields parquet: %w", err)
-	}
-
-	schemaInfo.ConnectionID = connectionID
-	schemaKey := fmt.Sprintf("%s/%s/custom_fields/schema.json", accountID, connectionID)
-	if err := parquet.WriteSchema(ctx, s3Client, analyticsBucket, schemaKey, schemaInfo); err != nil {
-		return 0, fmt.Errorf("failed to write custom_fields schema: %w", err)
-	}
-
-	return len(fields), nil
+	return nil
 }
 
 // clearOldChunks deletes all existing chunk_*.parquet files for an object type
