@@ -4,13 +4,12 @@ import { useState } from 'react'
 import {
   Shield,
   Smartphone,
-  Lock,
   Loader2,
   CheckCircle,
   XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useMfaStatus, useSetupTotp, useVerifyTotp, useEnableSmsMfa, useDisableMfa } from '@/lib/hooks/use-mfa'
+import { useMfaStatus, useSetupTotp, useVerifyTotp, useDisableMfa } from '@/lib/hooks/use-mfa'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -32,7 +31,6 @@ export function SecurityTab() {
   const { data: mfaStatus, isLoading: statusLoading } = useMfaStatus()
   const setupTotp = useSetupTotp()
   const verifyTotp = useVerifyTotp()
-  const enableSms = useEnableSmsMfa()
   const disableMfa = useDisableMfa()
 
   const [totpStep, setTotpStep] = useState<SetupStep>('idle')
@@ -67,10 +65,6 @@ export function SecurityTab() {
         },
       }
     )
-  }
-
-  const handleEnableSms = () => {
-    enableSms.mutate(undefined)
   }
 
   const handleDisable = () => {
@@ -123,7 +117,7 @@ export function SecurityTab() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {mfaEnabled
-                      ? `Protected with ${mfaMethod === 'totp' ? 'authenticator app' : 'SMS verification'}`
+                      ? 'Protected with authenticator app'
                       : 'Enable 2FA to add an extra layer of security'}
                   </p>
                 </div>
@@ -183,9 +177,7 @@ export function SecurityTab() {
               <Separator />
 
               <div className="space-y-4">
-                <h4 className="text-sm font-medium">Choose Authentication Method</h4>
-
-                {/* TOTP Option */}
+                {/* TOTP Setup */}
                 <div className="rounded-lg border p-4 space-y-4">
                   <div className="flex items-center gap-2">
                     <Smartphone className="h-4 w-4" />
@@ -288,36 +280,6 @@ export function SecurityTab() {
                   )}
                 </div>
 
-                {/* SMS Option */}
-                <div className="rounded-lg border p-4 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Lock className="h-4 w-4" />
-                    <span className="text-sm font-medium">SMS Verification</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Receive a verification code via text message to your registered phone number.
-                  </p>
-                  {!mfaStatus?.phoneVerified && (
-                    <p className="text-xs text-amber-600">
-                      You need to add and verify a phone number in your Profile before enabling SMS
-                      2FA.
-                    </p>
-                  )}
-                  <Button
-                    onClick={handleEnableSms}
-                    disabled={enableSms.isPending || !mfaStatus?.phoneVerified}
-                    variant="outline"
-                  >
-                    {enableSms.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                    Enable SMS 2FA
-                  </Button>
-                  {enableSms.isError && (
-                    <p className="flex items-center gap-1 text-xs text-destructive">
-                      <XCircle className="h-3 w-3" />
-                      {(enableSms.error as Error)?.message || 'Failed to enable SMS 2FA'}
-                    </p>
-                  )}
-                </div>
               </div>
             </>
           )}
