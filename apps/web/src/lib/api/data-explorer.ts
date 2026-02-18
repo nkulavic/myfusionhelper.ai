@@ -48,6 +48,13 @@ export interface DataQueryResponse {
   model_used?: string
 }
 
+export interface CatalogColumn {
+  name: string
+  type: string
+  display_name: string
+  sample_values?: string[]
+}
+
 export interface CatalogObjectType {
   object_type: string
   label: string
@@ -57,12 +64,30 @@ export interface CatalogObjectType {
   connection_name: string
   platform_id: string
   platform_name: string
+  platform_slug?: string
   last_synced_at?: string
   sync_status?: string
+  column_count?: number
+  columns?: CatalogColumn[]
 }
 
 export interface DataCatalogResponse {
   sources: CatalogObjectType[]
+}
+
+export interface SchemaColumn {
+  type: string
+  display_name: string
+  nullable: boolean
+  sample_values?: string[]
+}
+
+export interface SchemaResponse {
+  connection_id: string
+  object_type: string
+  record_count: number
+  synced_at: string
+  columns: Record<string, SchemaColumn>
 }
 
 export interface RecordDetailResponse {
@@ -100,6 +125,11 @@ export const dataExplorerApi = {
       object_type: objectType,
       format,
     }),
+
+  getSchema: (connectionId: string, objectType: string) =>
+    apiClient.getRaw<SchemaResponse>(
+      `/data/schema?connection_id=${connectionId}&object_type=${objectType}`
+    ),
 
   triggerSync: (connectionId: string) =>
     apiClient.postRaw<{ connection_id: string; status: string }>('/data/sync', {

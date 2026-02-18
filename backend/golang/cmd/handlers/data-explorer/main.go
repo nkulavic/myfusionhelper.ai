@@ -16,6 +16,7 @@ import (
 	healthClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/health"
 	queryClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/query"
 	recordClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/record"
+	schemaClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/schema"
 	syncClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/sync"
 	timeseriesClient "github.com/myfusionhelper/api/cmd/handlers/data-explorer/clients/timeseries"
 
@@ -50,6 +51,10 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	// Catalog
 	case path == "/data/catalog" && method == "GET":
 		return routeToProtectedHandler(ctx, event, catalogClient.HandleWithAuth)
+
+	// Schema (column-level metadata for a single source)
+	case path == "/data/schema" && method == "GET":
+		return routeToProtectedHandler(ctx, event, schemaClient.HandleWithAuth)
 
 	// Query
 	case path == "/data/query" && method == "POST":

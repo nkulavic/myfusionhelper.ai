@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"sort"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -36,16 +37,27 @@ var objectTypeMeta = map[string]struct {
 
 // CatalogSource represents a single data source in the catalog response.
 type CatalogSource struct {
-	ObjectType     string `json:"object_type"`
-	Label          string `json:"label"`
-	Icon           string `json:"icon"`
-	RecordCount    int    `json:"record_count"`
-	ConnectionID   string `json:"connection_id"`
-	ConnectionName string `json:"connection_name"`
-	PlatformID     string `json:"platform_id"`
-	PlatformName   string `json:"platform_name"`
-	LastSyncedAt   string `json:"last_synced_at,omitempty"`
-	SyncStatus     string `json:"sync_status,omitempty"`
+	ObjectType     string          `json:"object_type"`
+	Label          string          `json:"label"`
+	Icon           string          `json:"icon"`
+	RecordCount    int             `json:"record_count"`
+	ConnectionID   string          `json:"connection_id"`
+	ConnectionName string          `json:"connection_name"`
+	PlatformID     string          `json:"platform_id"`
+	PlatformName   string          `json:"platform_name"`
+	PlatformSlug   string          `json:"platform_slug"`
+	LastSyncedAt   string          `json:"last_synced_at,omitempty"`
+	SyncStatus     string          `json:"sync_status,omitempty"`
+	ColumnCount    int             `json:"column_count"`
+	Columns        []SchemaColumn  `json:"columns,omitempty"`
+}
+
+// SchemaColumn is a lightweight column descriptor returned in the catalog.
+type SchemaColumn struct {
+	Name         string   `json:"name"`
+	Type         string   `json:"type"`
+	DisplayName  string   `json:"display_name"`
+	SampleValues []string `json:"sample_values,omitempty"`
 }
 
 // HandleWithAuth returns the data catalog for the authenticated account.
@@ -115,8 +127,10 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 
 		platform := platformCache[conn.PlatformID]
 		platformName := ""
+		platformSlug := ""
 		if platform != nil {
 			platformName = platform.Name
+			platformSlug = platform.Slug
 		}
 
 		// Check each object type for schema.json
@@ -133,6 +147,25 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 				lastSynced = schema.SyncedAt
 			}
 
+			// Convert schema columns to sorted array
+			var columns []SchemaColumn
+			if len(schema.Columns) > 0 {
+				colNames := make([]string, 0, len(schema.Columns))
+				for name := range schema.Columns {
+					colNames = append(colNames, name)
+				}
+				sort.Strings(colNames)
+				for _, name := range colNames {
+					col := schema.Columns[name]
+					columns = append(columns, SchemaColumn{
+						Name:         name,
+						Type:         col.Type,
+						DisplayName:  col.DisplayName,
+						SampleValues: col.SampleValues,
+					})
+				}
+			}
+
 			sources = append(sources, CatalogSource{
 				ObjectType:     objectType,
 				Label:          meta.Label,
@@ -142,8 +175,11 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 				ConnectionName: conn.Name,
 				PlatformID:     conn.PlatformID,
 				PlatformName:   platformName,
+				PlatformSlug:   platformSlug,
 				LastSyncedAt:   lastSynced,
 				SyncStatus:     conn.SyncStatus,
+				ColumnCount:    len(schema.Columns),
+				Columns:        columns,
 			})
 		}
 	}

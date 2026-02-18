@@ -31,12 +31,13 @@ type SyncRequest struct {
 }
 
 // SyncMessage is the message sent to the data sync SQS queue.
+// Must include object_types so the data-sync worker knows what to sync.
 type SyncMessage struct {
-	ConnectionID string `json:"connection_id"`
-	AccountID    string `json:"account_id"`
-	UserID       string `json:"user_id"`
-	TriggerType  string `json:"trigger_type"`
-	RequestedAt  string `json:"requested_at"`
+	AccountID    string   `json:"account_id"`
+	ConnectionID string   `json:"connection_id"`
+	ObjectTypes  []string `json:"object_types"`
+	TriggerType  string   `json:"trigger_type"`
+	RequestedAt  string   `json:"requested_at"`
 }
 
 // HandleWithAuth handles POST /data/sync.
@@ -78,9 +79,9 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 
 	// Build sync message
 	msg := SyncMessage{
-		ConnectionID: req.ConnectionID,
 		AccountID:    authCtx.AccountID,
-		UserID:       authCtx.UserID,
+		ConnectionID: req.ConnectionID,
+		ObjectTypes:  []string{"contacts", "tags", "custom_fields"},
 		TriggerType:  "manual",
 		RequestedAt:  time.Now().UTC().Format(time.RFC3339),
 	}

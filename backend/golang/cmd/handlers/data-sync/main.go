@@ -87,6 +87,11 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 			continue
 		}
 
+		// Default to all object types if none specified (e.g. manual trigger)
+		if len(msg.ObjectTypes) == 0 {
+			msg.ObjectTypes = []string{"contacts", "tags", "custom_fields"}
+		}
+
 		log.Printf("Starting data sync for connection %s (account: %s, objects: %v, continuation: %v)",
 			msg.ConnectionID, msg.AccountID, msg.ObjectTypes, msg.IsContinuation)
 

@@ -5,6 +5,7 @@ import {
   type DataCatalogResponse,
   type DataQueryResponse,
   type RecordDetailResponse,
+  type SchemaResponse,
 } from '@/lib/api/data-explorer'
 import { toast } from 'sonner'
 
@@ -32,6 +33,14 @@ export function useDataRecord(
     queryKey: ['data-record', connectionId, objectType, recordId],
     queryFn: () => dataExplorerApi.getRecord(connectionId!, objectType!, recordId!),
     enabled: !!connectionId && !!objectType && !!recordId,
+  })
+}
+
+export function useDataSchema(connectionId: string | null, objectType: string | null) {
+  return useQuery<SchemaResponse>({
+    queryKey: ['data-schema', connectionId, objectType],
+    queryFn: () => dataExplorerApi.getSchema(connectionId!, objectType!),
+    enabled: !!connectionId && !!objectType,
   })
 }
 

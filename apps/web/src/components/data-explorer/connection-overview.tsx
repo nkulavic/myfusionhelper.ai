@@ -12,6 +12,7 @@ import {
   Loader2,
   Clock,
   CheckCircle2,
+  Columns3,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -227,13 +228,45 @@ export function ConnectionOverview() {
                       {(entry.record_count ?? 0).toLocaleString()}
                     </p>
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground">records</p>
+                      <div className="flex items-center gap-3">
+                        <p className="text-xs text-muted-foreground">records</p>
+                        {(entry.column_count ?? 0) > 0 && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Columns3 className="h-3 w-3" />
+                            <span>{entry.column_count} columns</span>
+                          </div>
+                        )}
+                      </div>
                       {entry.last_synced_at && (
                         <p className="text-[10px] text-muted-foreground/70">
                           {formatRelativeTime(entry.last_synced_at)}
                         </p>
                       )}
                     </div>
+                    {entry.columns && entry.columns.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {entry.columns
+                          .filter((c) => !c.name.startsWith('_') && !c.name.startsWith('timestamp_'))
+                          .slice(0, 6)
+                          .map((col) => (
+                            <Badge
+                              key={col.name}
+                              variant="outline"
+                              className="text-[10px] px-1.5 py-0 font-normal"
+                            >
+                              {col.display_name}
+                            </Badge>
+                          ))}
+                        {(entry.columns.filter((c) => !c.name.startsWith('_') && !c.name.startsWith('timestamp_')).length ?? 0) > 6 && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] px-1.5 py-0 font-normal text-muted-foreground"
+                          >
+                            +{entry.columns.filter((c) => !c.name.startsWith('_') && !c.name.startsWith('timestamp_')).length - 6} more
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </Card>
               )
