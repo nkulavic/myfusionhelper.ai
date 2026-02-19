@@ -2,15 +2,17 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Check, Loader2, Shield, Zap, Clock, ChevronDown, ChevronUp } from 'lucide-react'
+import { Shield, Clock, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
 import {
   useBillingInfo,
   useCreatePortalSession,
   useCreateCheckoutSession,
 } from '@/lib/hooks/use-settings'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { PlanCard } from '@/components/plan-card'
+import { BillingToggle } from '@/components/billing-toggle'
 import {
   Accordion,
   AccordionContent,
@@ -22,10 +24,8 @@ import {
   PLAN_CONFIGS,
   PAID_PLAN_IDS,
   COMPARISON_ROWS,
-  formatLimit,
   getAnnualSavingsPercent,
   isTrialPlan,
-  type PlanId,
 } from '@/lib/plan-constants'
 
 export default function PlansPage() {
@@ -87,24 +87,6 @@ export default function PlansPage() {
 
   const maxSavings = Math.max(...PAID_PLAN_IDS.map((id) => getAnnualSavingsPercent(id)))
 
-  const plans = PAID_PLAN_IDS.map((id) => {
-    const config = PLAN_CONFIGS[id]
-    return {
-      id,
-      name: config.name,
-      description: config.description,
-      popular: id === 'grow',
-      features: [
-        `${formatLimit(config.maxHelpers)} active helpers`,
-        `${config.maxConnections} CRM connections`,
-        `${formatLimit(config.maxExecutions)} monthly executions`,
-        `${config.maxApiKeys} API keys`,
-        `${config.maxTeamMembers} team members`,
-        config.overageRate > 0 ? `$${config.overageRate}/execution overage` : 'Dedicated support',
-      ],
-    }
-  })
-
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       {/* Header */}
@@ -118,121 +100,29 @@ export default function PlansPage() {
       </div>
 
       {/* Monthly / Annual Toggle */}
-      <div className="flex items-center justify-center gap-3">
-        <span
-          className={cn(
-            'text-sm font-medium transition-colors',
-            !isAnnual ? 'text-foreground' : 'text-muted-foreground',
-          )}
-        >
-          Monthly
-        </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={isAnnual}
-          onClick={() => setIsAnnual(!isAnnual)}
-          className={cn(
-            'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
-            isAnnual ? 'bg-primary' : 'bg-muted-foreground/30',
-          )}
-        >
-          <span
-            className={cn(
-              'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform',
-              isAnnual ? 'translate-x-5' : 'translate-x-0',
-            )}
-          />
-        </button>
-        <span
-          className={cn(
-            'text-sm font-medium transition-colors',
-            isAnnual ? 'text-foreground' : 'text-muted-foreground',
-          )}
-        >
-          Annual
-        </span>
-        {isAnnual && (
-          <Badge variant="secondary" className="text-xs">
-            Save up to {maxSavings}%
-          </Badge>
-        )}
+      <div className="flex justify-center">
+        <BillingToggle
+          billingPeriod={isAnnual ? 'annual' : 'monthly'}
+          onChange={(p) => setIsAnnual(p === 'annual')}
+          maxSavings={maxSavings}
+        />
       </div>
 
       {/* Plan Cards */}
       <div className="grid gap-6 md:grid-cols-3">
-        {plans.map((plan) => {
-          const config = PLAN_CONFIGS[plan.id]
-          const price = isAnnual ? config.annualMonthlyPrice : config.monthlyPrice
-          const originalPrice = isAnnual ? config.monthlyPrice : null
-          const isCurrentPlan = currentPlan === plan.id
-          const isPlanLoading = checkoutPlan === plan.id && createCheckout.isPending
-
-          return (
-            <div
-              key={plan.id}
-              className={cn(
-                'relative flex flex-col rounded-xl border p-6 transition-all',
-                plan.popular && 'border-primary shadow-md',
-                isCurrentPlan && 'bg-primary/5 ring-2 ring-primary',
-              )}
-            >
-              {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="gap-1">
-                    <Zap className="h-3 w-3" />
-                    Most Popular
-                  </Badge>
-                </div>
-              )}
-
-              <div className="mb-4">
-                <h3 className="text-xl font-bold">{plan.name}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
-              </div>
-
-              <div className="mb-6">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold">${price}</span>
-                  <span className="text-muted-foreground">/month</span>
-                </div>
-                {isAnnual && originalPrice && (
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    <span className="line-through">${originalPrice}/mo</span>
-                    <span className="ml-1 font-medium text-primary">
-                      Save {getAnnualSavingsPercent(plan.id)}%
-                    </span>
-                  </p>
-                )}
-              </div>
-
-              <ul className="mb-6 flex-1 space-y-3">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-sm">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              {isCurrentPlan ? (
-                <Button variant="outline" disabled className="w-full">
-                  Current Plan
-                </Button>
-              ) : (
-                <Button
-                  variant={plan.popular ? 'default' : 'outline'}
-                  className="w-full"
-                  onClick={() => handleSelectPlan(plan.id as 'start' | 'grow' | 'deliver')}
-                  disabled={isPlanLoading || createCheckout.isPending}
-                >
-                  {isPlanLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Choose {plan.name}
-                </Button>
-              )}
-            </div>
-          )
-        })}
+        {PAID_PLAN_IDS.map((planId) => (
+          <PlanCard
+            key={planId}
+            planId={planId}
+            billingPeriod={isAnnual ? 'annual' : 'monthly'}
+            currentPlan={currentPlan}
+            isPopular={planId === 'grow'}
+            onSelect={(id) => handleSelectPlan(id as 'start' | 'grow' | 'deliver')}
+            isLoading={checkoutPlan === planId && createCheckout.isPending}
+            isManaging={createPortal.isPending}
+            variant="full"
+          />
+        ))}
       </div>
 
       {createCheckout.isError && (

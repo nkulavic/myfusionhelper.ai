@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Check, CheckCircle, ExternalLink, Loader2, Receipt, Zap } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { ExternalLink, Loader2, Receipt } from 'lucide-react'
 import {
   useBillingInfo,
   useInvoices,
@@ -14,6 +13,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
+import { PlanCard } from '@/components/plan-card'
+import { BillingToggle } from '@/components/billing-toggle'
 import {
   Card,
   CardContent,
@@ -23,9 +24,7 @@ import {
 } from '@/components/ui/card'
 import { toast } from 'sonner'
 import {
-  PLAN_CONFIGS,
   PAID_PLAN_IDS,
-  formatLimit,
   getAnnualSavingsPercent,
   getPlanLabel,
   isTrialPlan,
@@ -53,26 +52,6 @@ export function BillingTab() {
 
   const currentPlan = billing?.plan || 'trial'
   const isOnTrial = isTrialPlan(currentPlan)
-
-  const plans = PAID_PLAN_IDS.map((id) => {
-    const config = PLAN_CONFIGS[id]
-    return {
-      id,
-      name: config.name,
-      description: config.description,
-      popular: id === 'grow',
-      features: [
-        `${formatLimit(config.maxHelpers)} active helpers`,
-        `${config.maxConnections} CRM connections`,
-        `${formatLimit(config.maxExecutions)} monthly executions included`,
-        `${config.maxApiKeys} API keys`,
-        `${config.maxTeamMembers} team members`,
-        config.overageRate > 0
-          ? `Overage: $${config.overageRate}/execution`
-          : 'Dedicated support',
-      ],
-    }
-  })
 
   const handleManageSubscription = () => {
     createPortal.mutate(undefined, {
@@ -187,124 +166,28 @@ export function BillingTab() {
                   : 'Upgrade or change your current plan'}
               </CardDescription>
             </div>
-            <div className="flex items-center gap-3">
-              <span
-                className={cn(
-                  'text-sm font-medium transition-colors',
-                  !isAnnual ? 'text-foreground' : 'text-muted-foreground'
-                )}
-              >
-                Monthly
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={isAnnual}
-                onClick={() => setIsAnnual(!isAnnual)}
-                className={cn(
-                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
-                  isAnnual ? 'bg-primary' : 'bg-muted-foreground/30'
-                )}
-              >
-                <span
-                  className={cn(
-                    'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform',
-                    isAnnual ? 'translate-x-5' : 'translate-x-0'
-                  )}
-                />
-              </button>
-              <span
-                className={cn(
-                  'text-sm font-medium transition-colors',
-                  isAnnual ? 'text-foreground' : 'text-muted-foreground'
-                )}
-              >
-                Annual
-              </span>
-              {isAnnual && (
-                <Badge variant="secondary" className="text-xs">
-                  Save up to {maxSavings}%
-                </Badge>
-              )}
-            </div>
+            <BillingToggle
+              billingPeriod={isAnnual ? 'annual' : 'monthly'}
+              onChange={(p) => setIsAnnual(p === 'annual')}
+              maxSavings={maxSavings}
+            />
           </div>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3">
-            {plans.map((plan) => {
-              const config = PLAN_CONFIGS[plan.id]
-              const price = isAnnual ? config.annualMonthlyPrice : config.monthlyPrice
-              const isCurrentPlan = currentPlan === plan.id
-              const isPlanLoading = checkoutPlan === plan.id && createCheckout.isPending
-              return (
-                <div
-                  key={plan.id}
-                  className={cn(
-                    'relative flex flex-col rounded-lg border p-5 transition-all',
-                    plan.popular && 'border-primary shadow-sm',
-                    isCurrentPlan && 'bg-primary/5 ring-1 ring-primary'
-                  )}
-                >
-                  {plan.popular && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <Badge className="gap-1">
-                        <Zap className="h-3 w-3" />
-                        Most Popular
-                      </Badge>
-                    </div>
-                  )}
-                  <div className="mb-4">
-                    <h3 className="text-lg font-bold">{plan.name}</h3>
-                    <p className="mt-1 text-xs text-muted-foreground">{plan.description}</p>
-                  </div>
-                  <div className="mb-4">
-                    <span className="text-3xl font-bold">${price}</span>
-                    <span className="text-sm text-muted-foreground">/month</span>
-                    {isAnnual && (
-                      <span className="ml-2 text-xs text-muted-foreground">billed yearly</span>
-                    )}
-                  </div>
-                  <ul className="mb-6 flex-1 space-y-2">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-2 text-sm">
-                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {isCurrentPlan ? (
-                    <Button variant="outline" disabled className="w-full">
-                      <CheckCircle className="h-4 w-4" />
-                      Current Plan
-                    </Button>
-                  ) : !isOnTrial ? (
-                    <Button
-                      variant={plan.popular ? 'default' : 'outline'}
-                      className="w-full"
-                      onClick={handleManageSubscription}
-                      disabled={createPortal.isPending}
-                    >
-                      {createPortal.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                      <ExternalLink className="h-4 w-4" />
-                      {PAID_PLAN_IDS.indexOf(currentPlan as PlanId) <
-                      PAID_PLAN_IDS.indexOf(plan.id)
-                        ? 'Upgrade'
-                        : 'Downgrade'}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant={plan.popular ? 'default' : 'outline'}
-                      className="w-full"
-                      onClick={() => handleSelectPlan(plan.id as 'start' | 'grow' | 'deliver')}
-                      disabled={isPlanLoading || createCheckout.isPending}
-                    >
-                      {isPlanLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                      Get Started
-                    </Button>
-                  )}
-                </div>
-              )
-            })}
+            {PAID_PLAN_IDS.map((planId) => (
+              <PlanCard
+                key={planId}
+                planId={planId}
+                billingPeriod={isAnnual ? 'annual' : 'monthly'}
+                currentPlan={currentPlan}
+                isPopular={planId === 'grow'}
+                onSelect={(id) => handleSelectPlan(id as 'start' | 'grow' | 'deliver')}
+                isLoading={checkoutPlan === planId && createCheckout.isPending}
+                isManaging={createPortal.isPending}
+                variant="compact"
+              />
+            ))}
           </div>
           {createCheckout.isError && (
             <p className="mt-4 text-center text-sm text-destructive">

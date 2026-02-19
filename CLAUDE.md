@@ -159,7 +159,7 @@ Infrastructure must deploy before API services. The CI pipeline (`deploy-backend
 5. **Route53** (creates DNS records for custom domain after gateway)
 6. **API services** (parallel, max 3): auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat, emails
 7. **Helper workers** (parallel, max 10): 97 individual self-contained workers, auto-detected from changed `services/workers/*-worker/` directories
-8. **Non-helper workers** (parallel): helper-worker (deprecated monolith), notification-worker, data-sync
+8. **Non-helper workers** (parallel): helper-worker (deprecated monolith), notification-worker, data-sync, trial-expiration
 9. **Post-deploy**: `verify-deploy.sh` health check
 
 **All deployments target us-west-2 region exclusively.**
@@ -195,7 +195,7 @@ build-test
   │     │     │     ├── deploy-monitoring (CloudWatch alarms)
   │     │     │     └── deploy-api (parallel max 3: auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat, emails)
   │     │     └── deploy-helpers (parallel max 10: auto-detected changed *-worker/ directories)
-  │     └── deploy-workers (parallel: helper-worker [monolith], notification-worker, data-sync)
+  │     └── deploy-workers (parallel: helper-worker [monolith], notification-worker, data-sync, trial-expiration)
   └── detect-changed-helpers (git diff to find changed worker dirs)
         └── post-deploy (verify-deploy.sh health check)
 ```
@@ -328,6 +328,23 @@ These old SSM parameters still exist but are **no longer used**:
 | Ontraport | API Key | Active |
 | HubSpot | API Key (Private App) | Active |
 | Stripe | API Key (Secret Key) | Active |
+
+## Billing & Trial Model
+
+**Plans**: `trial` (default for new accounts), `start`, `grow`, `deliver`. Legacy `free` plan exists but new registrations use `trial`.
+
+**14-Day Free Trial**:
+- No credit card required at registration
+- Stripe customer created at registration (no subscription, for tracking/analytics)
+- Start-level limits during trial: 10 helpers, 2 connections, 5k executions/mo
+- `Account` fields: `TrialStartedAt`, `TrialEndsAt`, `TrialExpired`
+- Trial expiration worker (`mfh-trial-expiration`) runs every 6 hours via EventBridge, scans for expired trials and sets `trial_expired = true`
+
+**Soft Lock on Expiry**: Expired trial users can log in, view dashboard, access `/plans` and `/settings`, but can't create/run helpers. Other routes redirect to `/plans`.
+
+**Enforcement**: `internal/billing/enforce.go` checks `account.Settings.Max*` vs `account.Usage.*` (pure DynamoDB reads). Trial expiration is an early return in all limit functions. `IsTrialPlan()` helper treats both `"trial"` and `"free"` as trial plans.
+
+**Checkout**: When an active trial user subscribes, Stripe checkout uses remaining trial days (not a fresh 14 days) to prevent double-trial abuse. Expired trials get no trial period.
 
 ## Helper Categories
 

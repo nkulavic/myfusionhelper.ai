@@ -25,6 +25,7 @@ import {
   PanelLeftOpen,
   CreditCard,
   Clock,
+  ArrowLeft,
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { cn } from '@/lib/utils'
@@ -40,6 +41,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useBillingInfo } from '@/lib/hooks/use-settings'
 import { usePlanLimits } from '@/lib/hooks/use-plan-limits'
+import { SettingsSidebarNav } from './settings/_components/settings-sidebar-nav'
 
 const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -57,6 +59,7 @@ const baseNavigation = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const isSettingsPage = pathname.startsWith('/settings')
   const { user } = useAuthStore()
   const { currentAccount, onboardingComplete, _hasHydrated } = useWorkspaceStore()
   const {
@@ -149,50 +152,108 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
       >
         <div className="flex h-full flex-col">
-          {/* Logo */}
+          {/* Logo / Settings header */}
           <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
-            {/* Desktop minimized: expand button */}
-            {sidebarMinimized && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="mx-auto hidden h-8 w-8 text-sidebar-muted-foreground hover:bg-sidebar-accent lg:flex"
-                onClick={toggleSidebarMinimized}
-                aria-label="Expand sidebar"
-              >
-                <PanelLeftOpen className="h-4 w-4" />
-              </Button>
-            )}
-            {/* Desktop expanded: logo + collapse button */}
-            {!sidebarMinimized && (
+            {isSettingsPage ? (
               <>
-                <Link href="/" className="hidden items-center gap-2 font-bold text-sidebar-foreground lg:flex">
+                {/* Settings: Desktop minimized — back arrow icon */}
+                {sidebarMinimized && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Link
+                        href="/"
+                        className="mx-auto hidden h-8 w-8 items-center justify-center rounded-md text-sidebar-muted-foreground hover:bg-sidebar-accent lg:flex"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Back to app</TooltipContent>
+                  </Tooltip>
+                )}
+                {/* Settings: Desktop expanded — back link + "Settings" label */}
+                {!sidebarMinimized && (
+                  <>
+                    <Link
+                      href="/"
+                      className="hidden items-center gap-2 text-sm font-medium text-sidebar-muted-foreground hover:text-sidebar-foreground lg:flex"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Back
+                    </Link>
+                    <span className="hidden text-sm font-semibold text-sidebar-foreground lg:block">
+                      Settings
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="hidden h-8 w-8 text-sidebar-muted-foreground hover:bg-sidebar-accent lg:flex"
+                      onClick={toggleSidebarMinimized}
+                      aria-label="Collapse sidebar"
+                    >
+                      <PanelLeftClose className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+                {/* Settings: Mobile — "Settings" text + close button */}
+                <span className="text-sm font-semibold text-sidebar-foreground lg:hidden">
+                  Settings
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-sidebar-muted-foreground hover:bg-sidebar-accent lg:hidden"
+                  onClick={() => setSidebarCollapsed(true)}
+                  aria-label="Close sidebar"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                {/* Default: Desktop minimized — expand button */}
+                {sidebarMinimized && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="mx-auto hidden h-8 w-8 text-sidebar-muted-foreground hover:bg-sidebar-accent lg:flex"
+                    onClick={toggleSidebarMinimized}
+                    aria-label="Expand sidebar"
+                  >
+                    <PanelLeftOpen className="h-4 w-4" />
+                  </Button>
+                )}
+                {/* Default: Desktop expanded — logo + collapse button */}
+                {!sidebarMinimized && (
+                  <>
+                    <Link href="/" className="hidden items-center gap-2 font-bold text-sidebar-foreground lg:flex">
+                      <Image src="/logo.png" alt="MyFusion Helper" width={160} height={20} className="brightness-0 invert" />
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="hidden h-8 w-8 text-sidebar-muted-foreground hover:bg-sidebar-accent lg:flex"
+                      onClick={toggleSidebarMinimized}
+                      aria-label="Collapse sidebar"
+                    >
+                      <PanelLeftClose className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+                {/* Default: Mobile — logo + close button */}
+                <Link href="/" className="flex items-center gap-2 font-bold text-sidebar-foreground lg:hidden">
                   <Image src="/logo.png" alt="MyFusion Helper" width={160} height={20} className="brightness-0 invert" />
                 </Link>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="hidden h-8 w-8 text-sidebar-muted-foreground hover:bg-sidebar-accent lg:flex"
-                  onClick={toggleSidebarMinimized}
-                  aria-label="Collapse sidebar"
+                  className="h-8 w-8 text-sidebar-muted-foreground hover:bg-sidebar-accent lg:hidden"
+                  onClick={() => setSidebarCollapsed(true)}
+                  aria-label="Close sidebar"
                 >
-                  <PanelLeftClose className="h-4 w-4" />
+                  <X className="h-4 w-4" />
                 </Button>
               </>
             )}
-            {/* Mobile: always full logo + close button */}
-            <Link href="/" className="flex items-center gap-2 font-bold text-sidebar-foreground lg:hidden">
-              <Image src="/logo.png" alt="MyFusion Helper" width={160} height={20} className="brightness-0 invert" />
-            </Link>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-sidebar-muted-foreground hover:bg-sidebar-accent lg:hidden"
-              onClick={() => setSidebarCollapsed(true)}
-              aria-label="Close sidebar"
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </div>
 
           {/* Account Switcher - minimized (desktop only) */}
@@ -261,37 +322,44 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             'flex-1 space-y-1 overflow-y-auto p-4',
             sidebarMinimized && 'lg:p-2'
           )}>
-            {navigation.map((item) => {
-              const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + '/'))
-              const linkContent = (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setSidebarCollapsed(true)}
-                  className={cn(
-                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all active:scale-[0.97]',
-                    sidebarMinimized && 'lg:justify-center lg:gap-0 lg:px-0',
-                    isActive
-                      ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                      : 'text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'
-                  )}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  <span className={cn(sidebarMinimized && 'lg:hidden')}>{item.name}</span>
-                </Link>
-              )
-
-              if (sidebarMinimized) {
-                return (
-                  <Tooltip key={item.name}>
-                    <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
-                    <TooltipContent side="right" className="hidden lg:block">{item.name}</TooltipContent>
-                  </Tooltip>
+            {isSettingsPage ? (
+              <SettingsSidebarNav
+                sidebarMinimized={sidebarMinimized}
+                onNavClick={() => setSidebarCollapsed(true)}
+              />
+            ) : (
+              navigation.map((item) => {
+                const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + '/'))
+                const linkContent = (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={() => setSidebarCollapsed(true)}
+                    className={cn(
+                      'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all active:scale-[0.97]',
+                      sidebarMinimized && 'lg:justify-center lg:gap-0 lg:px-0',
+                      isActive
+                        ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                        : 'text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                    )}
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span className={cn(sidebarMinimized && 'lg:hidden')}>{item.name}</span>
+                  </Link>
                 )
-              }
 
-              return linkContent
-            })}
+                if (sidebarMinimized) {
+                  return (
+                    <Tooltip key={item.name}>
+                      <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+                      <TooltipContent side="right" className="hidden lg:block">{item.name}</TooltipContent>
+                    </Tooltip>
+                  )
+                }
+
+                return linkContent
+              })
+            )}
           </nav>
 
           {/* User Menu */}

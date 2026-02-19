@@ -73,7 +73,8 @@ backend/golang/
 │   ├── billing/                   # /billing/* endpoints (Stripe integration)
 │   ├── data-explorer/             # /data/* endpoints (DuckDB + Parquet)
 │   ├── data-sync/                 # SQS worker: sync CRM data -> S3/Parquet
-│   └── data-sync-scheduler/       # EventBridge trigger for data-sync
+│   ├── data-sync-scheduler/       # EventBridge trigger for data-sync
+│   └── trial-expiration/          # EventBridge worker: expire trial accounts (every 6 hours)
 │
 ├── internal/
 │   ├── worker/                    # Shared worker handler (used by ALL helper workers)
@@ -124,6 +125,7 @@ backend/golang/
 │       ├── ... (97 total helper workers)
 │       ├── data-sync/             # Non-helper: CRM data sync
 │       ├── notification-worker/   # Non-helper: send notifications
+│       ├── trial-expiration/      # Non-helper: EventBridge cron, expires trial accounts
 │       └── helper-worker/         # DEPRECATED: old monolith (fallback only)
 │
 ├── go.mod, go.sum
@@ -446,6 +448,22 @@ All struct fields use dual tags: `json:"snake_case" dynamodbav:"snake_case"`.
 
 Key types: `User`, `Account`, `UserAccount`, `Permissions`, `AuthContext`, `Platform`, `PlatformConnection`, `PlatformConnectionAuth`, `Helper`, `Execution`, `APIKey`, `PlanLimits`.
 
+**Account trial fields**: `TrialStartedAt *time.Time`, `TrialEndsAt *time.Time`, `TrialExpired bool`. Set at registration when plan is `"trial"`.
+
+## Billing & Trial Enforcement (`internal/billing/`)
+
+**Plans** (`plans.go`): `Plans` map with configs for `"trial"`, `"free"`, `"start"`, `"grow"`, `"deliver"`. Key helpers: `GetPlan()`, `GetPlanLabel()`, `IsTrialPlan()` (returns true for `"trial"` and `"free"`), `IsPaidPlan()`.
+
+**Enforcement** (`enforce.go`): All limit functions (`CheckHelperLimit`, `CheckConnectionLimit`, `CheckAPIKeyLimit`, `CheckExecutionLimit`) call `checkTrialExpired()` as an early return. Trial expiration checks both the `TrialExpired` flag and `TrialEndsAt` timestamp. Returns `LimitExceededError` with resource `"trial"`.
+
+**Registration** (`cmd/handlers/auth/clients/register/main.go`): Creates Stripe customer at registration (no subscription). Sets `Plan: "trial"`, `TrialStartedAt`, `TrialEndsAt: +14 days`, `TrialExpired: false`, `Settings` from Start-level plan limits.
+
+**Checkout** (`cmd/handlers/billing/clients/checkout/main.go`): Active trial users get remaining trial days on Stripe subscription (not fresh 14 days). Expired trials get no trial period.
+
+**Webhook** (`cmd/handlers/billing/clients/webhook/main.go`): On subscription cancel, sets `Plan: "trial"`, `TrialExpired: true`. On subscription activate, clears `TrialExpired: false`.
+
+**Trial Expiration Worker** (`cmd/handlers/trial-expiration/main.go`): EventBridge-triggered every 6 hours. Scans accounts table for `plan="trial" AND trial_expired=false AND trial_ends_at < now`, marks each as `trial_expired=true` with conditional update.
+
 ## CRM Connector System (`internal/connectors/`)
 
 Implements `CRMConnector` interface for: Keap, GoHighLevel, ActiveCampaign, Ontraport, HubSpot.
@@ -487,7 +505,7 @@ custom:
 - API Gateway: `mfh-api-gateway`
 - API services: `mfh-{name}` (auth, accounts, api-keys, helpers, platforms, data-explorer, billing)
 - Helper workers: `mfh-{kebab-name}-worker` (tag-it-worker, copy-it-worker, etc.)
-- Other workers: `mfh-stream-router`, `mfh-data-sync`, `mfh-notification-worker`
+- Other workers: `mfh-stream-router`, `mfh-data-sync`, `mfh-notification-worker`, `mfh-trial-expiration`
 
 ### Cross-Stack References
 
@@ -587,7 +605,7 @@ See root `CLAUDE.md` for full CI/CD documentation with all 3 workflows, GitHub s
 4. **API Gateway** (creates HttpApi + Cognito authorizer + custom domain)
 5. **API services** (parallel, max 3): auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat, emails
 6. **Helper workers** (parallel, max 10): auto-detected from changed `services/workers/*-worker/` directories
-7. **Non-helper workers** (parallel): helper-worker (monolith), notification-worker, data-sync
+7. **Non-helper workers** (parallel): helper-worker (monolith), notification-worker, data-sync, trial-expiration
 8. **Post-deploy**: `verify-deploy.sh` health check
 
 ### Helper Worker Auto-Detection

@@ -36,6 +36,7 @@ src/app/
 │   ├── reports/[id]/page.tsx        # Single report
 │   ├── emails/page.tsx              # Email management
 │   ├── emails/templates/page.tsx    # Email templates
+│   ├── plans/page.tsx               # Dedicated plan selection page (Stripe checkout)
 │   ├── settings/page.tsx            # Account/profile/API keys/billing
 │   └── settings/billing/success/page.tsx # Post-checkout success (confetti)
 ├── (legal)/             # Legal pages (minimal layout)
@@ -113,6 +114,7 @@ Central HTTP client with these features:
 | `use-helpers.ts` | `useHelpers`, `useCreateHelper`, `useExecutionsPaginated` |
 | `use-settings.ts` | `useAccount`, `useUpdateProfile`, `useBillingInfo`, `useInvoices`, `useCreateCheckoutSession`, `useCreatePortalSession`, `useAPIKeys`, `useTeamMembers`, `useNotificationPreferences` |
 | `use-emails.ts` | `useEmails`, `useSendEmail`, `useEmailTemplates`, `useCreateTemplate` (mock fallback) |
+| `use-plan-limits.ts` | `usePlanLimits` -- returns `isTrialing`, `isTrialExpired`, `daysRemaining`, `canCreate()` with trial-aware logic |
 | `use-reports.ts` | `useReportStats` (fetches from `/api/reports/stats`) |
 
 Pattern: each hook wraps an API call with `useQuery` or `useMutation` and handles cache invalidation.
@@ -239,13 +241,31 @@ const form = useForm<FormValues>({
 
 ### Dashboard Layout
 
-Fixed 264px sidebar with:
+Fixed 264px sidebar (collapsible to icon-only rail) with:
 - Logo (top)
 - Account switcher
-- Navigation links (9 items: Dashboard, Helpers, Connections, Executions, Insights, Data Explorer, Reports, Emails, Settings)
+- Navigation links (9 items + conditional "Plans" link for trial/expired users)
 - Theme toggle, notifications, logout, user avatar (bottom)
 
 Main content area: `pl-64` offset, `p-6` padding.
+
+**Trial Banner**: Persistent non-dismissible banner at top of dashboard layout during trial/expired state. Color-coded by urgency: blue (8-14 days), amber (3-7 days), red (1-2 days), dark red (expired). Links to `/plans`.
+
+**Dashboard Tabs**: Dashboard page uses tabbed interface (First Steps / Dashboard):
+- **First Steps** tab (default during trial when setup incomplete): trial progress widget, getting started steps (connect CRM, create helper, watch execution), plan CTA
+- **Dashboard** tab: stats cards, execution history, quick actions
+
+**Soft Lock**: Expired trial users can only access `/`, `/plans`, `/settings`, `/dashboard`. Other routes redirect to `/plans`.
+
+### Plan Selection Page (`/plans`)
+
+Dedicated page with:
+- Monthly/annual billing toggle
+- 3 plan cards (Start / Grow / Deliver) with features and pricing
+- Feature comparison table (expandable)
+- FAQ accordion
+- Trust signals ("Cancel anytime", "No charge until trial ends")
+- Uses `useCreateCheckoutSession()` for Stripe checkout
 
 ### Shared Types
 
@@ -284,4 +304,8 @@ All icons come from `lucide-react`. Do not use other icon libraries.
 
 - **Emails**: `use-emails.ts` hooks fall back to mock data when backend email endpoints return errors (backend email CRUD not yet implemented).
 - **Settings**: Team members and notification preferences still use stub API calls until backend endpoints are built.
-- **Billing**: Wired to real Stripe backend endpoints (`/billing`, `/billing/checkout/sessions`, `/billing/portal-session`, `/billing/invoices`).
+- **Billing**: Wired to real Stripe backend endpoints (`/billing`, `/billing/checkout/sessions`, `/billing/portal-session`, `/billing/invoices`). Billing response includes trial state: `isTrialing`, `daysRemaining`, `totalTrialDays`, `trialExpired`.
+
+### Plan Constants (`src/lib/plan-constants.ts`)
+
+Single source of truth for plan configuration. `PlanId` type: `'free' | 'trial' | 'start' | 'grow' | 'deliver'`. Key helpers: `isTrialPlan()`, `isPaidPlan()`, `getPlanLabel()`, `getPlanFeatures()`, `COMPARISON_ROWS` for feature comparison table.
