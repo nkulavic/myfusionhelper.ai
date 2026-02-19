@@ -22,13 +22,16 @@ func New(ctx context.Context) (*Service, error) {
 	// Get API base URL from environment or use default
 	apiBaseURL := os.Getenv("INTERNAL_EMAIL_API_URL")
 	if apiBaseURL == "" {
-		// Default to API Gateway URL with /internal path prefix
+		// Derive from stage -- use custom API domain
 		stage := os.Getenv("STAGE")
-		if stage == "" {
-			stage = "dev"
+		switch stage {
+		case "main", "":
+			apiBaseURL = "https://api.myfusionhelper.ai"
+		case "staging":
+			apiBaseURL = "https://api-staging.myfusionhelper.ai"
+		default:
+			apiBaseURL = fmt.Sprintf("https://api-%s.myfusionhelper.ai", stage)
 		}
-		// Internal services are on same API Gateway, no auth needed
-		apiBaseURL = fmt.Sprintf("https://a95gb181u4.execute-api.us-west-2.amazonaws.com/%s", stage)
 	}
 
 	return &Service{
