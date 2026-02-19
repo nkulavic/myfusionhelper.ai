@@ -489,7 +489,7 @@ Key functions:
 
 `checkout.session.completed` and `customer.subscription.created` fire simultaneously from Stripe when a new subscription is created. Both update the same account record. The checkout handler sets `subscription_email_sent=true` on the account. The subscription.created handler checks this flag via `checkAndClearEmailSentFlag()` — if set, it skips the email and clears the flag. Both handlers write identical plan/limits/status, so the DynamoDB SET is naturally idempotent.
 
-### Event Handlers (9 Stripe events)
+### Event Handlers (8 Stripe events)
 
 | Stripe Event | Handler | Account Change | Email |
 |---|---|---|---|
@@ -500,7 +500,6 @@ Key functions:
 | `customer.subscription.trial_will_end` | `handleTrialWillEnd` | None | `trial_ending` |
 | `invoice.paid` | `handleInvoicePaid` | Reset `past_due` → `active` if applicable | `payment_recovered` (recovery) or `payment_receipt` (all payments) |
 | `invoice.payment_failed` | `handlePaymentFailed` | None (Stripe retries) | `payment_failed` (with hosted invoice URL if available) |
-| `payment_method.expiring` | `handlePaymentMethodExpiring` | None | `card_expiring` (brand, last4, expiry date) |
 | `charge.refunded` | `handleChargeRefunded` | None | `refund_processed` (amount, reason) |
 
 ### Shared Helpers
@@ -532,7 +531,7 @@ All templates use a shared HTML layout with header, greeting, main content, CTA 
 - `RefundReason` -- refund processed
 
 **Template types** (via `GetBillingEventEmailTemplate(data, eventType)`):
-`subscription_created`, `subscription_cancelled`, `payment_failed`, `payment_recovered`, `payment_receipt`, `trial_ending`, `trial_expired`, `plan_upgraded`, `plan_downgraded`, `card_expiring`, `refund_processed`
+`subscription_created`, `subscription_cancelled`, `payment_failed`, `payment_recovered`, `payment_receipt`, `trial_ending`, `trial_expired`, `plan_upgraded`, `plan_downgraded`, `refund_processed`
 
 **Other templates**: `welcome`, `password_reset`, `email_verification`, `execution_alert`, `connection_alert`, `usage_alert`, `weekly_summary`, `team_invite`
 

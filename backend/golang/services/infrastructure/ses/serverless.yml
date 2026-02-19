@@ -105,7 +105,7 @@ resources:
         Type: TXT
         TTL: 300
         ResourceRecords:
-          - '"v=DMARC1; p=none; rua=mailto:admin@myfusionhelper.ai"'
+          - '"v=DMARC1; p=none; rua=mailto:dmarc@myfusionhelper.ai"'
 
     # SES Configuration Set for tracking and reputation
     SESConfigurationSet:

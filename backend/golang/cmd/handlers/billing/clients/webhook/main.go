@@ -110,8 +110,6 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		handlerErr = handlePaymentFailed(ctx, dbClient, stripeEvent)
 	case "invoice.paid":
 		handlerErr = handleInvoicePaid(ctx, dbClient, stripeEvent)
-	case "payment_method.expiring":
-		handlerErr = handlePaymentMethodExpiring(ctx, dbClient, stripeEvent)
 	case "charge.refunded":
 		handlerErr = handleChargeRefunded(ctx, dbClient, stripeEvent)
 	default:
@@ -594,46 +592,6 @@ func handleInvoicePaid(ctx context.Context, dbClient *dynamodb.Client, event str
 	return nil
 }
 
-// handlePaymentMethodExpiring handles payment_method.expiring events.
-// Sends a proactive email asking the user to update their card before it expires.
-func handlePaymentMethodExpiring(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
-	var pm stripe.PaymentMethod
-	if err := json.Unmarshal(event.Data.Raw, &pm); err != nil {
-		return fmt.Errorf("failed to parse payment method: %w", err)
-	}
-
-	customerID := ""
-	if pm.Customer != nil {
-		customerID = pm.Customer.ID
-	}
-	if customerID == "" {
-		log.Printf("Payment method expiring event with no customer ID")
-		return nil
-	}
-
-	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
-	if err != nil {
-		return fmt.Errorf("failed to look up account: %w", err)
-	}
-	if acct == nil {
-		return nil
-	}
-
-	if acct.OwnerUserID != "" && pm.Card != nil {
-		extraData := map[string]interface{}{
-			"CardLast4":    pm.Card.Last4,
-			"CardBrand":    formatCardBrand(pm.Card.Brand),
-			"CardExpMonth": fmt.Sprintf("%02d", pm.Card.ExpMonth),
-			"CardExpYear":  fmt.Sprintf("%d", pm.Card.ExpYear),
-		}
-		sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "card_expiring", acct.CurrentPlan, extraData)
-		log.Printf("Sent card_expiring email for customer %s (card ending %s, exp %02d/%d)",
-			customerID, pm.Card.Last4, pm.Card.ExpMonth, pm.Card.ExpYear)
-	}
-
-	return nil
-}
-
 // handleChargeRefunded handles charge.refunded events.
 // Sends a refund confirmation email to the account owner.
 func handleChargeRefunded(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
@@ -700,22 +658,6 @@ func formatStripeAmount(amountCents int64, currency string) string {
 		symbol = "\u00a3"
 	}
 	return fmt.Sprintf("%s%.2f", symbol, dollars)
-}
-
-// formatCardBrand converts Stripe card brand identifiers to display names.
-func formatCardBrand(brand stripe.PaymentMethodCardBrand) string {
-	switch brand {
-	case stripe.PaymentMethodCardBrandVisa:
-		return "Visa"
-	case stripe.PaymentMethodCardBrandMastercard:
-		return "Mastercard"
-	case stripe.PaymentMethodCardBrandAmex:
-		return "American Express"
-	case stripe.PaymentMethodCardBrandDiscover:
-		return "Discover"
-	default:
-		return string(brand)
-	}
 }
 
 // formatRefundReason converts Stripe refund reason codes to human-readable text.

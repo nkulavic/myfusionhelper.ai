@@ -81,7 +81,6 @@ WEBHOOK_EVENTS=(
   "customer.subscription.trial_will_end"
   "invoice.payment_failed"
   "invoice.paid"
-  "payment_method.expiring"
   "charge.refunded"
 )
 

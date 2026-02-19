@@ -369,7 +369,6 @@ These old SSM parameters still exist but are **no longer used**:
 | `customer.subscription.trial_will_end` | No data change | `trial_ending` |
 | `invoice.paid` | Reset `past_due` → `active`; send receipt for all payments | `payment_recovered` or `payment_receipt` |
 | `invoice.payment_failed` | No data change (Stripe retries) | `payment_failed` (with hosted invoice URL) |
-| `payment_method.expiring` | No data change | `card_expiring` (card brand, last4, expiry) |
 | `charge.refunded` | No data change | `refund_processed` (amount, reason) |
 
 ### Transactional Email System

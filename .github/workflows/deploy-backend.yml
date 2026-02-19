@@ -992,7 +992,7 @@ jobs:
           echo "$EVENTS" | while read -r evt; do echo "    - $evt"; done
 
           # Verify required events are present
-          REQUIRED_EVENTS="checkout.session.completed customer.subscription.created customer.subscription.updated customer.subscription.deleted customer.subscription.trial_will_end invoice.payment_failed invoice.paid payment_method.expiring charge.refunded"
+          REQUIRED_EVENTS="checkout.session.completed customer.subscription.created customer.subscription.updated customer.subscription.deleted customer.subscription.trial_will_end invoice.payment_failed invoice.paid charge.refunded"
           MISSING=""
           for evt in $REQUIRED_EVENTS; do
             if ! echo "$EVENTS" | grep -q "^${evt}$"; then
