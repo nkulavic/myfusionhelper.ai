@@ -61,7 +61,7 @@ export function PlanStep({ onNext, onBack, onSkip }: PlanStepProps) {
       const result = await refetchBilling()
       const plan = result.data?.plan
 
-      if (plan && plan !== 'free') {
+      if (plan && plan !== 'free' && plan !== 'trial') {
         clearInterval(interval)
         setActivating(false)
         onNext()
@@ -249,9 +249,9 @@ export function PlanStep({ onNext, onBack, onSkip }: PlanStepProps) {
         </button>
         <button
           onClick={onSkip}
-          className="text-sm text-muted-foreground hover:text-foreground"
+          className="text-sm font-medium text-primary hover:text-primary/80"
         >
-          Continue with free sandbox
+          Skip — Start Free Trial
         </button>
       </div>
     </div>

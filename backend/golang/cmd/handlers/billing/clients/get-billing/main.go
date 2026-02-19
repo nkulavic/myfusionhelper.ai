@@ -3,7 +3,9 @@ package getbilling
 import (
 	"context"
 	"log"
+	"math"
 	"os"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -34,6 +36,10 @@ type BillingResponse struct {
 	TrialEndsAt      *int64                    `json:"trial_ends_at,omitempty"`
 	CancelAt         *int64                    `json:"cancel_at,omitempty"`
 	StripeCustomerID string                    `json:"stripe_customer_id,omitempty"`
+	IsTrialing       bool                      `json:"is_trialing"`
+	DaysRemaining    int                       `json:"days_remaining"`
+	TotalTrialDays   int                       `json:"total_trial_days"`
+	TrialExpired     bool                      `json:"trial_expired"`
 	Usage            types.AccountUsage        `json:"usage"`
 	Limits           types.AccountSettings     `json:"limits"`
 }
@@ -83,6 +89,26 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 	}
 
 	planConfig := billing.GetPlan(account.Plan)
+
+	// Compute trial state
+	isTrialing := billing.IsTrialPlan(account.Plan) && !account.TrialExpired
+	daysRemaining := 0
+	trialExpired := account.TrialExpired
+
+	if account.TrialEndsAt != nil {
+		remaining := time.Until(*account.TrialEndsAt)
+		if remaining > 0 {
+			daysRemaining = int(math.Ceil(remaining.Hours() / 24))
+		} else {
+			isTrialing = false
+			trialExpired = true
+		}
+	} else if billing.IsTrialPlan(account.Plan) {
+		// No TrialEndsAt set -- legacy free account, treat as expired
+		isTrialing = false
+		trialExpired = true
+	}
+
 	resp := BillingResponse{
 		Plan:             account.Plan,
 		Status:           account.Status,
@@ -90,6 +116,10 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		PriceAnnually:    planConfig.PriceAnnually,
 		BillingPeriod:    "monthly", // default, overridden from Stripe subscription below
 		StripeCustomerID: account.StripeCustomerID,
+		IsTrialing:       isTrialing,
+		DaysRemaining:    daysRemaining,
+		TotalTrialDays:   14,
+		TrialExpired:     trialExpired,
 		Usage:            account.Usage,
 		Limits:           account.Settings,
 	}

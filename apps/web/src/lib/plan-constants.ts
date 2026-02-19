@@ -1,7 +1,7 @@
 // Shared plan configuration — single source of truth for all pricing displays.
 // Must match backend/golang/internal/billing/plans.go
 
-export type PlanId = 'free' | 'start' | 'grow' | 'deliver'
+export type PlanId = 'free' | 'trial' | 'start' | 'grow' | 'deliver'
 
 export interface PlanConfig {
   id: PlanId
@@ -31,6 +31,20 @@ export const PLAN_CONFIGS: Record<PlanId, PlanConfig> = {
     maxExecutions: 100,
     maxApiKeys: 1,
     maxTeamMembers: 1,
+    overageRate: 0,
+  },
+  trial: {
+    id: 'trial',
+    name: 'Free Trial',
+    description: '14-day free trial with Start-level access',
+    monthlyPrice: 0,
+    annualPrice: 0,
+    annualMonthlyPrice: 0,
+    maxHelpers: 10,
+    maxConnections: 2,
+    maxExecutions: 5000,
+    maxApiKeys: 2,
+    maxTeamMembers: 2,
     overageRate: 0,
   },
   start: {
@@ -85,12 +99,12 @@ export function getPlanFeatures(
   billingPeriod: 'monthly' | 'annual' = 'monthly'
 ): string[] {
   const plan = PLAN_CONFIGS[planId]
-  if (planId === 'free') {
+  if (planId === 'free' || planId === 'trial') {
     return [
-      `${plan.maxHelpers} active helper`,
-      `${plan.maxConnections} CRM connection`,
+      `${plan.maxHelpers} active helper${plan.maxHelpers > 1 ? 's' : ''}`,
+      `${plan.maxConnections} CRM connection${plan.maxConnections > 1 ? 's' : ''}`,
       `${formatLimit(plan.maxExecutions)} executions/mo`,
-      `${plan.maxApiKeys} API key`,
+      `${plan.maxApiKeys} API key${plan.maxApiKeys > 1 ? 's' : ''}`,
     ]
   }
   const price =
@@ -151,7 +165,12 @@ export const COMPARISON_ROWS = [
 
 /** Returns human-readable plan label. */
 export function getPlanLabel(plan: string): string {
-  return PLAN_CONFIGS[plan as PlanId]?.name ?? 'Sandbox'
+  return PLAN_CONFIGS[plan as PlanId]?.name ?? 'Free Trial'
+}
+
+/** Returns true if the plan is a trial or legacy free tier. */
+export function isTrialPlan(plan: string): boolean {
+  return plan === 'trial' || plan === 'free'
 }
 
 /** Returns true if the limit value represents "unlimited". */

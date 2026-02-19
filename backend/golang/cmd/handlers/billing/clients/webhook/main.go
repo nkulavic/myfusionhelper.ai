@@ -158,17 +158,19 @@ func handleSubscriptionCancelled(ctx context.Context, event stripe.Event) (event
 		return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
 	}
 
-	ownerUserID, err := updateAccountByStripeCustomer(ctx, customerID, "free", "active")
+	ownerUserID, err := updateAccountByStripeCustomer(ctx, customerID, "trial", "active")
 	if err != nil {
 		log.Printf("Failed to downgrade account: %v", err)
 		return authMiddleware.CreateErrorResponse(500, "Failed to process event"), nil
 	}
 
+	// Mark trial as expired since they had a subscription before
 	if ownerUserID != "" {
-		syncCognitoPlanGroup(ctx, ownerUserID, "free")
+		setTrialExpired(ctx, customerID)
+		syncCognitoPlanGroup(ctx, ownerUserID, "trial")
 		cfg, _ := config.LoadDefaultConfig(ctx)
 		dbClient := dynamodb.NewFromConfig(cfg)
-		sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_cancelled", "free")
+		sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_cancelled", "trial")
 	}
 
 	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
@@ -251,7 +253,7 @@ func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event, str
 		Key: map[string]ddbtypes.AttributeValue{
 			"account_id": &ddbtypes.AttributeValueMemberS{Value: accountID},
 		},
-		UpdateExpression: aws.String("SET #plan = :plan, #status = :status, settings.max_helpers = :mh, settings.max_connections = :mc, settings.max_executions = :me, updated_at = :now"),
+		UpdateExpression: aws.String("SET #plan = :plan, #status = :status, settings.max_helpers = :mh, settings.max_connections = :mc, settings.max_executions = :me, trial_expired = :te, updated_at = :now"),
 		ExpressionAttributeNames: map[string]string{
 			"#plan":   "plan",
 			"#status": "status",
@@ -262,6 +264,7 @@ func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event, str
 			":mh":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxHelpers)},
 			":mc":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxConnections)},
 			":me":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxExecutions)},
+			":te":     &ddbtypes.AttributeValueMemberBOOL{Value: false},
 			":now":    &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
 		},
 	})
@@ -341,24 +344,33 @@ func updateAccountByStripeCustomer(ctx context.Context, stripeCustomerID, plan, 
 
 	planCfg := billing.GetPlan(plan)
 
+	updateExpr := "SET #plan = :plan, #status = :status, settings.max_helpers = :mh, settings.max_connections = :mc, settings.max_executions = :me, updated_at = :now"
+	exprValues := map[string]ddbtypes.AttributeValue{
+		":plan":   &ddbtypes.AttributeValueMemberS{Value: plan},
+		":status": &ddbtypes.AttributeValueMemberS{Value: status},
+		":mh":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxHelpers)},
+		":mc":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxConnections)},
+		":me":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxExecutions)},
+		":now":    &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
+	}
+
+	// Clear trial_expired when activating a paid subscription
+	if billing.IsPaidPlan(plan) {
+		updateExpr += ", trial_expired = :te"
+		exprValues[":te"] = &ddbtypes.AttributeValueMemberBOOL{Value: false}
+	}
+
 	_, err = dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(accountsTable),
 		Key: map[string]ddbtypes.AttributeValue{
 			"account_id": &ddbtypes.AttributeValueMemberS{Value: accountID},
 		},
-		UpdateExpression: aws.String("SET #plan = :plan, #status = :status, settings.max_helpers = :mh, settings.max_connections = :mc, settings.max_executions = :me, updated_at = :now"),
+		UpdateExpression: aws.String(updateExpr),
 		ExpressionAttributeNames: map[string]string{
 			"#plan":   "plan",
 			"#status": "status",
 		},
-		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
-			":plan":   &ddbtypes.AttributeValueMemberS{Value: plan},
-			":status": &ddbtypes.AttributeValueMemberS{Value: status},
-			":mh":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxHelpers)},
-			":mc":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxConnections)},
-			":me":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxExecutions)},
-			":now":    &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
-		},
+		ExpressionAttributeValues: exprValues,
 	})
 	return ownerUserID, err
 }
@@ -455,7 +467,7 @@ func syncCognitoPlanGroup(ctx context.Context, ownerUserID, newPlan string) {
 	cognitoUsername := user.CognitoUserID
 
 	// Remove from all plan groups
-	planGroups := []string{"plan-free", "plan-start", "plan-grow", "plan-deliver"}
+	planGroups := []string{"plan-free", "plan-trial", "plan-start", "plan-grow", "plan-deliver"}
 	for _, group := range planGroups {
 		_, _ = cognitoClient.AdminRemoveUserFromGroup(ctx, &cognitoidentityprovider.AdminRemoveUserFromGroupInput{
 			UserPoolId: aws.String(cognitoUserPoolID),
@@ -475,6 +487,48 @@ func syncCognitoPlanGroup(ctx context.Context, ownerUserID, newPlan string) {
 		log.Printf("Failed to add user %s to Cognito group %s: %v", cognitoUsername, newGroup, err)
 	} else {
 		log.Printf("Synced user %s to Cognito group %s", cognitoUsername, newGroup)
+	}
+}
+
+// setTrialExpired marks an account's trial as expired when a subscription is cancelled.
+func setTrialExpired(ctx context.Context, stripeCustomerID string) {
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		log.Printf("Failed to load AWS config for setTrialExpired: %v", err)
+		return
+	}
+	dbClient := dynamodb.NewFromConfig(cfg)
+
+	queryResult, err := dbClient.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(accountsTable),
+		IndexName:              aws.String("StripeCustomerIdIndex"),
+		KeyConditionExpression: aws.String("stripe_customer_id = :cid"),
+		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+			":cid": &ddbtypes.AttributeValueMemberS{Value: stripeCustomerID},
+		},
+		Limit: aws.Int32(1),
+	})
+	if err != nil || len(queryResult.Items) == 0 {
+		log.Printf("setTrialExpired: could not find account for customer %s: %v", stripeCustomerID, err)
+		return
+	}
+
+	accountID := queryResult.Items[0]["account_id"].(*ddbtypes.AttributeValueMemberS).Value
+	_, err = dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(accountsTable),
+		Key: map[string]ddbtypes.AttributeValue{
+			"account_id": &ddbtypes.AttributeValueMemberS{Value: accountID},
+		},
+		UpdateExpression: aws.String("SET trial_expired = :te, updated_at = :now"),
+		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+			":te":  &ddbtypes.AttributeValueMemberBOOL{Value: true},
+			":now": &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
+		},
+	})
+	if err != nil {
+		log.Printf("Failed to set trial_expired for account %s: %v", accountID, err)
+	} else {
+		log.Printf("Set trial_expired=true for account %s", accountID)
 	}
 }
 

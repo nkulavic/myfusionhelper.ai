@@ -35,9 +35,12 @@ export interface Account {
   createdByUserId: string
   name: string
   company: string
-  plan: 'free' | 'start' | 'grow' | 'deliver'
+  plan: 'free' | 'trial' | 'start' | 'grow' | 'deliver'
   status: 'active' | 'suspended' | 'cancelled'
   stripeCustomerId?: string
+  trialStartedAt?: string
+  trialEndsAt?: string
+  trialExpired?: boolean
   settings: AccountSettings
   usage: AccountUsage
   createdAt: string

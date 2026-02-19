@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowRight,
@@ -15,11 +14,11 @@ import {
 } from 'lucide-react'
 import { useHelpers, useExecutions } from '@/lib/hooks/use-helpers'
 import { useConnections } from '@/lib/hooks/use-connections'
+import { usePlanLimits } from '@/lib/hooks/use-plan-limits'
 import type { PlatformConnection } from '@myfusionhelper/types'
 import { Skeleton } from '@/components/ui/skeleton'
-import { GettingStartedCard } from './_components/getting-started-card'
-
-const GS_DISMISSED_KEY = 'mfh_getting_started_dismissed'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { FirstStepsTab } from './_components/first-steps-tab'
 
 const quickActions = [
   { label: 'Create Helper', href: '/helpers?view=new', icon: Plus },
@@ -69,24 +68,18 @@ export default function DashboardPage() {
   const { data: helpers, isLoading: helpersLoading } = useHelpers()
   const { data: connections, isLoading: connectionsLoading } = useConnections()
   const { data: executions, isLoading: executionsLoading } = useExecutions({ limit: 5 })
-
-  const [gsDismissed, setGsDismissed] = useState(true) // default true to avoid flash
-
-  useEffect(() => {
-    setGsDismissed(localStorage.getItem(GS_DISMISSED_KEY) === '1')
-  }, [])
-
-  const handleDismissGs = () => {
-    setGsDismissed(true)
-    localStorage.setItem(GS_DISMISSED_KEY, '1')
-  }
+  const { isTrialing, isTrialExpired } = usePlanLimits()
 
   const activeHelpers = helpers?.filter((h) => h.status === 'active').length ?? 0
   const activeConnections = connections?.filter((c) => c.status === 'active') ?? []
   const todayExecutions = executions?.length ?? 0
-  const successRate = executions && executions.length > 0
-    ? ((executions.filter((e) => e.status === 'completed').length / executions.length) * 100).toFixed(1)
-    : '0'
+  const successRate =
+    executions && executions.length > 0
+      ? (
+          (executions.filter((e) => e.status === 'completed').length / executions.length) *
+          100
+        ).toFixed(1)
+      : '0'
 
   const statsLoading = helpersLoading || connectionsLoading || executionsLoading
 
@@ -94,7 +87,9 @@ export default function DashboardPage() {
   const hasHelpers = (helpers?.length ?? 0) > 0
   const hasExecutions = (executions?.length ?? 0) > 0
   const allSetupComplete = hasConnections && hasHelpers && hasExecutions
-  const showGettingStarted = !gsDismissed && !allSetupComplete
+
+  const showFirstSteps = (isTrialing || isTrialExpired) && !allSetupComplete
+  const defaultTab = showFirstSteps ? 'first-steps' : 'dashboard'
 
   const stats = [
     {
@@ -124,26 +119,72 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div className="animate-fade-in-up space-y-8">
-      {/* Welcome */}
+    <div className="animate-fade-in-up space-y-6">
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Overview of your CRM automation activity
-        </p>
+        <p className="text-muted-foreground">Overview of your CRM automation activity</p>
       </div>
 
-      {/* Getting Started */}
-      {(statsLoading || showGettingStarted) && !gsDismissed && (
-        <GettingStartedCard
-          connections={connections}
-          helpers={helpers}
+      {/* Tabs: First Steps (trial only) + Dashboard */}
+      {showFirstSteps ? (
+        <Tabs defaultValue={defaultTab}>
+          <TabsList>
+            <TabsTrigger value="first-steps">First Steps</TabsTrigger>
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="first-steps" className="mt-6">
+            <FirstStepsTab
+              connections={connections}
+              helpers={helpers}
+              executions={executions}
+              isLoading={statsLoading}
+            />
+          </TabsContent>
+
+          <TabsContent value="dashboard" className="mt-6">
+            <DashboardContent
+              stats={stats}
+              statsLoading={statsLoading}
+              executions={executions}
+              executionsLoading={executionsLoading}
+              connections={connections}
+              connectionsLoading={connectionsLoading}
+            />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <DashboardContent
+          stats={stats}
+          statsLoading={statsLoading}
           executions={executions}
-          isLoading={statsLoading}
-          onDismiss={handleDismissGs}
+          executionsLoading={executionsLoading}
+          connections={connections}
+          connectionsLoading={connectionsLoading}
         />
       )}
+    </div>
+  )
+}
 
+function DashboardContent({
+  stats,
+  statsLoading,
+  executions,
+  executionsLoading,
+  connections,
+  connectionsLoading,
+}: {
+  stats: { label: string; value: string; change: string; icon: React.ComponentType<{ className?: string }> }[]
+  statsLoading: boolean
+  executions: ReturnType<typeof useExecutions>['data']
+  executionsLoading: boolean
+  connections: ReturnType<typeof useConnections>['data']
+  connectionsLoading: boolean
+}) {
+  return (
+    <div className="space-y-8">
       {/* Stats Grid */}
       {statsLoading ? (
         <StatsSkeleton />
@@ -164,7 +205,7 @@ export default function DashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Recent Executions */}
-        <div className="lg:col-span-2 rounded-lg border bg-card">
+        <div className="rounded-lg border bg-card lg:col-span-2">
           <div className="flex items-center justify-between border-b px-5 py-4">
             <h2 className="font-semibold">Recent Executions</h2>
             <Link
@@ -196,13 +237,13 @@ export default function DashboardPage() {
                       <Clock className="h-4 w-4 animate-spin text-info" />
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{exec.helperId}</p>
-                    <p className="text-xs text-muted-foreground truncate">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{exec.helperId}</p>
+                    <p className="truncate text-xs text-muted-foreground">
                       {exec.contactId || 'No contact'}
                     </p>
                   </div>
-                  <div className="text-right flex-shrink-0">
+                  <div className="flex-shrink-0 text-right">
                     <p className="text-xs font-mono text-muted-foreground">
                       {exec.durationMs ? `${exec.durationMs}ms` : '-'}
                     </p>
@@ -218,7 +259,8 @@ export default function DashboardPage() {
               <Activity className="mb-3 h-8 w-8 text-muted-foreground/50" />
               <p className="text-sm font-medium text-muted-foreground">No executions yet</p>
               <p className="mt-1 max-w-xs text-xs text-muted-foreground">
-                Once you configure and trigger a helper from your CRM, every execution will appear here with status, timing, and contact details.
+                Once you configure and trigger a helper from your CRM, every execution will appear
+                here with status, timing, and contact details.
               </p>
             </div>
           )}
@@ -289,7 +331,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-4">
+              <div className="py-4 text-center">
                 <p className="text-sm font-medium text-muted-foreground">No connections yet</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Connect your CRM to start using helpers

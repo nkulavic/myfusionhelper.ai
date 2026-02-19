@@ -14,7 +14,8 @@ type PlanConfig struct {
 }
 
 // Plans defines all available subscription tiers.
-// "free" is the sandbox tier for users who haven't selected a paid plan.
+// "free" is the legacy sandbox tier (kept for backward compat).
+// "trial" is the 14-day free trial with Start-level limits.
 var Plans = map[string]PlanConfig{
 	"free": {
 		Name:           "Sandbox",
@@ -23,6 +24,17 @@ var Plans = map[string]PlanConfig{
 		MaxAPIKeys:     1,
 		MaxTeamMembers: 1,
 		MaxExecutions:  100,
+		PriceMonthly:   0,
+		PriceAnnually:  0,
+		OverageRate:    0, // hard-blocked at limit
+	},
+	"trial": {
+		Name:           "Free Trial",
+		MaxHelpers:     10,
+		MaxConnections: 2,
+		MaxAPIKeys:     2,
+		MaxTeamMembers: 2,
+		MaxExecutions:  5000,
 		PriceMonthly:   0,
 		PriceAnnually:  0,
 		OverageRate:    0, // hard-blocked at limit
@@ -63,12 +75,12 @@ var Plans = map[string]PlanConfig{
 }
 
 // GetPlan returns the PlanConfig for the given plan name.
-// Returns the sandbox (free) config if the plan is unknown.
+// Returns the trial config if the plan is unknown.
 func GetPlan(plan string) PlanConfig {
 	if cfg, ok := Plans[plan]; ok {
 		return cfg
 	}
-	return Plans["free"]
+	return Plans["trial"]
 }
 
 // GetPlanLabel returns the display name for a plan.
@@ -76,10 +88,15 @@ func GetPlanLabel(plan string) string {
 	if cfg, ok := Plans[plan]; ok {
 		return cfg.Name
 	}
-	return "Sandbox"
+	return "Free Trial"
 }
 
 // IsPaidPlan returns true if the plan is a paid subscription tier.
 func IsPaidPlan(plan string) bool {
 	return plan == "start" || plan == "grow" || plan == "deliver"
+}
+
+// IsTrialPlan returns true if the plan is a free trial or legacy free tier.
+func IsTrialPlan(plan string) bool {
+	return plan == "trial" || plan == "free"
 }

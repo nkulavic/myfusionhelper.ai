@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -188,12 +189,22 @@ func HandleWithAuth(ctx context.Context, event events.APIGatewayV2HTTPRequest, a
 		SuccessURL: stripe.String(successURL),
 		CancelURL:  stripe.String(cancelURL),
 		SubscriptionData: &stripe.CheckoutSessionSubscriptionDataParams{
-			TrialPeriodDays: stripe.Int64(14),
 			Metadata: map[string]string{
 				"account_id": authCtx.AccountID,
 				"plan":       req.Plan,
 			},
 		},
+	}
+
+	// Grant remaining trial days on Stripe subscription (only if still in active trial)
+	if account.Plan == "trial" && !account.TrialExpired && account.TrialEndsAt != nil {
+		remaining := time.Until(*account.TrialEndsAt)
+		trialDays := int64(remaining.Hours() / 24)
+		if trialDays > 0 {
+			params.SubscriptionData.TrialPeriodDays = stripe.Int64(trialDays)
+			log.Printf("Granting %d remaining trial days on Stripe subscription for account %s", trialDays, authCtx.AccountID)
+		}
+		// If trial expired or 0 days left, no trial period -- charge immediately
 	}
 
 	s, err := session.New(params)

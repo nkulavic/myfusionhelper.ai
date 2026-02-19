@@ -23,8 +23,10 @@ import {
   Search,
   PanelLeftClose,
   PanelLeftOpen,
+  CreditCard,
+  Clock,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useWorkspaceStore } from '@/lib/stores/workspace-store'
@@ -37,8 +39,9 @@ import { CommandPalette } from '@/components/command-palette'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useBillingInfo } from '@/lib/hooks/use-settings'
+import { usePlanLimits } from '@/lib/hooks/use-plan-limits'
 
-const navigation = [
+const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Helpers', href: '/helpers', icon: Blocks },
   { name: 'Connections', href: '/connections', icon: Link2 },
@@ -66,16 +69,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setCommandPaletteOpen,
   } = useUIStore()
   const logout = useLogout()
+  const { isTrialing, isTrialExpired } = usePlanLimits()
+
+  // Build navigation with conditional Plans item
+  const navigation = [
+    ...baseNavigation.slice(0, 1), // Dashboard
+    ...(isTrialing || isTrialExpired ? [{ name: 'Plans', href: '/plans', icon: CreditCard }] : []),
+    ...baseNavigation.slice(1), // Rest of nav
+  ]
 
   // Register global keyboard shortcuts
   useGlobalKeyboardShortcuts()
 
-  // Redirect to plan gate if not subscribed, or onboarding if not completed
+  // Redirect to onboarding if not completed
   useEffect(() => {
     if (_hasHydrated && !onboardingComplete) {
       router.replace('/onboarding/plan')
     }
   }, [_hasHydrated, onboardingComplete, router])
+
+  // Soft lock: redirect expired trial users to /plans (allow /plans, /settings, /dashboard)
+  const allowedWhileExpired = ['/', '/plans', '/settings', '/dashboard']
+  useEffect(() => {
+    if (!isTrialExpired) return
+    const isAllowed = allowedWhileExpired.some(
+      (route) => pathname === route || pathname.startsWith(route + '/'),
+    )
+    if (!isAllowed) {
+      router.replace('/plans')
+    }
+  }, [isTrialExpired, pathname, router])
 
   const userInitials = user?.name
     ? user.name
@@ -373,7 +396,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         'flex flex-1 flex-col pt-14 transition-all duration-200 lg:pt-0',
         sidebarMinimized ? 'lg:pl-16' : 'lg:pl-64'
       )}>
-        <UpgradeBanner />
+        <TrialBanner />
         <main className="flex-1 p-4 sm:p-6">
           {children}
         </main>
@@ -399,48 +422,87 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   )
 }
 
-function UpgradeBanner() {
+function TrialBanner() {
   const { data: billing } = useBillingInfo()
-  const [dismissed, setDismissed] = useState(false)
 
-  // Check sessionStorage on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined' && sessionStorage.getItem('mfh_banner_dismissed') === '1') {
-      setDismissed(true)
-    }
-  }, [])
+  if (!billing) return null
 
-  if (dismissed || !billing) return null
+  const { isTrialing, daysRemaining, totalTrialDays, trialExpired } = billing
 
-  const handleDismiss = () => {
-    setDismissed(true)
-    sessionStorage.setItem('mfh_banner_dismissed', '1')
-  }
+  // Hide for paid subscribers
+  if (!isTrialing && !trialExpired) return null
 
-  // Trial countdown (< 7 days remaining)
-  if (billing.trialEndsAt) {
-    const now = Date.now() / 1000
-    const daysLeft = Math.ceil((billing.trialEndsAt - now) / 86400)
-    if (daysLeft > 0 && daysLeft <= 7) {
-      return (
-        <div className="flex items-center justify-between gap-4 border-b bg-amber-50 px-4 py-2 dark:bg-amber-950/30 sm:px-6">
-          <p className="text-sm text-foreground">
-            Your trial ends in {daysLeft} day{daysLeft !== 1 ? 's' : ''}.{' '}
-            <Link href="/settings?tab=billing" className="font-medium text-primary hover:underline">
-              Manage subscription
-            </Link>
-          </p>
-          <button
-            onClick={handleDismiss}
-            className="shrink-0 text-muted-foreground hover:text-foreground"
-            aria-label="Dismiss"
-          >
-            <X className="h-4 w-4" />
-          </button>
+  // Expired state
+  if (trialExpired) {
+    return (
+      <div className="border-b bg-red-100 px-4 py-3 dark:bg-red-950/50 sm:px-6">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-red-600 dark:text-red-400" />
+            <p className="text-sm font-medium text-red-800 dark:text-red-200">
+              Your free trial has expired. Choose a plan to continue using MyFusion Helper.
+            </p>
+          </div>
+          <Link href="/plans">
+            <Button size="sm" variant="default">
+              Choose Plan
+            </Button>
+          </Link>
         </div>
-      )
-    }
+      </div>
+    )
   }
 
-  return null
+  // Active trial
+  const dayNumber = totalTrialDays - daysRemaining + 1
+  const progress = Math.min(100, Math.round(((dayNumber - 1) / totalTrialDays) * 100))
+
+  // Color by urgency
+  let bgClass = 'bg-blue-50 dark:bg-blue-950/30'
+  let textClass = 'text-blue-800 dark:text-blue-200'
+  let iconClass = 'text-blue-600 dark:text-blue-400'
+  let progressClass = 'bg-blue-500'
+
+  if (daysRemaining <= 2) {
+    bgClass = 'bg-red-50 dark:bg-red-950/30'
+    textClass = 'text-red-800 dark:text-red-200'
+    iconClass = 'text-red-600 dark:text-red-400'
+    progressClass = 'bg-red-500'
+  } else if (daysRemaining <= 7) {
+    bgClass = 'bg-amber-50 dark:bg-amber-950/30'
+    textClass = 'text-amber-800 dark:text-amber-200'
+    iconClass = 'text-amber-600 dark:text-amber-400'
+    progressClass = 'bg-amber-500'
+  }
+
+  return (
+    <div className={cn('border-b px-4 py-3 sm:px-6', bgClass)}>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <Clock className={cn('h-4 w-4 shrink-0', iconClass)} />
+          <div className="flex items-center gap-3 min-w-0">
+            <p className={cn('text-sm font-medium whitespace-nowrap', textClass)}>
+              {daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left in your free trial
+            </p>
+            <div className="hidden sm:flex items-center gap-2 min-w-0">
+              <div className="h-1.5 w-24 rounded-full bg-black/10 dark:bg-white/10">
+                <div
+                  className={cn('h-full rounded-full transition-all', progressClass)}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <span className={cn('text-xs whitespace-nowrap', textClass)}>
+                Day {dayNumber} / {totalTrialDays}
+              </span>
+            </div>
+          </div>
+        </div>
+        <Link href="/plans">
+          <Button size="sm" variant="default">
+            Choose Plan
+          </Button>
+        </Link>
+      </div>
+    </div>
+  )
 }

@@ -47,6 +47,9 @@ type Account struct {
 	Plan             string          `json:"plan" dynamodbav:"plan"`
 	Status           string          `json:"status" dynamodbav:"status"`
 	StripeCustomerID string          `json:"stripe_customer_id,omitempty" dynamodbav:"stripe_customer_id,omitempty"`
+	TrialStartedAt   *time.Time      `json:"trial_started_at,omitempty" dynamodbav:"trial_started_at,omitempty"`
+	TrialEndsAt      *time.Time      `json:"trial_ends_at,omitempty" dynamodbav:"trial_ends_at,omitempty"`
+	TrialExpired     bool            `json:"trial_expired" dynamodbav:"trial_expired"`
 	Settings         AccountSettings `json:"settings" dynamodbav:"settings"`
 	Usage            AccountUsage    `json:"usage" dynamodbav:"usage"`
 	CreatedAt        time.Time       `json:"created_at" dynamodbav:"created_at"`

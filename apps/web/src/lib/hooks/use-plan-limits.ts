@@ -22,8 +22,8 @@ const RESOURCE_TO_USAGE_KEY: Record<Resource, string> = {
 export function usePlanLimits() {
   const { data: billing, isLoading } = useBillingInfo()
 
-  const plan = (billing?.plan ?? 'free') as PlanId
-  const planConfig = PLAN_CONFIGS[plan] ?? PLAN_CONFIGS.free
+  const plan = (billing?.plan ?? 'trial') as PlanId
+  const planConfig = PLAN_CONFIGS[plan] ?? PLAN_CONFIGS.trial
 
   const limits = billing?.limits ?? {
     maxHelpers: planConfig.maxHelpers,
@@ -63,7 +63,12 @@ export function usePlanLimits() {
     return Math.min(100, Math.round((getUsage(resource) / limit) * 100))
   }
 
+  const isTrialing = billing?.isTrialing ?? false
+  const isTrialExpired = billing?.trialExpired ?? false
+  const daysRemaining = billing?.daysRemaining ?? 0
+
   function canCreate(resource: Resource): boolean {
+    if (isTrialExpired) return false
     return getUsage(resource) < getLimit(resource)
   }
 
@@ -80,6 +85,9 @@ export function usePlanLimits() {
     getLimit,
     getUsage,
     isSandbox: plan === 'free',
-    isPaid: plan !== 'free',
+    isTrialing,
+    isTrialExpired,
+    daysRemaining,
+    isPaid: plan !== 'free' && plan !== 'trial',
   }
 }

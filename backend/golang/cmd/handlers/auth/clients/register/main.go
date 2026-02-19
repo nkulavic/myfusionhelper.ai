@@ -19,8 +19,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/myfusionhelper/api/internal/apiutil"
 	"github.com/myfusionhelper/api/internal/billing"
+	appConfig "github.com/myfusionhelper/api/internal/config"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/notifications"
+	stripe "github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v82/customer"
 )
 
 type RegisterRequest struct {
@@ -63,17 +66,21 @@ type AccountUsage struct {
 }
 
 type Account struct {
-	AccountID       string          `json:"account_id" dynamodbav:"account_id"`
-	OwnerUserID     string          `json:"owner_user_id" dynamodbav:"owner_user_id"`
-	CreatedByUserID string          `json:"created_by_user_id" dynamodbav:"created_by_user_id"`
-	Name            string          `json:"name" dynamodbav:"name"`
-	Company         string          `json:"company" dynamodbav:"company"`
-	Plan            string          `json:"plan" dynamodbav:"plan"`
-	Status          string          `json:"status" dynamodbav:"status"`
-	Settings        AccountSettings `json:"settings" dynamodbav:"settings"`
-	Usage           AccountUsage    `json:"usage" dynamodbav:"usage"`
-	CreatedAt       string          `json:"created_at" dynamodbav:"created_at"`
-	UpdatedAt       string          `json:"updated_at" dynamodbav:"updated_at"`
+	AccountID        string          `json:"account_id" dynamodbav:"account_id"`
+	OwnerUserID      string          `json:"owner_user_id" dynamodbav:"owner_user_id"`
+	CreatedByUserID  string          `json:"created_by_user_id" dynamodbav:"created_by_user_id"`
+	Name             string          `json:"name" dynamodbav:"name"`
+	Company          string          `json:"company" dynamodbav:"company"`
+	Plan             string          `json:"plan" dynamodbav:"plan"`
+	Status           string          `json:"status" dynamodbav:"status"`
+	StripeCustomerID string          `json:"stripe_customer_id,omitempty" dynamodbav:"stripe_customer_id,omitempty"`
+	TrialStartedAt   *time.Time      `json:"trial_started_at,omitempty" dynamodbav:"trial_started_at,omitempty"`
+	TrialEndsAt      *time.Time      `json:"trial_ends_at,omitempty" dynamodbav:"trial_ends_at,omitempty"`
+	TrialExpired     bool            `json:"trial_expired" dynamodbav:"trial_expired"`
+	Settings         AccountSettings `json:"settings" dynamodbav:"settings"`
+	Usage            AccountUsage    `json:"usage" dynamodbav:"usage"`
+	CreatedAt        string          `json:"created_at" dynamodbav:"created_at"`
+	UpdatedAt        string          `json:"updated_at" dynamodbav:"updated_at"`
 }
 
 var (
@@ -177,22 +184,51 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		companyName = req.Name
 	}
 
-	// Create account with sandbox (free) plan limits
-	sandboxPlan := billing.GetPlan("free")
+	// Create Stripe customer for tracking (no subscription yet)
+	stripeCustomerID := ""
+	secrets, secretsErr := appConfig.LoadSecrets(ctx)
+	if secretsErr != nil {
+		log.Printf("Failed to load secrets for Stripe customer creation: %v", secretsErr)
+		// Non-fatal -- continue registration without Stripe customer
+	} else if secrets.Stripe.SecretKey != "" {
+		stripe.Key = secrets.Stripe.SecretKey
+		cust, err := customer.New(&stripe.CustomerParams{
+			Email: stripe.String(strings.ToLower(req.Email)),
+			Name:  stripe.String(companyName),
+			Metadata: map[string]string{
+				"account_id": accountID,
+			},
+		})
+		if err != nil {
+			log.Printf("Failed to create Stripe customer (non-fatal): %v", err)
+		} else {
+			stripeCustomerID = cust.ID
+			log.Printf("Created Stripe customer %s for account %s", stripeCustomerID, accountID)
+		}
+	}
+
+	// Create account with 14-day free trial (Start-level limits)
+	trialPlan := billing.GetPlan("trial")
+	trialStart := time.Now().UTC()
+	trialEnd := trialStart.Add(14 * 24 * time.Hour)
 	account := Account{
-		AccountID:       accountID,
-		OwnerUserID:     userID,
-		CreatedByUserID: userID,
-		Name:            companyName,
-		Company:         companyName,
-		Plan:            "free",
-		Status:          "active",
+		AccountID:        accountID,
+		OwnerUserID:      userID,
+		CreatedByUserID:  userID,
+		Name:             companyName,
+		Company:          companyName,
+		Plan:             "trial",
+		Status:           "active",
+		StripeCustomerID: stripeCustomerID,
+		TrialStartedAt:   &trialStart,
+		TrialEndsAt:      &trialEnd,
+		TrialExpired:     false,
 		Settings: AccountSettings{
-			MaxHelpers:     sandboxPlan.MaxHelpers,
-			MaxConnections: sandboxPlan.MaxConnections,
-			MaxAPIKeys:     sandboxPlan.MaxAPIKeys,
-			MaxTeamMembers: sandboxPlan.MaxTeamMembers,
-			MaxExecutions:  sandboxPlan.MaxExecutions,
+			MaxHelpers:     trialPlan.MaxHelpers,
+			MaxConnections: trialPlan.MaxConnections,
+			MaxAPIKeys:     trialPlan.MaxAPIKeys,
+			MaxTeamMembers: trialPlan.MaxTeamMembers,
+			MaxExecutions:  trialPlan.MaxExecutions,
 		},
 		Usage:     AccountUsage{},
 		CreatedAt: now,

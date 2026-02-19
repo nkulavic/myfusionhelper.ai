@@ -28,6 +28,7 @@ import {
   formatLimit,
   getAnnualSavingsPercent,
   getPlanLabel,
+  isTrialPlan,
   type PlanId,
 } from '@/lib/plan-constants'
 
@@ -50,7 +51,8 @@ export function BillingTab() {
     }
   }, [searchParams])
 
-  const currentPlan = billing?.plan || 'free'
+  const currentPlan = billing?.plan || 'trial'
+  const isOnTrial = isTrialPlan(currentPlan)
 
   const plans = PAID_PLAN_IDS.map((id) => {
     const config = PLAN_CONFIGS[id]
@@ -83,7 +85,7 @@ export function BillingTab() {
   }
 
   const handleSelectPlan = (planId: 'start' | 'grow' | 'deliver') => {
-    if (currentPlan !== 'free') {
+    if (!isOnTrial) {
       handleManageSubscription()
       return
     }
@@ -131,7 +133,7 @@ export function BillingTab() {
                       : `$${billing.priceMonthly}/month`}
                   </p>
                 )}
-                {billing.billingPeriod === 'annual' && billing.plan !== 'free' && (
+                {billing.billingPeriod === 'annual' && !isTrialPlan(billing.plan) && (
                   <Badge variant="secondary" className="mt-1 text-xs">
                     Annual billing
                   </Badge>
@@ -152,7 +154,7 @@ export function BillingTab() {
                   </p>
                 )}
               </div>
-              {billing.plan !== 'free' && (
+              {!isTrialPlan(billing.plan) && (
                 <Button
                   variant="outline"
                   onClick={handleManageSubscription}
@@ -177,10 +179,10 @@ export function BillingTab() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-lg">
-                {currentPlan === 'free' ? 'Choose a Plan' : 'Change Plan'}
+                {isOnTrial ? 'Choose a Plan' : 'Change Plan'}
               </CardTitle>
               <CardDescription>
-                {currentPlan === 'free'
+                {isOnTrial
                   ? 'Select the plan that best fits your needs'
                   : 'Upgrade or change your current plan'}
               </CardDescription>
@@ -275,7 +277,7 @@ export function BillingTab() {
                       <CheckCircle className="h-4 w-4" />
                       Current Plan
                     </Button>
-                  ) : currentPlan !== 'free' ? (
+                  ) : !isOnTrial ? (
                     <Button
                       variant={plan.popular ? 'default' : 'outline'}
                       className="w-full"

@@ -44,6 +44,7 @@ provider:
     APP_URL: ${self:custom.appUrl.${self:provider.stage}, 'http://localhost:3001'}
     API_VERSION: v1
     API_REFERENCE: mfh-api
+    INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
   iam:
     role:
       statements:
@@ -99,6 +100,11 @@ provider:
             - ses:SendEmail
             - ses:SendRawEmail
           Resource: "arn:aws:ses:${self:provider.region}:*:identity/myfusionhelper.ai"
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+          Resource:
+            - "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
         - Effect: Allow
           Action:
             - xray:PutTraceSegments

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -47,12 +48,38 @@ func fetchAccount(ctx context.Context, db *dynamodb.Client, accountsTable, accou
 	return &account, nil
 }
 
+// checkTrialExpired returns a LimitExceededError if the account's trial has expired.
+func checkTrialExpired(account *types.Account) *LimitExceededError {
+	if !IsTrialPlan(account.Plan) {
+		return nil
+	}
+	// Check the TrialExpired flag first (set by the trial-expiration worker)
+	if account.TrialExpired {
+		return &LimitExceededError{
+			Resource: "trial",
+			Message:  "Your free trial has expired. Please choose a plan to continue.",
+		}
+	}
+	// Also check TrialEndsAt in case the worker hasn't run yet
+	if account.TrialEndsAt != nil && time.Now().UTC().After(*account.TrialEndsAt) {
+		return &LimitExceededError{
+			Resource: "trial",
+			Message:  "Your free trial has expired. Please choose a plan to continue.",
+		}
+	}
+	return nil
+}
+
 // CheckHelperLimit verifies the account hasn't exceeded its helper limit.
 func CheckHelperLimit(ctx context.Context, db *dynamodb.Client, accountsTable, accountID string) error {
 	account, err := fetchAccount(ctx, db, accountsTable, accountID)
 	if err != nil {
 		log.Printf("Billing check failed (allowing): %v", err)
 		return nil // fail open
+	}
+
+	if expired := checkTrialExpired(account); expired != nil {
+		return expired
 	}
 
 	if account.Settings.MaxHelpers > 0 && account.Usage.Helpers >= account.Settings.MaxHelpers {
@@ -76,6 +103,10 @@ func CheckConnectionLimit(ctx context.Context, db *dynamodb.Client, accountsTabl
 		return nil
 	}
 
+	if expired := checkTrialExpired(account); expired != nil {
+		return expired
+	}
+
 	if account.Settings.MaxConnections > 0 && account.Usage.Connections >= account.Settings.MaxConnections {
 		planLabel := GetPlanLabel(account.Plan)
 		return &LimitExceededError{
@@ -97,6 +128,10 @@ func CheckAPIKeyLimit(ctx context.Context, db *dynamodb.Client, accountsTable, a
 		return nil
 	}
 
+	if expired := checkTrialExpired(account); expired != nil {
+		return expired
+	}
+
 	if account.Settings.MaxAPIKeys > 0 && account.Usage.APIKeys >= account.Settings.MaxAPIKeys {
 		planLabel := GetPlanLabel(account.Plan)
 		return &LimitExceededError{
@@ -112,7 +147,7 @@ func CheckAPIKeyLimit(ctx context.Context, db *dynamodb.Client, accountsTable, a
 
 // CheckExecutionLimit verifies the account hasn't exceeded its monthly execution limit.
 // For paid plans, this returns nil (overage is metered by Stripe).
-// For sandbox (free) plans, this blocks execution at the limit.
+// For trial and free plans, this blocks execution at the limit.
 func CheckExecutionLimit(ctx context.Context, db *dynamodb.Client, accountsTable, accountID string) error {
 	account, err := fetchAccount(ctx, db, accountsTable, accountID)
 	if err != nil {
@@ -120,19 +155,24 @@ func CheckExecutionLimit(ctx context.Context, db *dynamodb.Client, accountsTable
 		return nil
 	}
 
+	if expired := checkTrialExpired(account); expired != nil {
+		return expired
+	}
+
 	// Paid plans allow overage — Stripe meters it automatically
 	if IsPaidPlan(account.Plan) {
 		return nil
 	}
 
-	// Sandbox (free) plan: hard-block at limit
+	// Trial and free plans: hard-block at limit
 	if account.Settings.MaxExecutions > 0 && account.Usage.MonthlyExecutions >= account.Settings.MaxExecutions {
+		msg := fmt.Sprintf("You've used all %d executions this month. Choose a plan to continue.", account.Settings.MaxExecutions)
 		return &LimitExceededError{
 			Resource: "executions",
 			Current:  account.Usage.MonthlyExecutions,
 			Limit:    account.Settings.MaxExecutions,
 			Plan:     account.Plan,
-			Message:  fmt.Sprintf("You've used all %d sandbox executions this month. Pick a plan to continue.", account.Settings.MaxExecutions),
+			Message:  msg,
 		}
 	}
 	return nil

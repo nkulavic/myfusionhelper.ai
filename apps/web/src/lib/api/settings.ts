@@ -136,6 +136,10 @@ export interface BillingInfo {
   trialEndsAt?: number
   cancelAt?: number
   stripeCustomerId?: string
+  isTrialing: boolean
+  daysRemaining: number
+  totalTrialDays: number
+  trialExpired: boolean
   usage: {
     helpers: number
     connections: number

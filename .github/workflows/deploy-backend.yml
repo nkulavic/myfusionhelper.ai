@@ -182,7 +182,7 @@ jobs:
             echo "deploy_stripe_webhooks=true" >> $GITHUB_OUTPUT
             echo "api_services=$(to_json 'auth accounts api-keys helpers platforms data-explorer billing chat emails studio internal-email')" >> $GITHUB_OUTPUT
             echo "has_api=true" >> $GITHUB_OUTPUT
-            echo "worker_services=$(to_json 'helper-worker notification-worker data-sync')" >> $GITHUB_OUTPUT
+            echo "worker_services=$(to_json 'helper-worker notification-worker data-sync trial-expiration')" >> $GITHUB_OUTPUT
             echo "has_workers=true" >> $GITHUB_OUTPUT
             # Helper workers: deploy all
             ALL_HELPERS=$(find backend/golang/services/workers -maxdepth 1 -type d -name "*-worker" \
@@ -218,7 +218,7 @@ jobs:
                 route53) R53=true ;;
                 monitoring) MON=true ;;
                 stripe-webhooks) STRIPE=true ;;
-                helper-worker|notification-worker|data-sync) WORKERS="$WORKERS $svc" ;;
+                helper-worker|notification-worker|data-sync|trial-expiration) WORKERS="$WORKERS $svc" ;;
                 *) API="$API $svc" ;;  # Assume API service
               esac
             done
@@ -397,7 +397,7 @@ jobs:
           # ── Core workers ──
           WORKERS=""
           if $DEPLOY_ALL_WORKERS; then
-            WORKERS="helper-worker notification-worker data-sync"
+            WORKERS="helper-worker notification-worker data-sync trial-expiration"
           else
             if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/workers/helper-worker/|cmd/handlers/helper-worker/)"; then
               WORKERS="$WORKERS helper-worker"
@@ -407,6 +407,9 @@ jobs:
             fi
             if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/workers/data-sync/|cmd/handlers/data-sync/)"; then
               WORKERS="$WORKERS data-sync"
+            fi
+            if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/workers/trial-expiration/|cmd/handlers/trial-expiration/)"; then
+              WORKERS="$WORKERS trial-expiration"
             fi
           fi
 
