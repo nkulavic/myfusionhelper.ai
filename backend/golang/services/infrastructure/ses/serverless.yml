@@ -27,7 +27,7 @@ resources:
   Resources:
     # SES Email Identity for the domain
     # NOTE: Only created in main stage (global resource, shared across stages).
-    # Domain verification (DNS records) must be done manually in the AWS console.
+    # Domain verification requires DKIM CNAME records in Route53 (created below).
     SESEmailIdentity:
       Type: AWS::SES::EmailIdentity
       Condition: IsMain
@@ -37,6 +37,70 @@ resources:
           SigningEnabled: true
         DkimSigningAttributes:
           NextSigningKeyLength: RSA_2048_BIT
+
+    # Route53 DKIM records for SES domain verification + email signing.
+    # These 3 CNAMEs verify domain ownership AND enable DKIM signing.
+    SESDkimRecord1:
+      Type: AWS::Route53::RecordSet
+      Condition: IsMain
+      DependsOn: SESEmailIdentity
+      Properties:
+        HostedZoneId: Z071462818IPQJBH38AMK
+        Name: !Sub "${SESEmailIdentity.DkimDNSTokenName1}._domainkey.myfusionhelper.ai"
+        Type: CNAME
+        TTL: 300
+        ResourceRecords:
+          - !Sub "${SESEmailIdentity.DkimDNSTokenValue1}"
+
+    SESDkimRecord2:
+      Type: AWS::Route53::RecordSet
+      Condition: IsMain
+      DependsOn: SESEmailIdentity
+      Properties:
+        HostedZoneId: Z071462818IPQJBH38AMK
+        Name: !Sub "${SESEmailIdentity.DkimDNSTokenName2}._domainkey.myfusionhelper.ai"
+        Type: CNAME
+        TTL: 300
+        ResourceRecords:
+          - !Sub "${SESEmailIdentity.DkimDNSTokenValue2}"
+
+    SESDkimRecord3:
+      Type: AWS::Route53::RecordSet
+      Condition: IsMain
+      DependsOn: SESEmailIdentity
+      Properties:
+        HostedZoneId: Z071462818IPQJBH38AMK
+        Name: !Sub "${SESEmailIdentity.DkimDNSTokenName3}._domainkey.myfusionhelper.ai"
+        Type: CNAME
+        TTL: 300
+        ResourceRecords:
+          - !Sub "${SESEmailIdentity.DkimDNSTokenValue3}"
+
+    # SPF + domain verification TXT records.
+    # Includes Google Workspace site verification and SPF for both Google + SES.
+    DomainTxtRecords:
+      Type: AWS::Route53::RecordSet
+      Condition: IsMain
+      Properties:
+        HostedZoneId: Z071462818IPQJBH38AMK
+        Name: myfusionhelper.ai
+        Type: TXT
+        TTL: 60
+        ResourceRecords:
+          - '"google-site-verification=kpSGVYsKl7KdZbn3VoXpPnndu7s7qwADACBogbcXI2w"'
+          - '"v=spf1 include:_spf.google.com include:amazonses.com ~all"'
+
+    # DMARC policy for email authentication reporting.
+    DmarcRecord:
+      Type: AWS::Route53::RecordSet
+      Condition: IsMain
+      Properties:
+        HostedZoneId: Z071462818IPQJBH38AMK
+        Name: _dmarc.myfusionhelper.ai
+        Type: TXT
+        TTL: 300
+        ResourceRecords:
+          - '"v=DMARC1; p=none; rua=mailto:admin@myfusionhelper.ai"'
 
     # SES Configuration Set for tracking and reputation
     SESConfigurationSet:
