@@ -114,16 +114,24 @@ func (s *Service) SendHelperExecutionAlert(ctx context.Context, accountID, email
 	return s.sendEmail(ctx, req)
 }
 
-// SendBillingEvent sends a billing-related notification
-func (s *Service) SendBillingEvent(ctx context.Context, accountID, email, eventType, planName string) error {
+// SendBillingEvent sends a billing-related notification.
+// Optional extraData keys are merged into the template data (e.g., "InvoiceURL").
+func (s *Service) SendBillingEvent(ctx context.Context, accountID, email, eventType, planName string, extraData ...map[string]interface{}) error {
+	data := map[string]interface{}{
+		"event_type": eventType,
+		"PlanName":   planName,
+	}
+	if len(extraData) > 0 && extraData[0] != nil {
+		for k, v := range extraData[0] {
+			data[k] = v
+		}
+	}
+
 	req := SendEmailRequest{
 		TemplateType: "billing_event",
 		To:           []string{email},
-		Data: map[string]interface{}{
-			"event_type": eventType,
-			"PlanName":   planName,
-		},
-		AccountID: accountID,
+		Data:         data,
+		AccountID:    accountID,
 	}
 
 	return s.sendEmail(ctx, req)

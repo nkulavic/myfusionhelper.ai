@@ -3,6 +3,7 @@ package webhook
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -27,10 +28,16 @@ import (
 )
 
 var (
-	accountsTable     = os.Getenv("ACCOUNTS_TABLE")
-	usersTable        = os.Getenv("USERS_TABLE")
-	cognitoUserPoolID = os.Getenv("COGNITO_USER_POOL_ID")
+	accountsTable      = os.Getenv("ACCOUNTS_TABLE")
+	usersTable         = os.Getenv("USERS_TABLE")
+	webhookEventsTable = os.Getenv("WEBHOOK_EVENTS_TABLE")
+	cognitoUserPoolID  = os.Getenv("COGNITO_USER_POOL_ID")
 )
+
+// planRank maps plan names to numeric ranks for upgrade/downgrade detection.
+var planRank = map[string]int{
+	"free": 0, "trial": 0, "start": 1, "grow": 2, "deliver": 3,
+}
 
 // Handle processes Stripe webhook events (public, verified by signature)
 func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -65,39 +72,232 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 
 	stripeKey := secrets.Stripe.SecretKey
 
-	log.Printf("Received Stripe event: %s", stripeEvent.Type)
+	log.Printf("Received Stripe event: %s (id: %s)", stripeEvent.Type, stripeEvent.ID)
 
+	// Create shared DynamoDB client for all handlers
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		log.Printf("Failed to load AWS config: %v", err)
+		return authMiddleware.CreateErrorResponse(500, "Internal error"), nil
+	}
+	dbClient := dynamodb.NewFromConfig(cfg)
+
+	// Idempotency check -- skip if already processed
+	alreadySeen, err := checkAndRecordEvent(ctx, dbClient, stripeEvent)
+	if err != nil {
+		log.Printf("Idempotency check failed: %v", err)
+		// Continue processing -- better to risk a duplicate than to drop the event
+	}
+	if alreadySeen {
+		log.Printf("Event %s already processed, skipping", stripeEvent.ID)
+		return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
+	}
+
+	// Route to handler
+	var handlerErr error
 	switch stripeEvent.Type {
-	case "customer.subscription.created",
-		"customer.subscription.updated":
-		return handleSubscriptionUpdate(ctx, stripeEvent)
+	case "customer.subscription.created":
+		handlerErr = handleSubscriptionCreated(ctx, dbClient, stripeEvent)
+	case "customer.subscription.updated":
+		handlerErr = handleSubscriptionUpdated(ctx, dbClient, stripeEvent)
 	case "customer.subscription.deleted":
-		return handleSubscriptionCancelled(ctx, stripeEvent)
+		handlerErr = handleSubscriptionCancelled(ctx, dbClient, stripeEvent)
+	case "customer.subscription.trial_will_end":
+		handlerErr = handleTrialWillEnd(ctx, dbClient, stripeEvent)
 	case "checkout.session.completed":
-		return handleCheckoutSessionCompleted(ctx, stripeEvent, stripeKey)
+		handlerErr = handleCheckoutSessionCompleted(ctx, dbClient, stripeEvent, stripeKey)
 	case "invoice.payment_failed":
-		return handlePaymentFailed(ctx, stripeEvent)
+		handlerErr = handlePaymentFailed(ctx, dbClient, stripeEvent)
+	case "invoice.paid":
+		handlerErr = handleInvoicePaid(ctx, dbClient, stripeEvent)
+	case "payment_method.expiring":
+		handlerErr = handlePaymentMethodExpiring(ctx, dbClient, stripeEvent)
+	case "charge.refunded":
+		handlerErr = handleChargeRefunded(ctx, dbClient, stripeEvent)
 	default:
 		log.Printf("Unhandled event type: %s", stripeEvent.Type)
 	}
 
+	// Update event status
+	if handlerErr != nil {
+		log.Printf("Handler error for event %s: %v", stripeEvent.ID, handlerErr)
+		markEventStatus(ctx, dbClient, stripeEvent.ID, "failed", handlerErr.Error())
+		return authMiddleware.CreateErrorResponse(500, "Failed to process event"), nil
+	}
+
+	markEventStatus(ctx, dbClient, stripeEvent.ID, "processed", "")
 	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
 }
 
-func handleSubscriptionUpdate(ctx context.Context, event stripe.Event) (events.APIGatewayV2HTTPResponse, error) {
-	var sub stripe.Subscription
-	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
-		log.Printf("Failed to parse subscription: %v", err)
-		return authMiddleware.CreateErrorResponse(400, "Invalid event data"), nil
+// ---------------------------------------------------------------------------
+// Idempotency layer
+// ---------------------------------------------------------------------------
+
+// checkAndRecordEvent attempts to insert the event into the webhook-events table.
+// Returns (true, nil) if the event was already recorded (duplicate).
+func checkAndRecordEvent(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) (bool, error) {
+	if webhookEventsTable == "" {
+		return false, nil // table not configured, skip idempotency
 	}
 
-	customerID := sub.Customer.ID
-	if customerID == "" {
-		log.Printf("No customer ID in subscription event")
-		return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
+	now := time.Now().UTC()
+	ttl := now.Add(90 * 24 * time.Hour).Unix() // 90-day retention
+
+	_, err := dbClient.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(webhookEventsTable),
+		Item: map[string]ddbtypes.AttributeValue{
+			"event_id":            &ddbtypes.AttributeValueMemberS{Value: event.ID},
+			"event_type":          &ddbtypes.AttributeValueMemberS{Value: string(event.Type)},
+			"status":              &ddbtypes.AttributeValueMemberS{Value: "pending"},
+			"received_at":         &ddbtypes.AttributeValueMemberS{Value: now.Format(time.RFC3339)},
+			"ttl":                 &ddbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", ttl)},
+		},
+		ConditionExpression: aws.String("attribute_not_exists(event_id)"),
+	})
+	if err != nil {
+		var condErr *ddbtypes.ConditionalCheckFailedException
+		if errors.As(err, &condErr) {
+			return true, nil // already exists
+		}
+		return false, fmt.Errorf("failed to record event: %w", err)
 	}
 
-	// Determine plan from subscription metadata, then fall back to price metadata
+	return false, nil
+}
+
+// markEventStatus updates the processing status of a recorded webhook event.
+func markEventStatus(ctx context.Context, dbClient *dynamodb.Client, eventID string, status, errorMsg string) {
+	if webhookEventsTable == "" {
+		return
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	updateExpr := "SET #s = :status, processed_at = :now"
+	exprValues := map[string]ddbtypes.AttributeValue{
+		":status": &ddbtypes.AttributeValueMemberS{Value: status},
+		":now":    &ddbtypes.AttributeValueMemberS{Value: now},
+	}
+
+	if errorMsg != "" {
+		updateExpr += ", error_message = :err"
+		exprValues[":err"] = &ddbtypes.AttributeValueMemberS{Value: errorMsg}
+	}
+
+	_, err := dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(webhookEventsTable),
+		Key: map[string]ddbtypes.AttributeValue{
+			"event_id": &ddbtypes.AttributeValueMemberS{Value: eventID},
+		},
+		UpdateExpression: aws.String(updateExpr),
+		ExpressionAttributeNames: map[string]string{
+			"#s": "status",
+		},
+		ExpressionAttributeValues: exprValues,
+	})
+	if err != nil {
+		log.Printf("Failed to update event status for %s: %v", eventID, err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+// accountLookupResult holds the result of looking up an account by Stripe customer ID.
+type accountLookupResult struct {
+	AccountID   string
+	OwnerUserID string
+	CurrentPlan string
+	Status      string
+}
+
+// lookupAccountByStripeCustomer queries the StripeCustomerIdIndex GSI.
+func lookupAccountByStripeCustomer(ctx context.Context, dbClient *dynamodb.Client, customerID string) (*accountLookupResult, error) {
+	queryResult, err := dbClient.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(accountsTable),
+		IndexName:              aws.String("StripeCustomerIdIndex"),
+		KeyConditionExpression: aws.String("stripe_customer_id = :cid"),
+		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+			":cid": &ddbtypes.AttributeValueMemberS{Value: customerID},
+		},
+		Limit: aws.Int32(1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(queryResult.Items) == 0 {
+		log.Printf("No account found for Stripe customer %s", customerID)
+		return nil, nil
+	}
+
+	result := &accountLookupResult{}
+	if attr, ok := queryResult.Items[0]["account_id"]; ok {
+		result.AccountID = attr.(*ddbtypes.AttributeValueMemberS).Value
+	}
+	if attr, ok := queryResult.Items[0]["owner_user_id"]; ok {
+		result.OwnerUserID = attr.(*ddbtypes.AttributeValueMemberS).Value
+	}
+	if attr, ok := queryResult.Items[0]["plan"]; ok {
+		result.CurrentPlan = attr.(*ddbtypes.AttributeValueMemberS).Value
+	}
+	if attr, ok := queryResult.Items[0]["status"]; ok {
+		result.Status = attr.(*ddbtypes.AttributeValueMemberS).Value
+	}
+
+	return result, nil
+}
+
+// updateAccountPlan updates the plan, limits, and status for an account.
+func updateAccountPlan(ctx context.Context, dbClient *dynamodb.Client, accountID, plan, status string) error {
+	planCfg := billing.GetPlan(plan)
+
+	updateExpr := "SET #plan = :plan, #status = :status, settings.max_helpers = :mh, settings.max_connections = :mc, settings.max_executions = :me, updated_at = :now"
+	exprValues := map[string]ddbtypes.AttributeValue{
+		":plan":   &ddbtypes.AttributeValueMemberS{Value: plan},
+		":status": &ddbtypes.AttributeValueMemberS{Value: status},
+		":mh":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxHelpers)},
+		":mc":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxConnections)},
+		":me":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxExecutions)},
+		":now":    &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
+	}
+
+	// Clear trial_expired when activating a paid subscription
+	if billing.IsPaidPlan(plan) {
+		updateExpr += ", trial_expired = :te"
+		exprValues[":te"] = &ddbtypes.AttributeValueMemberBOOL{Value: false}
+	}
+
+	_, err := dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(accountsTable),
+		Key: map[string]ddbtypes.AttributeValue{
+			"account_id": &ddbtypes.AttributeValueMemberS{Value: accountID},
+		},
+		UpdateExpression: aws.String(updateExpr),
+		ExpressionAttributeNames: map[string]string{
+			"#plan":   "plan",
+			"#status": "status",
+		},
+		ExpressionAttributeValues: exprValues,
+	})
+	return err
+}
+
+// classifyPlanChange determines if a plan change is an upgrade, downgrade, or same-tier.
+func classifyPlanChange(oldPlan, newPlan string) string {
+	oldRank := planRank[oldPlan]
+	newRank := planRank[newPlan]
+
+	if newRank > oldRank {
+		return "plan_upgraded"
+	}
+	if newRank < oldRank {
+		return "plan_downgraded"
+	}
+	return "" // same tier, no email
+}
+
+// extractPlanFromSubscription determines the plan name from subscription metadata/price metadata.
+func extractPlanFromSubscription(sub *stripe.Subscription) string {
 	plan := "free"
 	if sub.Metadata != nil {
 		if p, ok := sub.Metadata["plan"]; ok && p != "" {
@@ -112,89 +312,438 @@ func handleSubscriptionUpdate(ctx context.Context, event stripe.Event) (events.A
 			}
 		}
 	}
-
-	status := "active"
-	if sub.Status == stripe.SubscriptionStatusPastDue {
-		status = "active" // still active but payment issue
-	} else if sub.Status == stripe.SubscriptionStatusCanceled {
-		status = "cancelled"
-	} else if sub.Status == stripe.SubscriptionStatusTrialing {
-		status = "active"
-	}
-
-	ownerUserID, err := updateAccountByStripeCustomer(ctx, customerID, plan, status)
-	if err != nil {
-		log.Printf("Failed to update account: %v", err)
-		return authMiddleware.CreateErrorResponse(500, "Failed to process event"), nil
-	}
-
-	// Sync Cognito plan group and send billing email synchronously.
-	// NOTE: These must NOT use goroutines in Lambda -- the context gets cancelled
-	// when the handler returns, causing all background goroutines to fail.
-	if ownerUserID != "" {
-		syncCognitoPlanGroup(ctx, ownerUserID, plan)
-
-		cfg, _ := config.LoadDefaultConfig(ctx)
-		dbClient := dynamodb.NewFromConfig(cfg)
-		eventType := "subscription_created"
-		if event.Type == "customer.subscription.updated" {
-			eventType = "subscription_created"
-		}
-		sendBillingEmail(ctx, dbClient, ownerUserID, eventType, plan)
-	}
-
-	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
+	return plan
 }
 
-func handleSubscriptionCancelled(ctx context.Context, event stripe.Event) (events.APIGatewayV2HTTPResponse, error) {
+// subscriptionStatusToAccountStatus maps Stripe subscription status to our account status.
+func subscriptionStatusToAccountStatus(status stripe.SubscriptionStatus) string {
+	switch status {
+	case stripe.SubscriptionStatusCanceled:
+		return "cancelled"
+	case stripe.SubscriptionStatusPastDue:
+		return "past_due"
+	default:
+		return "active"
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Event handlers
+// ---------------------------------------------------------------------------
+
+// handleSubscriptionCreated handles customer.subscription.created events.
+// Skips the email if checkout.session.completed already sent one (race condition fix).
+func handleSubscriptionCreated(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
 	var sub stripe.Subscription
 	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
-		log.Printf("Failed to parse subscription: %v", err)
-		return authMiddleware.CreateErrorResponse(400, "Invalid event data"), nil
+		return fmt.Errorf("failed to parse subscription: %w", err)
 	}
 
 	customerID := sub.Customer.ID
 	if customerID == "" {
-		return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
+		log.Printf("No customer ID in subscription.created event")
+		return nil
 	}
 
-	ownerUserID, err := updateAccountByStripeCustomer(ctx, customerID, "trial", "active")
+	plan := extractPlanFromSubscription(&sub)
+	status := subscriptionStatusToAccountStatus(sub.Status)
+
+	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
 	if err != nil {
-		log.Printf("Failed to downgrade account: %v", err)
-		return authMiddleware.CreateErrorResponse(500, "Failed to process event"), nil
+		return fmt.Errorf("failed to look up account: %w", err)
+	}
+	if acct == nil {
+		return nil
+	}
+
+	if err := updateAccountPlan(ctx, dbClient, acct.AccountID, plan, status); err != nil {
+		return fmt.Errorf("failed to update account: %w", err)
+	}
+
+	if acct.OwnerUserID != "" {
+		syncCognitoPlanGroup(ctx, dbClient, acct.OwnerUserID, plan)
+
+		// Only send email if checkout hasn't already sent one.
+		// Check for subscription_email_sent flag on the account.
+		emailAlreadySent := checkAndClearEmailSentFlag(ctx, dbClient, acct.AccountID)
+		if !emailAlreadySent {
+			sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "subscription_created", plan)
+		} else {
+			log.Printf("Skipping subscription_created email -- already sent by checkout handler")
+		}
+	}
+
+	return nil
+}
+
+// handleSubscriptionUpdated handles customer.subscription.updated events.
+// Detects upgrade vs downgrade and sends the correct email.
+func handleSubscriptionUpdated(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+	var sub stripe.Subscription
+	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+		return fmt.Errorf("failed to parse subscription: %w", err)
+	}
+
+	customerID := sub.Customer.ID
+	if customerID == "" {
+		log.Printf("No customer ID in subscription.updated event")
+		return nil
+	}
+
+	plan := extractPlanFromSubscription(&sub)
+	status := subscriptionStatusToAccountStatus(sub.Status)
+
+	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
+	if err != nil {
+		return fmt.Errorf("failed to look up account: %w", err)
+	}
+	if acct == nil {
+		return nil
+	}
+
+	previousPlan := acct.CurrentPlan
+
+	if err := updateAccountPlan(ctx, dbClient, acct.AccountID, plan, status); err != nil {
+		return fmt.Errorf("failed to update account: %w", err)
+	}
+
+	if acct.OwnerUserID != "" {
+		syncCognitoPlanGroup(ctx, dbClient, acct.OwnerUserID, plan)
+
+		// Determine correct email type based on plan change direction
+		emailType := classifyPlanChange(previousPlan, plan)
+		if emailType != "" {
+			sendBillingEmail(ctx, dbClient, acct.OwnerUserID, emailType, plan)
+		} else {
+			log.Printf("Subscription updated but plan unchanged (%s), no email sent", plan)
+		}
+	}
+
+	return nil
+}
+
+// handleSubscriptionCancelled handles customer.subscription.deleted events.
+func handleSubscriptionCancelled(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+	var sub stripe.Subscription
+	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+		return fmt.Errorf("failed to parse subscription: %w", err)
+	}
+
+	customerID := sub.Customer.ID
+	if customerID == "" {
+		return nil
+	}
+
+	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
+	if err != nil {
+		return fmt.Errorf("failed to look up account: %w", err)
+	}
+	if acct == nil {
+		return nil
+	}
+
+	// Downgrade to trial plan
+	if err := updateAccountPlan(ctx, dbClient, acct.AccountID, "trial", "active"); err != nil {
+		return fmt.Errorf("failed to downgrade account: %w", err)
 	}
 
 	// Mark trial as expired since they had a subscription before
-	if ownerUserID != "" {
-		setTrialExpired(ctx, customerID)
-		syncCognitoPlanGroup(ctx, ownerUserID, "trial")
-		cfg, _ := config.LoadDefaultConfig(ctx)
-		dbClient := dynamodb.NewFromConfig(cfg)
-		sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_cancelled", "trial")
+	setTrialExpired(ctx, dbClient, acct.AccountID)
+
+	if acct.OwnerUserID != "" {
+		syncCognitoPlanGroup(ctx, dbClient, acct.OwnerUserID, "trial")
+		sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "subscription_cancelled", "trial")
 	}
 
-	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
+	return nil
 }
 
-func handlePaymentFailed(ctx context.Context, event stripe.Event) (events.APIGatewayV2HTTPResponse, error) {
-	log.Printf("Payment failed event received -- account status unchanged, Stripe will retry")
-	// Stripe handles retry logic. We just log it. The subscription.updated event
-	// will fire if the subscription status changes to past_due or cancelled.
-	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
+// handleTrialWillEnd handles customer.subscription.trial_will_end events (3 days before end).
+func handleTrialWillEnd(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+	var sub stripe.Subscription
+	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+		return fmt.Errorf("failed to parse subscription: %w", err)
+	}
+
+	customerID := sub.Customer.ID
+	if customerID == "" {
+		return nil
+	}
+
+	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
+	if err != nil {
+		return fmt.Errorf("failed to look up account: %w", err)
+	}
+	if acct == nil {
+		return nil
+	}
+
+	// No data changes, just send the email
+	if acct.OwnerUserID != "" {
+		sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "trial_ending", acct.CurrentPlan)
+	}
+
+	return nil
 }
 
-func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event, stripeKey string) (events.APIGatewayV2HTTPResponse, error) {
+// handlePaymentFailed handles invoice.payment_failed events.
+func handlePaymentFailed(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+	var invoice stripe.Invoice
+	if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+		return fmt.Errorf("failed to parse invoice: %w", err)
+	}
+
+	customerID := ""
+	if invoice.Customer != nil {
+		customerID = invoice.Customer.ID
+	}
+	if customerID == "" {
+		log.Printf("Payment failed event with no customer ID")
+		return nil
+	}
+
+	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
+	if err != nil {
+		return fmt.Errorf("failed to look up account: %w", err)
+	}
+	if acct == nil {
+		return nil
+	}
+
+	// No account status change -- Stripe handles retry logic.
+	// Send payment_failed email with direct link to pay the invoice.
+	if acct.OwnerUserID != "" {
+		var extraData map[string]interface{}
+		if invoice.HostedInvoiceURL != "" {
+			extraData = map[string]interface{}{
+				"InvoiceURL": invoice.HostedInvoiceURL,
+			}
+		}
+		sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "payment_failed", acct.CurrentPlan, extraData)
+	}
+
+	log.Printf("Payment failed for customer %s -- email sent, Stripe will retry", customerID)
+	return nil
+}
+
+// handleInvoicePaid handles invoice.paid events.
+// Resets past_due accounts back to active, and sends a payment receipt for all paid invoices.
+func handleInvoicePaid(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+	var invoice stripe.Invoice
+	if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+		return fmt.Errorf("failed to parse invoice: %w", err)
+	}
+
+	customerID := ""
+	if invoice.Customer != nil {
+		customerID = invoice.Customer.ID
+	}
+	if customerID == "" {
+		return nil
+	}
+
+	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
+	if err != nil {
+		return fmt.Errorf("failed to look up account: %w", err)
+	}
+	if acct == nil {
+		return nil
+	}
+
+	// Reset past_due accounts back to active
+	if acct.Status == "past_due" {
+		_, err := dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+			TableName: aws.String(accountsTable),
+			Key: map[string]ddbtypes.AttributeValue{
+				"account_id": &ddbtypes.AttributeValueMemberS{Value: acct.AccountID},
+			},
+			UpdateExpression: aws.String("SET #status = :active, updated_at = :now"),
+			ExpressionAttributeNames: map[string]string{
+				"#status": "status",
+			},
+			ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+				":active": &ddbtypes.AttributeValueMemberS{Value: "active"},
+				":now":    &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to reset account status: %w", err)
+		}
+
+		log.Printf("Reset account %s from past_due to active", acct.AccountID)
+
+		if acct.OwnerUserID != "" {
+			sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "payment_recovered", acct.CurrentPlan)
+		}
+		return nil
+	}
+
+	// For all other paid invoices, send a payment receipt
+	if acct.OwnerUserID != "" && invoice.AmountPaid > 0 {
+		extraData := map[string]interface{}{
+			"Amount":        formatStripeAmount(invoice.AmountPaid, string(invoice.Currency)),
+			"InvoiceNumber": invoice.Number,
+		}
+		if invoice.HostedInvoiceURL != "" {
+			extraData["InvoiceURL"] = invoice.HostedInvoiceURL
+		}
+		sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "payment_receipt", acct.CurrentPlan, extraData)
+		log.Printf("Sent payment receipt for invoice %s (amount: %d %s)", invoice.Number, invoice.AmountPaid, invoice.Currency)
+	}
+
+	return nil
+}
+
+// handlePaymentMethodExpiring handles payment_method.expiring events.
+// Sends a proactive email asking the user to update their card before it expires.
+func handlePaymentMethodExpiring(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+	var pm stripe.PaymentMethod
+	if err := json.Unmarshal(event.Data.Raw, &pm); err != nil {
+		return fmt.Errorf("failed to parse payment method: %w", err)
+	}
+
+	customerID := ""
+	if pm.Customer != nil {
+		customerID = pm.Customer.ID
+	}
+	if customerID == "" {
+		log.Printf("Payment method expiring event with no customer ID")
+		return nil
+	}
+
+	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
+	if err != nil {
+		return fmt.Errorf("failed to look up account: %w", err)
+	}
+	if acct == nil {
+		return nil
+	}
+
+	if acct.OwnerUserID != "" && pm.Card != nil {
+		extraData := map[string]interface{}{
+			"CardLast4":    pm.Card.Last4,
+			"CardBrand":    formatCardBrand(pm.Card.Brand),
+			"CardExpMonth": fmt.Sprintf("%02d", pm.Card.ExpMonth),
+			"CardExpYear":  fmt.Sprintf("%d", pm.Card.ExpYear),
+		}
+		sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "card_expiring", acct.CurrentPlan, extraData)
+		log.Printf("Sent card_expiring email for customer %s (card ending %s, exp %02d/%d)",
+			customerID, pm.Card.Last4, pm.Card.ExpMonth, pm.Card.ExpYear)
+	}
+
+	return nil
+}
+
+// handleChargeRefunded handles charge.refunded events.
+// Sends a refund confirmation email to the account owner.
+func handleChargeRefunded(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+	var charge stripe.Charge
+	if err := json.Unmarshal(event.Data.Raw, &charge); err != nil {
+		return fmt.Errorf("failed to parse charge: %w", err)
+	}
+
+	customerID := ""
+	if charge.Customer != nil {
+		customerID = charge.Customer.ID
+	}
+	if customerID == "" {
+		log.Printf("Charge refunded event with no customer ID")
+		return nil
+	}
+
+	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
+	if err != nil {
+		return fmt.Errorf("failed to look up account: %w", err)
+	}
+	if acct == nil {
+		return nil
+	}
+
+	if acct.OwnerUserID != "" {
+		refundAmount := charge.AmountRefunded
+		refundReason := ""
+
+		// Get reason from the most recent refund if available
+		if charge.Refunds != nil && len(charge.Refunds.Data) > 0 {
+			latestRefund := charge.Refunds.Data[0]
+			if refundAmount == 0 {
+				refundAmount = latestRefund.Amount
+			}
+			if latestRefund.Reason != "" {
+				refundReason = formatRefundReason(string(latestRefund.Reason))
+			}
+		}
+
+		extraData := map[string]interface{}{
+			"Amount": formatStripeAmount(refundAmount, string(charge.Currency)),
+		}
+		if refundReason != "" {
+			extraData["RefundReason"] = refundReason
+		}
+
+		sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "refund_processed", acct.CurrentPlan, extraData)
+		log.Printf("Sent refund_processed email for customer %s (amount: %d %s)",
+			customerID, refundAmount, charge.Currency)
+	}
+
+	return nil
+}
+
+// formatStripeAmount converts Stripe's integer cents to a formatted dollar string.
+func formatStripeAmount(amountCents int64, currency string) string {
+	dollars := float64(amountCents) / 100.0
+	symbol := "$"
+	switch currency {
+	case "eur":
+		symbol = "\u20ac"
+	case "gbp":
+		symbol = "\u00a3"
+	}
+	return fmt.Sprintf("%s%.2f", symbol, dollars)
+}
+
+// formatCardBrand converts Stripe card brand identifiers to display names.
+func formatCardBrand(brand stripe.PaymentMethodCardBrand) string {
+	switch brand {
+	case stripe.PaymentMethodCardBrandVisa:
+		return "Visa"
+	case stripe.PaymentMethodCardBrandMastercard:
+		return "Mastercard"
+	case stripe.PaymentMethodCardBrandAmex:
+		return "American Express"
+	case stripe.PaymentMethodCardBrandDiscover:
+		return "Discover"
+	default:
+		return string(brand)
+	}
+}
+
+// formatRefundReason converts Stripe refund reason codes to human-readable text.
+func formatRefundReason(reason string) string {
+	switch reason {
+	case "duplicate":
+		return "Duplicate charge"
+	case "fraudulent":
+		return "Fraudulent charge"
+	case "requested_by_customer":
+		return "Requested by customer"
+	default:
+		return reason
+	}
+}
+
+// handleCheckoutSessionCompleted handles checkout.session.completed events.
+func handleCheckoutSessionCompleted(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event, stripeKey string) error {
 	var sess stripe.CheckoutSession
 	if err := json.Unmarshal(event.Data.Raw, &sess); err != nil {
-		log.Printf("Failed to parse checkout session: %v", err)
-		return authMiddleware.CreateErrorResponse(400, "Invalid event data"), nil
+		return fmt.Errorf("failed to parse checkout session: %w", err)
 	}
 
 	log.Printf("Checkout session completed: %s, mode: %s", sess.ID, sess.Mode)
 
 	if sess.Mode != stripe.CheckoutSessionModeSubscription {
 		log.Printf("Ignoring non-subscription checkout session")
-		return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
+		return nil
 	}
 
 	// Extract account_id and plan from session metadata or subscription metadata
@@ -228,8 +777,7 @@ func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event, str
 
 	if accountID == "" {
 		log.Printf("No account_id found in checkout session metadata, falling back to customer lookup")
-		// Fall through -- subscription.created event will handle via customer ID lookup
-		return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
+		return nil
 	}
 
 	if plan == "" {
@@ -240,37 +788,30 @@ func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event, str
 
 	planCfg := billing.GetPlan(plan)
 
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		log.Printf("Failed to load AWS config: %v", err)
-		return authMiddleware.CreateErrorResponse(500, "Internal error"), nil
-	}
-
-	dbClient := dynamodb.NewFromConfig(cfg)
-
-	_, err = dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+	// Activate the account -- set plan, limits, clear trial_expired, and set email_sent flag
+	_, err := dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(accountsTable),
 		Key: map[string]ddbtypes.AttributeValue{
 			"account_id": &ddbtypes.AttributeValueMemberS{Value: accountID},
 		},
-		UpdateExpression: aws.String("SET #plan = :plan, #status = :status, settings.max_helpers = :mh, settings.max_connections = :mc, settings.max_executions = :me, trial_expired = :te, updated_at = :now"),
+		UpdateExpression: aws.String("SET #plan = :plan, #status = :status, settings.max_helpers = :mh, settings.max_connections = :mc, settings.max_executions = :me, trial_expired = :te, subscription_email_sent = :emailSent, updated_at = :now"),
 		ExpressionAttributeNames: map[string]string{
 			"#plan":   "plan",
 			"#status": "status",
 		},
 		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
-			":plan":   &ddbtypes.AttributeValueMemberS{Value: plan},
-			":status": &ddbtypes.AttributeValueMemberS{Value: "active"},
-			":mh":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxHelpers)},
-			":mc":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxConnections)},
-			":me":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxExecutions)},
-			":te":     &ddbtypes.AttributeValueMemberBOOL{Value: false},
-			":now":    &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
+			":plan":      &ddbtypes.AttributeValueMemberS{Value: plan},
+			":status":    &ddbtypes.AttributeValueMemberS{Value: "active"},
+			":mh":        &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxHelpers)},
+			":mc":        &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxConnections)},
+			":me":        &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxExecutions)},
+			":te":        &ddbtypes.AttributeValueMemberBOOL{Value: false},
+			":emailSent": &ddbtypes.AttributeValueMemberBOOL{Value: true},
+			":now":       &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
 		},
 	})
 	if err != nil {
-		log.Printf("Failed to activate account %s: %v", accountID, err)
-		return authMiddleware.CreateErrorResponse(500, "Failed to activate subscription"), nil
+		return fmt.Errorf("failed to activate account %s: %w", accountID, err)
 	}
 
 	log.Printf("Successfully activated account %s on plan %s", accountID, plan)
@@ -281,106 +822,68 @@ func handleCheckoutSessionCompleted(ctx context.Context, event stripe.Event, str
 	}
 
 	// Send welcome/activation email
-	ownerUserID := ""
-	acctResult, err := dbClient.GetItem(ctx, &dynamodb.GetItemInput{
+	ownerUserID := getAccountOwnerUserID(ctx, dbClient, accountID)
+	if ownerUserID != "" {
+		syncCognitoPlanGroup(ctx, dbClient, ownerUserID, plan)
+		sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_created", plan)
+	}
+
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Helper functions
+// ---------------------------------------------------------------------------
+
+// getAccountOwnerUserID fetches the owner_user_id for an account.
+func getAccountOwnerUserID(ctx context.Context, dbClient *dynamodb.Client, accountID string) string {
+	result, err := dbClient.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(accountsTable),
 		Key: map[string]ddbtypes.AttributeValue{
 			"account_id": &ddbtypes.AttributeValueMemberS{Value: accountID},
 		},
 		ProjectionExpression: aws.String("owner_user_id"),
 	})
-	if err == nil && acctResult.Item != nil {
-		if attr, ok := acctResult.Item["owner_user_id"]; ok {
-			ownerUserID = attr.(*ddbtypes.AttributeValueMemberS).Value
-		}
+	if err != nil || result.Item == nil {
+		return ""
 	}
-
-	if ownerUserID != "" {
-		syncCognitoPlanGroup(ctx, ownerUserID, plan)
-		sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_created", plan)
+	if attr, ok := result.Item["owner_user_id"]; ok {
+		return attr.(*ddbtypes.AttributeValueMemberS).Value
 	}
-
-	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
+	return ""
 }
 
-func updateAccountByStripeCustomer(ctx context.Context, stripeCustomerID, plan, status string) (string, error) {
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	dbClient := dynamodb.NewFromConfig(cfg)
-
-	// Query accounts by stripe_customer_id using StripeCustomerIdIndex GSI
-	queryResult, err := dbClient.Query(ctx, &dynamodb.QueryInput{
-		TableName:              aws.String(accountsTable),
-		IndexName:              aws.String("StripeCustomerIdIndex"),
-		KeyConditionExpression: aws.String("stripe_customer_id = :cid"),
-		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
-			":cid": &ddbtypes.AttributeValueMemberS{Value: stripeCustomerID},
-		},
-		Limit: aws.Int32(1),
-	})
-	if err != nil {
-		return "", err
-	}
-	if len(queryResult.Items) == 0 {
-		log.Printf("No account found for Stripe customer %s", stripeCustomerID)
-		return "", nil
-	}
-
-	// Get the account_id and owner_user_id from the result
-	accountIDAttr, ok := queryResult.Items[0]["account_id"]
-	if !ok {
-		log.Printf("Account missing account_id field")
-		return "", nil
-	}
-	accountID := accountIDAttr.(*ddbtypes.AttributeValueMemberS).Value
-
-	ownerUserID := ""
-	if ownerAttr, ok := queryResult.Items[0]["owner_user_id"]; ok {
-		ownerUserID = ownerAttr.(*ddbtypes.AttributeValueMemberS).Value
-	}
-
-	planCfg := billing.GetPlan(plan)
-
-	updateExpr := "SET #plan = :plan, #status = :status, settings.max_helpers = :mh, settings.max_connections = :mc, settings.max_executions = :me, updated_at = :now"
-	exprValues := map[string]ddbtypes.AttributeValue{
-		":plan":   &ddbtypes.AttributeValueMemberS{Value: plan},
-		":status": &ddbtypes.AttributeValueMemberS{Value: status},
-		":mh":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxHelpers)},
-		":mc":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxConnections)},
-		":me":     &ddbtypes.AttributeValueMemberN{Value: intToStr(planCfg.MaxExecutions)},
-		":now":    &ddbtypes.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
-	}
-
-	// Clear trial_expired when activating a paid subscription
-	if billing.IsPaidPlan(plan) {
-		updateExpr += ", trial_expired = :te"
-		exprValues[":te"] = &ddbtypes.AttributeValueMemberBOOL{Value: false}
-	}
-
-	_, err = dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+// checkAndClearEmailSentFlag checks if the subscription_email_sent flag is set
+// on the account and clears it. Returns true if it was set.
+func checkAndClearEmailSentFlag(ctx context.Context, dbClient *dynamodb.Client, accountID string) bool {
+	result, err := dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(accountsTable),
 		Key: map[string]ddbtypes.AttributeValue{
 			"account_id": &ddbtypes.AttributeValueMemberS{Value: accountID},
 		},
-		UpdateExpression: aws.String(updateExpr),
-		ExpressionAttributeNames: map[string]string{
-			"#plan":   "plan",
-			"#status": "status",
+		UpdateExpression:    aws.String("REMOVE subscription_email_sent"),
+		ConditionExpression: aws.String("subscription_email_sent = :true"),
+		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+			":true": &ddbtypes.AttributeValueMemberBOOL{Value: true},
 		},
-		ExpressionAttributeValues: exprValues,
+		ReturnValues: ddbtypes.ReturnValueAllOld,
 	})
-	return ownerUserID, err
+	if err != nil {
+		// Condition failed = flag wasn't set, or other error
+		return false
+	}
+	// If we got here, the condition passed and the flag was cleared
+	_ = result
+	return true
 }
 
 func intToStr(n int) string {
 	return fmt.Sprintf("%d", n)
 }
 
-// sendBillingEmail looks up the account owner and sends a billing notification email
-func sendBillingEmail(ctx context.Context, dbClient *dynamodb.Client, ownerUserID, eventType, plan string) {
+// sendBillingEmail looks up the account owner and sends a billing notification email.
+// Optional extraData is forwarded to the notification service (e.g., InvoiceURL).
+func sendBillingEmail(ctx context.Context, dbClient *dynamodb.Client, ownerUserID, eventType, plan string, extraData ...map[string]interface{}) {
 	if usersTable == "" {
 		log.Printf("USERS_TABLE not set, skipping billing email")
 		return
@@ -423,14 +926,16 @@ func sendBillingEmail(ctx context.Context, dbClient *dynamodb.Client, ownerUserI
 		return
 	}
 
-	if err := notifSvc.SendBillingEvent(ctx, userName, userEmail, eventType, billing.GetPlanLabel(plan)); err != nil {
-		log.Printf("Failed to send billing email: %v", err)
+	if err := notifSvc.SendBillingEvent(ctx, userName, userEmail, eventType, billing.GetPlanLabel(plan), extraData...); err != nil {
+		log.Printf("Failed to send %s billing email to %s: %v", eventType, userEmail, err)
+	} else {
+		log.Printf("Sent %s billing email to %s (plan: %s)", eventType, userEmail, plan)
 	}
 }
 
 // syncCognitoPlanGroup updates a user's Cognito plan group.
 // Removes from all plan-* groups, then adds to the new plan group.
-func syncCognitoPlanGroup(ctx context.Context, ownerUserID, newPlan string) {
+func syncCognitoPlanGroup(ctx context.Context, dbClient *dynamodb.Client, ownerUserID, newPlan string) {
 	if cognitoUserPoolID == "" {
 		log.Printf("COGNITO_USER_POOL_ID not set, skipping Cognito plan group sync")
 		return
@@ -442,7 +947,6 @@ func syncCognitoPlanGroup(ctx context.Context, ownerUserID, newPlan string) {
 		return
 	}
 	cognitoClient := cognitoidentityprovider.NewFromConfig(cfg)
-	dbClient := dynamodb.NewFromConfig(cfg)
 
 	// Look up cognito_user_id from DynamoDB user record
 	userResult, err := dbClient.GetItem(ctx, &dynamodb.GetItemInput{
@@ -490,31 +994,9 @@ func syncCognitoPlanGroup(ctx context.Context, ownerUserID, newPlan string) {
 	}
 }
 
-// setTrialExpired marks an account's trial as expired when a subscription is cancelled.
-func setTrialExpired(ctx context.Context, stripeCustomerID string) {
-	cfg, err := config.LoadDefaultConfig(ctx)
-	if err != nil {
-		log.Printf("Failed to load AWS config for setTrialExpired: %v", err)
-		return
-	}
-	dbClient := dynamodb.NewFromConfig(cfg)
-
-	queryResult, err := dbClient.Query(ctx, &dynamodb.QueryInput{
-		TableName:              aws.String(accountsTable),
-		IndexName:              aws.String("StripeCustomerIdIndex"),
-		KeyConditionExpression: aws.String("stripe_customer_id = :cid"),
-		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
-			":cid": &ddbtypes.AttributeValueMemberS{Value: stripeCustomerID},
-		},
-		Limit: aws.Int32(1),
-	})
-	if err != nil || len(queryResult.Items) == 0 {
-		log.Printf("setTrialExpired: could not find account for customer %s: %v", stripeCustomerID, err)
-		return
-	}
-
-	accountID := queryResult.Items[0]["account_id"].(*ddbtypes.AttributeValueMemberS).Value
-	_, err = dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+// setTrialExpired marks an account's trial as expired.
+func setTrialExpired(ctx context.Context, dbClient *dynamodb.Client, accountID string) {
+	_, err := dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(accountsTable),
 		Key: map[string]ddbtypes.AttributeValue{
 			"account_id": &ddbtypes.AttributeValueMemberS{Value: accountID},

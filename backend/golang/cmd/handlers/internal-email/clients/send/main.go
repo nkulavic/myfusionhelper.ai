@@ -173,6 +173,30 @@ func mapToTemplateData(data map[string]interface{}) email.TemplateData {
 	if v, ok := data["VerifyCode"].(string); ok {
 		td.VerifyCode = v
 	}
+	if v, ok := data["InvoiceURL"].(string); ok {
+		td.InvoiceURL = v
+	}
+	if v, ok := data["CardLast4"].(string); ok {
+		td.CardLast4 = v
+	}
+	if v, ok := data["CardBrand"].(string); ok {
+		td.CardBrand = v
+	}
+	if v, ok := data["CardExpMonth"].(string); ok {
+		td.CardExpMonth = v
+	}
+	if v, ok := data["CardExpYear"].(string); ok {
+		td.CardExpYear = v
+	}
+	if v, ok := data["Amount"].(string); ok {
+		td.Amount = v
+	}
+	if v, ok := data["InvoiceNumber"].(string); ok {
+		td.InvoiceNumber = v
+	}
+	if v, ok := data["RefundReason"].(string); ok {
+		td.RefundReason = v
+	}
 
 	return td
 }

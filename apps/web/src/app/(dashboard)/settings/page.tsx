@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Loader2 } from 'lucide-react'
+import { ChevronRight, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ProfileTab } from './_components/profile-tab'
@@ -35,12 +35,14 @@ function SettingsContent() {
   const tabParam = searchParams.get('tab')
   const validTabs = settingsTabs.map((t) => t.id)
   const activeTab = tabParam && validTabs.includes(tabParam) ? tabParam : 'profile'
+  const activeTabConfig = settingsTabs.find((t) => t.id === activeTab)
 
   return (
     <div className="animate-fade-in-up space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Manage your account and preferences</p>
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-muted-foreground">Settings</span>
+        <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
+        <h1 className="text-lg font-semibold">{activeTabConfig?.name ?? 'Settings'}</h1>
       </div>
 
       {/* Mobile: horizontal scrolling tabs (sidebar is overlay on mobile) */}

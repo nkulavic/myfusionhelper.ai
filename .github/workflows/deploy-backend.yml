@@ -889,6 +889,7 @@ jobs:
       - deploy-api
       - deploy-workers
       - deploy-monitoring
+      - setup-stripe-webhooks
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     steps:
@@ -922,6 +923,7 @@ jobs:
           echo "  Gateway:        ${{ needs.detect-changes.outputs.deploy_gateway }}"
           echo "  Route53:        ${{ needs.detect-changes.outputs.deploy_route53 }}"
           echo "  Monitoring:     ${{ needs.detect-changes.outputs.deploy_monitoring }}"
+          echo "  Stripe hooks:   ${{ needs.detect-changes.outputs.deploy_stripe_webhooks }}"
           echo "  API services:   ${{ needs.detect-changes.outputs.api_services }}"
           echo "  Core workers:   ${{ needs.detect-changes.outputs.worker_services }}"
           echo "  Helper workers: ${{ needs.detect-changes.outputs.helpers }}"
@@ -930,3 +932,70 @@ jobs:
       - name: Verify deployment
         working-directory: backend/golang/scripts
         run: bash verify-deploy.sh ${{ env.DEPLOY_STAGE }} us-west-2
+
+      - name: Verify Stripe webhooks
+        if: needs.detect-changes.outputs.deploy_stripe_webhooks == 'true'
+        run: |
+          echo "Verifying Stripe webhook configuration..."
+          # Load Stripe key from SSM
+          SECRETS_JSON=$(aws ssm get-parameter \
+            --name "/myfusionhelper/${{ env.DEPLOY_STAGE }}/secrets" \
+            --with-decryption \
+            --query 'Parameter.Value' \
+            --output text \
+            --region us-west-2 2>/dev/null || echo "")
+
+          if [ -z "$SECRETS_JSON" ]; then
+            echo "WARNING: Could not load secrets from SSM, skipping Stripe webhook verification"
+            exit 0
+          fi
+
+          STRIPE_KEY=$(echo "$SECRETS_JSON" | jq -r '.stripe.secret_key // empty')
+          if [ -z "$STRIPE_KEY" ]; then
+            echo "WARNING: Stripe key not found in SSM, skipping verification"
+            exit 0
+          fi
+
+          # Determine expected URL
+          case "${{ env.DEPLOY_STAGE }}" in
+            dev) API_DOMAIN="api-dev.myfusionhelper.ai" ;;
+            staging) API_DOMAIN="api-staging.myfusionhelper.ai" ;;
+            main|prod) API_DOMAIN="api.myfusionhelper.ai" ;;
+          esac
+          WEBHOOK_URL="https://${API_DOMAIN}/billing/webhook"
+
+          # Query Stripe for our endpoint
+          RESULT=$(curl -s "https://api.stripe.com/v1/webhook_endpoints?limit=100" -u "${STRIPE_KEY}:" 2>/dev/null)
+          ENDPOINT=$(echo "$RESULT" | jq --arg url "$WEBHOOK_URL" '.data[] | select(.url == $url)')
+
+          if [ -z "$ENDPOINT" ]; then
+            echo "ERROR: No Stripe webhook endpoint found for $WEBHOOK_URL"
+            exit 1
+          fi
+
+          STATUS=$(echo "$ENDPOINT" | jq -r '.status')
+          EVENTS=$(echo "$ENDPOINT" | jq -r '.enabled_events[]' | sort)
+
+          echo "Stripe webhook endpoint verified:"
+          echo "  URL:    $WEBHOOK_URL"
+          echo "  Status: $STATUS"
+          echo "  Events:"
+          echo "$EVENTS" | while read -r evt; do echo "    - $evt"; done
+
+          # Verify required events are present
+          REQUIRED_EVENTS="checkout.session.completed customer.subscription.created customer.subscription.updated customer.subscription.deleted customer.subscription.trial_will_end invoice.payment_failed invoice.paid payment_method.expiring charge.refunded"
+          MISSING=""
+          for evt in $REQUIRED_EVENTS; do
+            if ! echo "$EVENTS" | grep -q "^${evt}$"; then
+              MISSING="$MISSING $evt"
+            fi
+          done
+
+          if [ -n "$MISSING" ]; then
+            echo ""
+            echo "ERROR: Missing required Stripe webhook events:$MISSING"
+            exit 1
+          fi
+
+          echo ""
+          echo "All required webhook events verified!"

@@ -578,6 +578,22 @@ resources:
             Projection:
               ProjectionType: ALL
 
+    # Webhook Events Table (Stripe webhook idempotency + audit trail)
+    WebhookEventsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: mfh-${self:provider.stage}-webhook-events
+        BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        AttributeDefinitions:
+          - AttributeName: event_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: event_id
+            KeyType: HASH
+
   Outputs:
     UsersTableName:
       Value: !Ref UsersTable
@@ -775,3 +791,12 @@ resources:
       Value: !GetAtt DashboardsTable.Arn
       Export:
         Name: ${self:service}-${self:provider.stage}-DashboardsTableArn
+
+    WebhookEventsTableName:
+      Value: !Ref WebhookEventsTable
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WebhookEventsTableName
+    WebhookEventsTableArn:
+      Value: !GetAtt WebhookEventsTable.Arn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WebhookEventsTableArn

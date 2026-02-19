@@ -41,6 +41,7 @@ provider:
     COGNITO_JWKS_URI: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoJwksUri}
     COGNITO_ISSUER: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
     INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
+    WEBHOOK_EVENTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.WebhookEventsTableName}
     APP_URL: ${self:custom.appUrl.${self:provider.stage}, 'http://localhost:3001'}
     API_VERSION: v1
     API_REFERENCE: mfh-api
@@ -61,6 +62,13 @@ provider:
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}/index/*"
             - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}/index/*"
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.WebhookEventsTableArn}
         - Effect: Allow
           Action:
             - ssm:GetParameter

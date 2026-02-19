@@ -154,13 +154,14 @@ Infrastructure must deploy before API services. The CI pipeline (`deploy-backend
 
 1. **Build & test** Go code (Go 1.23, `CGO_ENABLED=1 go build ./...`)
 2. **Infrastructure** (parallel): cognito, dynamodb-core, s3, sqs, ses, monitoring, acm
-3. **Pre-gateway** (parallel): api-key-authorizer, scheduler, executions-stream, stream-router
-4. **API Gateway** (creates HttpApi + Cognito authorizer + custom domain mapping)
-5. **Route53** (creates DNS records for custom domain after gateway)
-6. **API services** (parallel, max 3): auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat, emails
-7. **Helper workers** (parallel, max 10): 97 individual self-contained workers, auto-detected from changed `services/workers/*-worker/` directories
-8. **Non-helper workers** (parallel): helper-worker (deprecated monolith), notification-worker, data-sync, trial-expiration
-9. **Post-deploy**: `verify-deploy.sh` health check
+3. **Stripe webhooks**: `setup-stripe-webhooks.sh` -- creates/updates Stripe webhook endpoint with all 9 events, verifies events match
+4. **Pre-gateway** (parallel): api-key-authorizer, scheduler, executions-stream, stream-router
+5. **API Gateway** (creates HttpApi + Cognito authorizer + custom domain mapping)
+6. **Route53** (creates DNS records for custom domain after gateway)
+7. **API services** (parallel, max 3): auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat, emails, internal-email
+8. **Helper workers** (parallel, max 10): 97 individual self-contained workers, auto-detected from changed `services/workers/*-worker/` directories
+9. **Non-helper workers** (parallel): helper-worker (deprecated monolith), notification-worker, data-sync, trial-expiration
+10. **Post-deploy**: `verify-deploy.sh` health check + Stripe webhook event verification
 
 **All deployments target us-west-2 region exclusively.**
 
@@ -189,15 +190,16 @@ Three GitHub Actions workflows in `.github/workflows/`:
 ```
 build-test
   ├── deploy-infra (parallel: cognito, dynamodb-core, s3, sqs, ses, acm)
+  │     ├── setup-stripe-webhooks (creates/updates Stripe webhook endpoint, verifies events)
   │     ├── deploy-pre-gateway (parallel: api-key-authorizer, scheduler, executions-stream, stream-router)
   │     │     ├── deploy-gateway (API Gateway + Cognito authorizer + custom domain)
   │     │     │     ├── deploy-route53 (DNS records for custom domain)
   │     │     │     ├── deploy-monitoring (CloudWatch alarms)
-  │     │     │     └── deploy-api (parallel max 3: auth, accounts, api-keys, helpers, platforms, data-explorer, billing, chat, emails)
+  │     │     │     └── deploy-api (parallel max 3: auth, accounts, ..., billing, internal-email)
   │     │     └── deploy-helpers (parallel max 10: auto-detected changed *-worker/ directories)
   │     └── deploy-workers (parallel: helper-worker [monolith], notification-worker, data-sync, trial-expiration)
   └── detect-changed-helpers (git diff to find changed worker dirs)
-        └── post-deploy (verify-deploy.sh health check)
+        └── post-deploy (verify-deploy.sh + Stripe webhook verification)
 ```
 
 **Helper auto-detection**: On push, uses `git diff` to detect changed `services/workers/*-worker/` directories. On manual dispatch, deploys ALL helpers. Excludes: helper-worker, notification-worker, data-sync, executions-stream, scheduler, voice assistant webhooks.
@@ -338,13 +340,47 @@ These old SSM parameters still exist but are **no longer used**:
 - Stripe customer created at registration (no subscription, for tracking/analytics)
 - Start-level limits during trial: 10 helpers, 2 connections, 5k executions/mo
 - `Account` fields: `TrialStartedAt`, `TrialEndsAt`, `TrialExpired`
-- Trial expiration worker (`mfh-trial-expiration`) runs every 6 hours via EventBridge, scans for expired trials and sets `trial_expired = true`
+- Trial expiration worker (`mfh-trial-expiration`) runs every 6 hours via EventBridge, scans for expired trials, sets `trial_expired = true`, and sends `trial_expired` email
 
 **Soft Lock on Expiry**: Expired trial users can log in, view dashboard, access `/plans` and `/settings`, but can't create/run helpers. Other routes redirect to `/plans`.
 
 **Enforcement**: `internal/billing/enforce.go` checks `account.Settings.Max*` vs `account.Usage.*` (pure DynamoDB reads). Trial expiration is an early return in all limit functions. `IsTrialPlan()` helper treats both `"trial"` and `"free"` as trial plans.
 
 **Checkout**: When an active trial user subscribes, Stripe checkout uses remaining trial days (not a fresh 14 days) to prevent double-trial abuse. Expired trials get no trial period.
+
+### Stripe Webhook Architecture
+
+**Endpoint**: `POST /billing/webhook` (public, verified by Stripe signature)
+**Handler**: `cmd/handlers/billing/clients/webhook/main.go`
+**Setup script**: `scripts/setup-stripe-webhooks.sh` (idempotent, creates/updates endpoint + verifies events)
+
+**Idempotency**: Every webhook event is recorded in `mfh-{stage}-webhook-events` DynamoDB table with `attribute_not_exists(event_id)` conditional write. Duplicate events return 200 immediately. Events tracked with status (`pending` → `processed`/`failed`) and 90-day TTL.
+
+**Race condition fix**: `checkout.session.completed` and `customer.subscription.created` fire simultaneously. Checkout sets `subscription_email_sent=true` flag on account; subscription.created checks and clears it to prevent duplicate emails.
+
+**9 Stripe events handled**:
+
+| Stripe Event | Handler | Email Sent |
+|---|---|---|
+| `checkout.session.completed` | Activate plan, store metered item, sync Cognito | `subscription_created` |
+| `customer.subscription.created` | Update plan/limits (conditional email) | `subscription_created` (if checkout didn't send) |
+| `customer.subscription.updated` | Detect upgrade/downgrade via `planRank` map | `plan_upgraded` or `plan_downgraded` |
+| `customer.subscription.deleted` | Downgrade to trial, mark expired, sync Cognito | `subscription_cancelled` |
+| `customer.subscription.trial_will_end` | No data change | `trial_ending` |
+| `invoice.paid` | Reset `past_due` → `active`; send receipt for all payments | `payment_recovered` or `payment_receipt` |
+| `invoice.payment_failed` | No data change (Stripe retries) | `payment_failed` (with hosted invoice URL) |
+| `payment_method.expiring` | No data change | `card_expiring` (card brand, last4, expiry) |
+| `charge.refunded` | No data change | `refund_processed` (amount, reason) |
+
+### Transactional Email System
+
+**Internal email service**: `cmd/handlers/internal-email/clients/send/main.go` — receives template type + data, renders HTML via `internal/email/templates.go`, sends via SES.
+
+**Notification service**: `internal/notifications/notifications.go` — HTTP client that calls the internal email API. Used by webhook handler, trial-expiration worker, and other services.
+
+**Email flow**: Handler → `notifications.SendBillingEvent()` → HTTP POST to `/internal/emails/send` → `mapToTemplateData()` → `GetBillingEventEmailTemplate()` → SES
+
+**12 email template types**: `welcome`, `password_reset`, `email_verification`, `execution_alert`, `billing_event` (with sub-types: `subscription_created`, `subscription_cancelled`, `payment_failed`, `payment_recovered`, `payment_receipt`, `trial_ending`, `trial_expired`, `plan_upgraded`, `plan_downgraded`, `card_expiring`, `refund_processed`), `connection_alert`, `usage_alert`, `weekly_summary`, `team_invite`
 
 ## Helper Categories
 

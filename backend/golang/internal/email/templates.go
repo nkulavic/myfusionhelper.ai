@@ -34,6 +34,14 @@ type TemplateData struct {
 	AccountName    string
 	InviteToken    string
 	VerifyCode     string
+	InvoiceURL     string
+	CardLast4      string
+	CardBrand      string
+	CardExpMonth   string
+	CardExpYear    string
+	Amount         string
+	InvoiceNumber  string
+	RefundReason   string
 }
 
 // EmailTemplate represents a rendered email template
@@ -207,10 +215,17 @@ func GetBillingEventEmailTemplate(data TemplateData, eventType string) EmailTemp
 
 	case "payment_failed":
 		subject = fmt.Sprintf("[Action Required] Payment Failed - %s", data.AppName)
-		mainContent = `
-			<p>We were unable to process your most recent payment. Please update your payment method to avoid any interruption to your service.</p>
-			<p>We'll retry the payment automatically, but you can also update your billing details from your Settings page.</p>
-		`
+		if data.InvoiceURL != "" {
+			mainContent = fmt.Sprintf(`
+				<p>We were unable to process your most recent payment. Please update your payment method to avoid any interruption to your service.</p>
+				<p>We'll retry the payment automatically, but you can also resolve this now by clicking the button below.</p>
+			`)
+		} else {
+			mainContent = `
+				<p>We were unable to process your most recent payment. Please update your payment method to avoid any interruption to your service.</p>
+				<p>We'll retry the payment automatically, but you can also update your billing details from your Settings page.</p>
+			`
+		}
 		textContent = "We were unable to process your most recent payment. Please update your payment method."
 
 	case "trial_ending":
@@ -247,10 +262,109 @@ func GetBillingEventEmailTemplate(data TemplateData, eventType string) EmailTemp
 		`, data.PlanName)
 		textContent = fmt.Sprintf("Your plan has been changed to %s. The change takes effect at your next billing cycle.", data.PlanName)
 
+	case "payment_recovered":
+		subject = fmt.Sprintf("Payment Successful - %s", data.AppName)
+		mainContent = `
+			<p>Great news! Your recent payment has been processed successfully and your account is back to full access.</p>
+			<p>No further action is needed. Thank you for staying with us!</p>
+		`
+		textContent = "Your recent payment has been processed successfully. Your account is fully active."
+
+	case "trial_expired":
+		subject = fmt.Sprintf("Your %s trial has ended", data.AppName)
+		mainContent = `
+			<p>Your 14-day free trial has ended. Your Helpers have been paused, but your data and configurations are safe.</p>
+
+			<div style="background: #f0f4ff; border-radius: 8px; padding: 16px; margin: 16px 0;">
+				<strong>What you can still do:</strong>
+				<ul style="margin: 8px 0 0 0; padding-left: 20px; color: #374151;">
+					<li>Log in and view your dashboard</li>
+					<li>Browse your existing Helpers and data</li>
+					<li>Subscribe to resume everything instantly</li>
+				</ul>
+			</div>
+
+			<p>Plans start at just $39/month. Pick up right where you left off.</p>
+		`
+		textContent = fmt.Sprintf("Your %s trial has ended. Subscribe to any plan to resume your Helpers. Plans start at $39/month.", data.AppName)
+
+	case "payment_receipt":
+		subject = fmt.Sprintf("Payment Receipt - %s", data.AppName)
+		invoiceRef := ""
+		if data.InvoiceNumber != "" {
+			invoiceRef = fmt.Sprintf(`<strong>Invoice:</strong> %s<br>`, data.InvoiceNumber)
+		}
+		mainContent = fmt.Sprintf(`
+			<p>Your payment has been processed successfully. Here are the details:</p>
+
+			<div style="background: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 4px; padding: 16px; margin: 16px 0;">
+				%s
+				<strong>Amount:</strong> %s<br>
+				<strong>Plan:</strong> %s
+			</div>
+
+			<p>Thank you for your continued support!</p>
+		`, invoiceRef, data.Amount, data.PlanName)
+		textContent = fmt.Sprintf("Your payment of %s for the %s plan has been processed successfully.", data.Amount, data.PlanName)
+
+	case "card_expiring":
+		subject = fmt.Sprintf("[Action Required] Card Expiring Soon - %s", data.AppName)
+		mainContent = fmt.Sprintf(`
+			<p>The payment method on file for your account is expiring soon.</p>
+
+			<div style="background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 4px; padding: 16px; margin: 16px 0;">
+				<strong>Card:</strong> %s ending in %s<br>
+				<strong>Expires:</strong> %s/%s
+			</div>
+
+			<p>Please update your payment method before your next billing date to avoid any interruption to your service.</p>
+		`, data.CardBrand, data.CardLast4, data.CardExpMonth, data.CardExpYear)
+		textContent = fmt.Sprintf("Your %s card ending in %s expires %s/%s. Please update your payment method.", data.CardBrand, data.CardLast4, data.CardExpMonth, data.CardExpYear)
+
+	case "refund_processed":
+		subject = fmt.Sprintf("Refund Processed - %s", data.AppName)
+		reasonBlock := ""
+		if data.RefundReason != "" {
+			reasonBlock = fmt.Sprintf(`<strong>Reason:</strong> %s<br>`, data.RefundReason)
+		}
+		mainContent = fmt.Sprintf(`
+			<p>A refund has been processed for your account. Here are the details:</p>
+
+			<div style="background: #f0f4ff; border-left: 4px solid #3b82f6; border-radius: 4px; padding: 16px; margin: 16px 0;">
+				<strong>Refund Amount:</strong> %s<br>
+				%s
+			</div>
+
+			<p>The refund should appear on your statement within 5-10 business days, depending on your bank.</p>
+		`, data.Amount, reasonBlock)
+		textContent = fmt.Sprintf("A refund of %s has been processed for your account. It should appear on your statement within 5-10 business days.", data.Amount)
+
 	default:
 		subject = fmt.Sprintf("Billing Update - %s", data.AppName)
 		mainContent = "<p>There has been an update to your billing status. Check your Settings page for details.</p>"
 		textContent = "There has been an update to your billing status."
+	}
+
+	// Default CTA for most billing emails
+	ctaText := "Manage Billing"
+	ctaURL := fmt.Sprintf("%s/settings?tab=billing", data.BaseURL)
+
+	// Customize CTA per event type
+	switch eventType {
+	case "payment_failed":
+		if data.InvoiceURL != "" {
+			ctaText = "Pay Invoice Now"
+			ctaURL = data.InvoiceURL
+		} else {
+			ctaText = "Update Payment Method"
+		}
+	case "card_expiring":
+		ctaText = "Update Payment Method"
+	case "payment_receipt":
+		if data.InvoiceURL != "" {
+			ctaText = "View Invoice"
+			ctaURL = data.InvoiceURL
+		}
 	}
 
 	htmlBody := generateHTML(data, emailContent{
@@ -258,8 +372,8 @@ func GetBillingEventEmailTemplate(data TemplateData, eventType string) EmailTemp
 		headerSubtitle: "Your subscription details",
 		greetingIcon:   "creditcard",
 		mainContent:    mainContent,
-		ctaText:        "Manage Billing",
-		ctaURL:         fmt.Sprintf("%s/settings", data.BaseURL),
+		ctaText:        ctaText,
+		ctaURL:         ctaURL,
 	})
 
 	textBody := fmt.Sprintf(`%s
@@ -268,9 +382,9 @@ Hello %s,
 
 %s
 
-Manage Billing: %s/settings
+%s: %s
 
--- %s`, subject, data.UserName, textContent, data.BaseURL, data.AppName)
+-- %s`, subject, data.UserName, textContent, ctaText, ctaURL, data.AppName)
 
 	return EmailTemplate{Subject: subject, HTMLBody: htmlBody, TextBody: textBody}
 }

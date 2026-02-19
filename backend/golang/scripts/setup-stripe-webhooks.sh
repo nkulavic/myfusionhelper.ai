@@ -78,11 +78,11 @@ WEBHOOK_EVENTS=(
   "customer.subscription.created"
   "customer.subscription.updated"
   "customer.subscription.deleted"
+  "customer.subscription.trial_will_end"
   "invoice.payment_failed"
   "invoice.paid"
-  "customer.created"
-  "customer.updated"
-  "customer.deleted"
+  "payment_method.expiring"
+  "charge.refunded"
 )
 
 # Check for existing webhook endpoint with our URL
@@ -160,6 +160,42 @@ else
   echo ""
   echo "========================================================"
 fi
+
+# ── Verify the endpoint has all expected events ──
+echo ""
+echo "Verifying Stripe webhook endpoint..."
+VERIFY=$(curl -s "https://api.stripe.com/v1/webhook_endpoints?limit=100" \
+  -u "${STRIPE_SECRET_KEY}:" 2>/dev/null)
+
+VERIFY_ID=$(echo "$VERIFY" | jq -r --arg url "$WEBHOOK_URL" '.data[] | select(.url == $url) | .id' 2>/dev/null | head -1)
+
+if [ -z "$VERIFY_ID" ] || [ "$VERIFY_ID" = "null" ]; then
+  echo "ERROR: Could not find webhook endpoint after setup!"
+  exit 1
+fi
+
+ACTUAL_EVENTS=$(echo "$VERIFY" | jq -r --arg url "$WEBHOOK_URL" '.data[] | select(.url == $url) | .enabled_events[]' 2>/dev/null | sort)
+EXPECTED_EVENTS=$(printf '%s\n' "${WEBHOOK_EVENTS[@]}" | sort)
+
+MISSING=""
+for event in "${WEBHOOK_EVENTS[@]}"; do
+  if ! echo "$ACTUAL_EVENTS" | grep -q "^${event}$"; then
+    MISSING="$MISSING $event"
+  fi
+done
+
+if [ -n "$MISSING" ]; then
+  echo "ERROR: Missing webhook events:$MISSING"
+  echo "Expected: ${WEBHOOK_EVENTS[*]}"
+  echo "Actual:   $(echo "$ACTUAL_EVENTS" | tr '\n' ' ')"
+  exit 1
+fi
+
+ENDPOINT_STATUS=$(echo "$VERIFY" | jq -r --arg url "$WEBHOOK_URL" '.data[] | select(.url == $url) | .status' 2>/dev/null)
+echo "Verification passed!"
+echo "  Endpoint: $VERIFY_ID"
+echo "  Status:   $ENDPOINT_STATUS"
+echo "  Events:   $(echo "$ACTUAL_EVENTS" | tr '\n' ', ' | sed 's/,$//')"
 
 echo ""
 echo "=== Stripe webhook setup complete for stage: $STAGE ==="
