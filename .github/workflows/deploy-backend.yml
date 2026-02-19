@@ -276,6 +276,13 @@ jobs:
             DEPLOY_ALL_WORKERS=true
           fi
 
+          # internal/notifications, internal/email, internal/billing → all API + workers
+          if echo "$CHANGED_FILES" | grep -qE "^backend/golang/internal/(notifications|email|billing)/"; then
+            echo "Shared service code changed (notifications/email/billing) - deploying all services"
+            DEPLOY_ALL_API=true
+            DEPLOY_ALL_WORKERS=true
+          fi
+
           # internal/worker, internal/connectors → all workers
           if echo "$CHANGED_FILES" | grep -qE "^backend/golang/internal/(worker|connectors)/"; then
             echo "Shared worker code changed - deploying all workers"
