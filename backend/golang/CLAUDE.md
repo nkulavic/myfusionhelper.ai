@@ -547,6 +547,99 @@ Handler (webhook/trial-expiration/etc.)
   → SES sends email
 ```
 
+### Stage-Specific Email Configuration
+
+Emails are stage-aware for both sender address and CTA links:
+
+| Stage | FROM Address | CTA Base URL |
+|-------|-------------|--------------|
+| dev | `noreply@dev.myfusionhelper.ai` | `https://dev.myfusionhelper.ai` |
+| staging | `noreply@staging.myfusionhelper.ai` | `https://staging.myfusionhelper.ai` |
+| main | `noreply@myfusionhelper.ai` | `https://app.myfusionhelper.ai` |
+
+Configured via `fromEmail` and `appUrl` custom vars in each service's `serverless.yml`. Go code fallbacks in `ses_client.go` (`getDefaultFromEmail()`) and `templates.go` (`getAppBaseURL()`) derive from the `STAGE` env var.
+
+### SES Domain Verification
+
+SES domain identity for `myfusionhelper.ai` is verified via Easy DKIM (3 CNAME records in Route53). Parent domain verification automatically covers all subdomains (`dev.myfusionhelper.ai`, `staging.myfusionhelper.ai`, etc.). DKIM, SPF, and DMARC records are managed in the SES CloudFormation stack (`IsMain` condition).
+
+**SES Sandbox**: Check `ProductionAccessEnabled` status. In sandbox mode, SES can only send to verified email addresses or the test inbox domain.
+
+### Test Email Inbox (dev only)
+
+A complete email receiving system exists for testing transactional emails in dev. Test accounts use `@test.myfusionhelper.ai` addresses.
+
+**Infrastructure** (all `IsDev` conditional in `services/infrastructure/ses/serverless.yml`):
+- Route53 MX record: `test.myfusionhelper.ai` → `inbound-smtp.us-west-2.amazonaws.com`
+- SES Receipt Rule Set (`mfh-test-email-rules`) catches `@test.myfusionhelper.ai`
+- S3 bucket `mfh-test-emails` stores raw emails (30-day auto-expiry)
+- Lambda organizer (`mfh-test-email-organizer`) copies emails to `by-recipient/<email>/<timestamp>_<subject>`
+- SNS topic wires SES → Lambda
+
+**How to use for testing:**
+
+1. Sign up a test account with email `anything@test.myfusionhelper.ai`
+2. The app sends emails (welcome, billing, etc.) to that address
+3. SES receives the email and stores it in S3
+
+**Reading test emails:**
+
+```bash
+# List all emails for a specific test address
+AWS_PROFILE=mfh-claude aws s3 ls s3://mfh-test-emails/by-recipient/user1@test.myfusionhelper.ai/
+
+# Read the most recent email (raw MIME format)
+AWS_PROFILE=mfh-claude aws s3 cp s3://mfh-test-emails/by-recipient/user1@test.myfusionhelper.ai/<key> -
+
+# List all test addresses that have received email
+AWS_PROFILE=mfh-claude aws s3 ls s3://mfh-test-emails/by-recipient/
+
+# List raw incoming emails (by message ID)
+AWS_PROFILE=mfh-claude aws s3 ls s3://mfh-test-emails/incoming/
+```
+
+**Parsing email content from S3:**
+
+The stored emails are in raw MIME format (RFC 822). To extract HTML body or headers:
+
+```bash
+# Download and view headers + text
+AWS_PROFILE=mfh-claude aws s3 cp s3://mfh-test-emails/by-recipient/user1@test.myfusionhelper.ai/<key> /tmp/email.eml
+
+# Extract just the subject and from
+grep -E "^(Subject|From|To|Date):" /tmp/email.eml
+
+# Extract HTML body (between boundaries) -- or use Python:
+python3 -c "
+import email, sys
+with open('/tmp/email.eml', 'rb') as f:
+    msg = email.message_from_binary_file(f)
+print('Subject:', msg['Subject'])
+print('From:', msg['From'])
+print('To:', msg['To'])
+for part in msg.walk():
+    if part.get_content_type() == 'text/html':
+        print(part.get_payload(decode=True).decode())
+        break
+"
+```
+
+**Verifying email content in automated checks:**
+
+```bash
+# Check that a welcome email was received
+AWS_PROFILE=mfh-claude aws s3 ls s3://mfh-test-emails/by-recipient/testuser@test.myfusionhelper.ai/ | grep -i welcome
+
+# Count emails received by a test address
+AWS_PROFILE=mfh-claude aws s3 ls s3://mfh-test-emails/by-recipient/testuser@test.myfusionhelper.ai/ | wc -l
+```
+
+**Important notes:**
+- Only exists in `dev` stage (all resources gated by `IsDev` CloudFormation condition)
+- Emails auto-expire after 30 days (S3 lifecycle rule)
+- The receipt rule set must be active (`aws ses set-active-receipt-rule-set --rule-set-name mfh-test-email-rules`) -- CI/CD handles this automatically
+- SES sandbox mode may prevent sending to non-verified addresses; `@test.myfusionhelper.ai` is received directly by SES, bypassing sandbox restrictions for receiving
+
 ## CRM Connector System (`internal/connectors/`)
 
 Implements `CRMConnector` interface for: Keap, GoHighLevel, ActiveCampaign, Ontraport, HubSpot.
