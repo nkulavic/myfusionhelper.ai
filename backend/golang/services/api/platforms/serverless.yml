@@ -51,8 +51,8 @@ provider:
     OAUTH_STATES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.OAuthStatesTableName}
     OAUTH_CREDENTIALS_PARAM: /myfusionhelper/${self:provider.stage}/platforms/oauth/credentials
     OAUTH_REDIRECT_URI: https://${self:custom.apiDomain.${self:provider.stage}}/platforms/oauth/callback
-    FRONTEND_SUCCESS_URL: ${self:custom.appUrl.${self:provider.stage}, 'http://localhost:3001'}/connections?oauth=success
-    FRONTEND_ERROR_URL: ${self:custom.appUrl.${self:provider.stage}, 'http://localhost:3001'}/connections?oauth=error
+    FRONTEND_SUCCESS_URL: ${self:custom.appUrl.${self:provider.stage}, 'https://app.myfusionhelper.ai'}/connections?oauth=success
+    FRONTEND_ERROR_URL: ${self:custom.appUrl.${self:provider.stage}, 'https://app.myfusionhelper.ai'}/connections?oauth=error
     API_VERSION: v1
     API_REFERENCE: mfh-api
   iam:

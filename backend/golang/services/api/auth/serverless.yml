@@ -10,6 +10,10 @@ custom:
     dev: https://dev.myfusionhelper.ai
     staging: https://staging.myfusionhelper.ai
     main: https://app.myfusionhelper.ai
+  fromEmail:
+    dev: noreply@dev.myfusionhelper.ai
+    staging: noreply@staging.myfusionhelper.ai
+    main: noreply@myfusionhelper.ai
   go:
     baseDir: ../../..
     supportedRuntimes: ["provided.al2023"]
@@ -41,7 +45,9 @@ provider:
     USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
     ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
     USER_ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableName}
-    APP_URL: ${self:custom.appUrl.${self:provider.stage}, 'http://localhost:3001'}
+    DEFAULT_FROM_EMAIL: ${self:custom.fromEmail.${self:provider.stage}, 'noreply@myfusionhelper.ai'}
+    DEFAULT_FROM_NAME: MyFusion Helper
+    APP_URL: ${self:custom.appUrl.${self:provider.stage}, 'https://app.myfusionhelper.ai'}
     API_VERSION: v1
     API_REFERENCE: mfh-api
     INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets

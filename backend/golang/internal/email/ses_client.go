@@ -63,7 +63,7 @@ func NewSESClient(ctx context.Context) (*SESClient, error) {
 
 	sesConfig := SESConfig{
 		Region:               region,
-		DefaultFromEmail:     getEnvOrDefault("DEFAULT_FROM_EMAIL", "noreply@myfusionhelper.ai"),
+		DefaultFromEmail:     getEnvOrDefault("DEFAULT_FROM_EMAIL", getDefaultFromEmail()),
 		DefaultFromName:      getEnvOrDefault("DEFAULT_FROM_NAME", "MyFusion Helper"),
 		ConfigurationSetName: getEnvOrDefault("SES_CONFIGURATION_SET", ""),
 	}
@@ -399,4 +399,15 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// getDefaultFromEmail returns the stage-appropriate noreply address.
+func getDefaultFromEmail() string {
+	stage := os.Getenv("STAGE")
+	switch stage {
+	case "main", "":
+		return "noreply@myfusionhelper.ai"
+	default:
+		return fmt.Sprintf("noreply@%s.myfusionhelper.ai", stage)
+	}
 }

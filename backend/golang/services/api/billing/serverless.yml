@@ -42,7 +42,7 @@ provider:
     COGNITO_ISSUER: ${cf:mfh-infrastructure-cognito-${self:provider.stage}.CognitoIssuer}
     INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
     WEBHOOK_EVENTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.WebhookEventsTableName}
-    APP_URL: ${self:custom.appUrl.${self:provider.stage}, 'http://localhost:3001'}
+    APP_URL: ${self:custom.appUrl.${self:provider.stage}, 'https://app.myfusionhelper.ai'}
     API_VERSION: v1
     API_REFERENCE: mfh-api
   iam:

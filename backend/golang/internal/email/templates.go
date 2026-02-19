@@ -64,10 +64,12 @@ func getAppBaseURL() string {
 		return url
 	}
 	stage := os.Getenv("STAGE")
-	if stage == "dev" {
-		return "http://localhost:3001"
+	switch stage {
+	case "main", "":
+		return "https://app.myfusionhelper.ai"
+	default:
+		return fmt.Sprintf("https://%s.myfusionhelper.ai", stage)
 	}
-	return "https://app.myfusionhelper.ai"
 }
 
 func getCurrentYear() string {
