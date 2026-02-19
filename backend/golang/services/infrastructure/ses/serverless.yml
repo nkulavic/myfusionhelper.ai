@@ -23,6 +23,11 @@ resources:
       Fn::Equals:
         - ${self:provider.stage}
         - main
+    # Test email receiving infrastructure -- only in dev stage.
+    IsDev:
+      Fn::Equals:
+        - ${self:provider.stage}
+        - dev
 
   Resources:
     # SES Email Identity for the domain
@@ -391,6 +396,212 @@ resources:
 
             -- MyFusion Helper
 
+    # ──────────────────────────────────────────────────────────────────
+    # Test Email Receiving (dev only)
+    # Receives emails at @test.myfusionhelper.ai and stores in S3.
+    # Used for testing transactional emails with test accounts.
+    # ──────────────────────────────────────────────────────────────────
+
+    # S3 bucket for storing received test emails
+    TestEmailBucket:
+      Type: AWS::S3::Bucket
+      Condition: IsDev
+      DeletionPolicy: Retain
+      Properties:
+        BucketName: mfh-test-emails
+        LifecycleConfiguration:
+          Rules:
+            - Id: ExpireTestEmails
+              Status: Enabled
+              ExpirationInDays: 30
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+
+    # Bucket policy allowing SES to write received emails
+    TestEmailBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Condition: IsDev
+      Properties:
+        Bucket: !Ref TestEmailBucket
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Sid: AllowSESPuts
+              Effect: Allow
+              Principal:
+                Service: ses.amazonaws.com
+              Action: s3:PutObject
+              Resource: !Sub "${TestEmailBucket.Arn}/incoming/*"
+              Condition:
+                StringEquals:
+                  "AWS:SourceAccount": "570331155915"
+
+    # SES Receipt Rule Set for test email receiving
+    TestEmailRuleSet:
+      Type: AWS::SES::ReceiptRuleSet
+      Condition: IsDev
+      Properties:
+        RuleSetName: mfh-test-email-rules
+
+    # SNS topic to notify when test emails arrive (triggers Lambda organizer)
+    TestEmailNotificationTopic:
+      Type: AWS::SNS::Topic
+      Condition: IsDev
+      Properties:
+        TopicName: mfh-test-email-notifications
+
+    # SES Receipt Rule: catch all @test.myfusionhelper.ai → S3 + SNS
+    # Emails land in s3://mfh-test-emails/incoming/<message-id>
+    # A Lambda (below) copies them to s3://mfh-test-emails/by-recipient/<email>/<timestamp>
+    TestEmailRule:
+      Type: AWS::SES::ReceiptRule
+      Condition: IsDev
+      DependsOn:
+        - TestEmailBucketPolicy
+        - TestEmailRuleSet
+      Properties:
+        RuleSetName: !Ref TestEmailRuleSet
+        Rule:
+          Name: catch-all-test-domain
+          Enabled: true
+          ScanEnabled: true
+          Recipients:
+            - test.myfusionhelper.ai
+          Actions:
+            - S3Action:
+                BucketName: !Ref TestEmailBucket
+                ObjectKeyPrefix: incoming/
+                TopicArn: !Ref TestEmailNotificationTopic
+
+    # SNS topic policy allowing SES to publish notifications
+    TestEmailNotificationTopicPolicy:
+      Type: AWS::SNS::TopicPolicy
+      Condition: IsDev
+      Properties:
+        Topics:
+          - !Ref TestEmailNotificationTopic
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Sid: AllowSESPublish
+              Effect: Allow
+              Principal:
+                Service: ses.amazonaws.com
+              Action: sns:Publish
+              Resource: !Ref TestEmailNotificationTopic
+              Condition:
+                StringEquals:
+                  "AWS:SourceAccount": "570331155915"
+
+    # IAM role for the email organizer Lambda
+    TestEmailOrganizerRole:
+      Type: AWS::IAM::Role
+      Condition: IsDev
+      Properties:
+        RoleName: mfh-test-email-organizer-role
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: TestEmailOrganizerPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:GetObject
+                    - s3:CopyObject
+                    - s3:PutObject
+                  Resource: !Sub "${TestEmailBucket.Arn}/*"
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource: "arn:aws:logs:us-west-2:*:*"
+
+    # Lambda that copies incoming emails to by-recipient/<email>/<timestamp>
+    TestEmailOrganizerFunction:
+      Type: AWS::Lambda::Function
+      Condition: IsDev
+      Properties:
+        FunctionName: mfh-test-email-organizer
+        Runtime: python3.12
+        Handler: index.handler
+        Timeout: 30
+        MemorySize: 128
+        Role: !GetAtt TestEmailOrganizerRole.Arn
+        Code:
+          ZipFile: |
+            import json, boto3, datetime, email as email_lib
+            s3 = boto3.client('s3')
+            BUCKET = 'mfh-test-emails'
+
+            def handler(event, context):
+                for record in event['Records']:
+                    msg = json.loads(record['Sns']['Message'])
+                    mail = msg.get('mail', {})
+                    recipients = mail.get('destination', [])
+                    message_id = mail.get('messageId', 'unknown')
+                    ts = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+                    source_key = f"incoming/{message_id}"
+                    # Extract subject from raw email for readable filenames
+                    try:
+                        obj = s3.get_object(Bucket=BUCKET, Key=source_key)
+                        raw = obj['Body'].read()
+                        parsed = email_lib.message_from_bytes(raw)
+                        subj = parsed.get('Subject', 'no-subject')
+                        safe_subj = ''.join(c if c.isalnum() or c in '-_ ' else '_' for c in subj)[:60]
+                    except Exception:
+                        raw = None
+                        safe_subj = 'unknown'
+                    for recipient in recipients:
+                        dest_key = f"by-recipient/{recipient}/{ts}_{safe_subj}"
+                        if raw:
+                            s3.put_object(Bucket=BUCKET, Key=dest_key, Body=raw, ContentType='message/rfc822')
+                        else:
+                            s3.copy_object(Bucket=BUCKET, CopySource=f"{BUCKET}/{source_key}", Key=dest_key)
+                        print(f"Organized: {dest_key}")
+                return {'statusCode': 200}
+
+    # Permission for SNS to invoke the organizer Lambda
+    TestEmailOrganizerInvokePermission:
+      Type: AWS::Lambda::Permission
+      Condition: IsDev
+      Properties:
+        FunctionName: !Ref TestEmailOrganizerFunction
+        Action: lambda:InvokeFunction
+        Principal: sns.amazonaws.com
+        SourceArn: !Ref TestEmailNotificationTopic
+
+    # SNS subscription: topic → Lambda
+    TestEmailOrganizerSubscription:
+      Type: AWS::SNS::Subscription
+      Condition: IsDev
+      Properties:
+        TopicArn: !Ref TestEmailNotificationTopic
+        Protocol: lambda
+        Endpoint: !GetAtt TestEmailOrganizerFunction.Arn
+
+    # Route53 MX record for test.myfusionhelper.ai → SES inbound
+    TestEmailMxRecord:
+      Type: AWS::Route53::RecordSet
+      Condition: IsDev
+      Properties:
+        HostedZoneId: Z071462818IPQJBH38AMK
+        Name: test.myfusionhelper.ai
+        Type: MX
+        TTL: 300
+        ResourceRecords:
+          - "10 inbound-smtp.us-west-2.amazonaws.com"
+
   Outputs:
     SESEmailIdentityName:
       Description: SES verified email identity
@@ -439,3 +650,17 @@ resources:
       Value: mfh-${self:provider.stage}-trial-ending
       Export:
         Name: ${self:service}-${self:provider.stage}-TrialEndingTemplateName
+
+    TestEmailBucketName:
+      Condition: IsDev
+      Description: S3 bucket for received test emails
+      Value: !Ref TestEmailBucket
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TestEmailBucketName
+
+    TestEmailRuleSetName:
+      Condition: IsDev
+      Description: SES Receipt Rule Set for test emails
+      Value: !Ref TestEmailRuleSet
+      Export:
+        Name: ${self:service}-${self:provider.stage}-TestEmailRuleSetName

@@ -531,6 +531,15 @@ jobs:
         env:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
 
+      # Activate test email receipt rule set after SES deploys (dev only)
+      - name: Activate test email receiving
+        if: matrix.service == 'ses' && env.DEPLOY_STAGE == 'dev'
+        run: |
+          echo "Activating SES receipt rule set for test email receiving..."
+          aws ses set-active-receipt-rule-set \
+            --rule-set-name mfh-test-email-rules \
+            --region us-west-2 || echo "Rule set activation failed (may already be active)"
+
   # ──────────────────────────────────────────────
   # 3a. Setup Stripe Webhooks (after infra, before API services)
   # ──────────────────────────────────────────────
