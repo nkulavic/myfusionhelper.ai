@@ -1,0 +1,7 @@
+{
+    "header_title": "Connection Alert",
+    "header_subtitle": "A CRM connection needs attention",
+    "icon": "warning",
+    "cta_text": "View Connections",
+    "cta_url": "{{ base_url }}/connections"
+}

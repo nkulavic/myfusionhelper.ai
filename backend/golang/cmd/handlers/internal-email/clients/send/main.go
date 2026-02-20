@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/myfusionhelper/api/internal/apiutil"
@@ -11,6 +12,21 @@ import (
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
 	"github.com/myfusionhelper/api/internal/types"
 )
+
+var templateLoader *email.TemplateLoader
+
+func init() {
+	bucket := os.Getenv("TEMPLATE_BUCKET")
+	if bucket != "" && os.Getenv("USE_S3_TEMPLATES") != "false" {
+		loader, err := email.NewTemplateLoader(context.Background(), bucket, "email-templates/")
+		if err != nil {
+			log.Printf("WARNING: S3 template loader init failed, using hardcoded templates: %v", err)
+		} else {
+			templateLoader = loader
+			log.Printf("S3 template loader initialized (bucket: %s)", bucket)
+		}
+	}
+}
 
 // SendEmailRequest matches the types.SendEmailRequest
 type SendEmailRequest struct {
@@ -46,29 +62,42 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	// Convert data map to TemplateData struct
 	templateData := mapToTemplateData(req.Data)
 
-	// Get the appropriate template
+	// Try S3 Liquid template first, fall back to hardcoded Go templates
 	var emailTemplate email.EmailTemplate
-	switch req.TemplateType {
-	case "welcome":
-		emailTemplate = email.GetWelcomeEmailTemplate(templateData)
-	case "password_reset":
-		emailTemplate = email.GetPasswordResetEmailTemplate(templateData)
-	case "execution_alert":
-		emailTemplate = email.GetExecutionAlertEmailTemplate(templateData)
-	case "billing_event":
-		eventType, _ := req.Data["event_type"].(string)
-		emailTemplate = email.GetBillingEventEmailTemplate(templateData, eventType)
-	case "connection_alert":
-		connectionName, _ := req.Data["connection_name"].(string)
-		emailTemplate = email.GetConnectionAlertEmailTemplate(templateData, connectionName)
-	case "usage_alert":
-		emailTemplate = email.GetUsageAlertEmailTemplate(templateData)
-	case "weekly_summary":
-		emailTemplate = email.GetWeeklySummaryEmailTemplate(templateData)
-	case "team_invite":
-		emailTemplate = email.GetTeamInviteEmailTemplate(templateData)
-	default:
-		return authMiddleware.CreateErrorResponse(400, "Unknown template type: "+req.TemplateType), nil
+	if templateLoader != nil {
+		templatePath := email.ResolveTemplatePath(req.TemplateType, req.Data)
+		rendered, err := email.RenderEmailFromS3(ctx, templateLoader, templatePath, templateData, req.Data)
+		if err == nil {
+			emailTemplate = rendered
+		} else if err != email.ErrTemplateNotFound {
+			log.Printf("S3 template render error for %s (falling back to Go): %v", templatePath, err)
+		}
+	}
+
+	// Fallback: hardcoded Go templates
+	if emailTemplate.Subject == "" {
+		switch req.TemplateType {
+		case "welcome":
+			emailTemplate = email.GetWelcomeEmailTemplate(templateData)
+		case "password_reset":
+			emailTemplate = email.GetPasswordResetEmailTemplate(templateData)
+		case "execution_alert":
+			emailTemplate = email.GetExecutionAlertEmailTemplate(templateData)
+		case "billing_event":
+			eventType, _ := req.Data["event_type"].(string)
+			emailTemplate = email.GetBillingEventEmailTemplate(templateData, eventType)
+		case "connection_alert":
+			connectionName, _ := req.Data["connection_name"].(string)
+			emailTemplate = email.GetConnectionAlertEmailTemplate(templateData, connectionName)
+		case "usage_alert":
+			emailTemplate = email.GetUsageAlertEmailTemplate(templateData)
+		case "weekly_summary":
+			emailTemplate = email.GetWeeklySummaryEmailTemplate(templateData)
+		case "team_invite":
+			emailTemplate = email.GetTeamInviteEmailTemplate(templateData)
+		default:
+			return authMiddleware.CreateErrorResponse(400, "Unknown template type: "+req.TemplateType), nil
+		}
 	}
 
 	// Send email

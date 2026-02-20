@@ -1,0 +1,8 @@
+<p><strong>{{ inviter_name }}</strong> ({{ inviter_email }}) has invited you to join the <strong>{{ account_name }}</strong> team on MyFusion Helper.</p>
+
+<div style="background: #f0f4ff; border-radius: 8px; padding: 16px; margin: 16px 0;">
+    <strong>Your role:</strong> {{ role_name }}<br>
+    <span style="font-size: 13px; color: #6b7280;">{% case role_name %}{% when "admin" %}Full access to manage Helpers, connections, team members, and billing.{% when "member" %}Can create and manage Helpers and connections. Cannot manage billing or team settings.{% when "viewer" %}Read-only access to view Helpers, executions, and reports.{% else %}Access to the team workspace.{% endcase %}</span>
+</div>
+
+<p>MyFusion Helper is a CRM automation platform with 62 pre-built Helpers that extend Keap, GoHighLevel, ActiveCampaign, Ontraport, and HubSpot. Accept the invitation below to get started.</p>

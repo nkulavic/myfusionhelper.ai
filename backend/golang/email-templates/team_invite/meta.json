@@ -1,0 +1,7 @@
+{
+    "header_title": "You're Invited!",
+    "header_subtitle": "Join {{ account_name }} on MyFusion Helper",
+    "icon": "rocket",
+    "cta_text": "Accept Invitation",
+    "cta_url": "{{ base_url }}/invite/{{ invite_token }}"
+}

@@ -1,0 +1,10 @@
+You're Invited to {{ account_name }} on MyFusion Helper!
+
+{{ inviter_name }} ({{ inviter_email }}) has invited you to join the {{ account_name }} team.
+
+Your role: {{ role_name }}
+{% case role_name %}{% when "admin" %}Full access to manage Helpers, connections, team members, and billing.{% when "member" %}Can create and manage Helpers and connections. Cannot manage billing or team settings.{% when "viewer" %}Read-only access to view Helpers, executions, and reports.{% else %}Access to the team workspace.{% endcase %}
+
+Accept Invitation: {{ base_url }}/invite/{{ invite_token }}
+
+-- MyFusion Helper

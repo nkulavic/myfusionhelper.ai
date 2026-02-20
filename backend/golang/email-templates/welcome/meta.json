@@ -1,0 +1,7 @@
+{
+    "header_title": "Welcome to MyFusion Helper!",
+    "header_subtitle": "Your CRM automation journey starts here",
+    "icon": "rocket",
+    "cta_text": "Go to Dashboard",
+    "cta_url": "{{ base_url }}"
+}

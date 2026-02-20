@@ -1,0 +1,9 @@
+<p>Your payment has been processed successfully. Here are the details:</p>
+
+<div style="background: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 4px; padding: 16px; margin: 16px 0;">
+    {% if invoice_number != "" %}<strong>Invoice:</strong> {{ invoice_number }}<br>{% endif %}
+    <strong>Amount:</strong> {{ amount }}<br>
+    <strong>Plan:</strong> {{ plan_name }}
+</div>
+
+<p>Thank you for your continued support!</p>

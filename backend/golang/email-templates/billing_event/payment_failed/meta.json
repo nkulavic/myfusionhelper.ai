@@ -1,0 +1,7 @@
+{
+    "header_title": "Billing Update",
+    "header_subtitle": "Your subscription details",
+    "icon": "creditcard",
+    "cta_text": "{% if invoice_url != '' %}Pay Invoice Now{% else %}Update Payment Method{% endif %}",
+    "cta_url": "{% if invoice_url != '' %}{{ invoice_url }}{% else %}{{ base_url }}/settings?tab=billing{% endif %}"
+}

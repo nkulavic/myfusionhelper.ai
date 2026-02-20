@@ -1,0 +1,9 @@
+[Action Required] Payment Failed - {{ app_name }}
+
+Hello {{ user_name }},
+
+We were unable to process your most recent payment. Please update your payment method.
+
+{% if invoice_url != "" %}Pay Invoice Now: {{ invoice_url }}{% else %}Update Payment Method: {{ base_url }}/settings?tab=billing{% endif %}
+
+-- {{ app_name }}

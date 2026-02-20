@@ -1,0 +1,8 @@
+<p>We've detected an issue with your <strong>{{ connection_name }}</strong> connection.</p>
+
+<div style="background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 4px; padding: 16px; margin: 16px 0;">
+    <strong>Connection:</strong> {{ connection_name }}<br>
+    <strong>Issue:</strong> {{ error_msg }}
+</div>
+
+<p>This may affect any Helpers that use this connection. Please check your connection settings and re-authorize if needed.</p>

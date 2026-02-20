@@ -1,0 +1,7 @@
+{
+    "header_title": "Billing Update",
+    "header_subtitle": "Your subscription details",
+    "icon": "creditcard",
+    "cta_text": "Update Payment Method",
+    "cta_url": "{{ base_url }}/settings?tab=billing"
+}

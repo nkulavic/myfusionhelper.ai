@@ -1,7 +1,9 @@
 package email
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"time"
 )
@@ -661,4 +663,46 @@ func getIconSVG(icon string) string {
 	default:
 		return ""
 	}
+}
+
+// RenderEmailFromS3 attempts to render an email using an S3-stored Liquid template.
+// Returns the rendered EmailTemplate or an error (including ErrTemplateNotFound for fallback).
+func RenderEmailFromS3(ctx context.Context, loader *TemplateLoader, templatePath string, data TemplateData, extraBindings map[string]interface{}) (EmailTemplate, error) {
+	bindings := TemplateDataToBindings(data)
+	for k, v := range extraBindings {
+		if _, exists := bindings[k]; !exists {
+			bindings[k] = v
+		}
+	}
+
+	subject, htmlContent, textBody, meta, err := loader.RenderTemplate(ctx, templatePath, bindings)
+	if err != nil {
+		return EmailTemplate{}, err
+	}
+
+	ctaText := loader.RenderString(meta.CTAText, bindings)
+	ctaURL := loader.RenderString(meta.CTAURL, bindings)
+
+	htmlBody := generateHTML(data, emailContent{
+		headerTitle:    meta.HeaderTitle,
+		headerSubtitle: meta.HeaderSubtitle,
+		greetingIcon:   meta.Icon,
+		mainContent:    htmlContent,
+		ctaText:        ctaText,
+		ctaURL:         ctaURL,
+	})
+
+	log.Printf("Rendered email from S3 Liquid template: %s", templatePath)
+	return EmailTemplate{Subject: subject, HTMLBody: htmlBody, TextBody: textBody}, nil
+}
+
+// ResolveTemplatePath maps a template_type (and optional sub-type from data) to an S3 path.
+func ResolveTemplatePath(templateType string, data map[string]interface{}) string {
+	if templateType == "billing_event" {
+		if eventType, ok := data["event_type"].(string); ok && eventType != "" {
+			return "billing_event/" + eventType
+		}
+		return "billing_event/default"
+	}
+	return templateType
 }

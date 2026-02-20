@@ -1,0 +1,9 @@
+Payment Receipt - {{ app_name }}
+
+Hello {{ user_name }},
+
+Your payment of {{ amount }} for the {{ plan_name }} plan has been processed successfully.
+
+{% if invoice_url != "" %}View Invoice: {{ invoice_url }}{% else %}Manage Billing: {{ base_url }}/settings?tab=billing{% endif %}
+
+-- {{ app_name }}

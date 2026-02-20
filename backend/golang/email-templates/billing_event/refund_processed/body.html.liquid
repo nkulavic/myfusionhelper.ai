@@ -1,0 +1,8 @@
+<p>A refund has been processed for your account. Here are the details:</p>
+
+<div style="background: #f0f4ff; border-left: 4px solid #3b82f6; border-radius: 4px; padding: 16px; margin: 16px 0;">
+    <strong>Refund Amount:</strong> {{ amount }}<br>
+    {% if refund_reason != "" %}<strong>Reason:</strong> {{ refund_reason }}<br>{% endif %}
+</div>
+
+<p>The refund should appear on your statement within 5-10 business days, depending on your bank.</p>

@@ -42,6 +42,8 @@ provider:
     EMAIL_LOGS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailLogsTableName}
     EMAIL_TEMPLATES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailTemplatesTableName}
     EMAIL_VERIFICATIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableName}
+    TEMPLATE_BUCKET: ${cf:mfh-infrastructure-s3-${self:provider.stage}.DataBucketName}
+    USE_S3_TEMPLATES: "true"
   iam:
     role:
       statements:
@@ -72,6 +74,12 @@ provider:
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailLogsTableArn}/index/*"
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailTemplatesTableArn}/index/*"
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableArn}/index/*"
+        # S3 permissions for email templates
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+          Resource:
+            - "${cf:mfh-infrastructure-s3-${self:provider.stage}.DataBucketArn}/email-templates/*"
         # CloudWatch Logs
         - Effect: Allow
           Action:

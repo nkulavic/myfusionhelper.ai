@@ -1,0 +1,4 @@
+<p>We were unable to process your most recent payment. Please update your payment method to avoid any interruption to your service.</p>
+{% if invoice_url != "" %}<p>We'll retry the payment automatically, but you can also resolve this now by clicking the button below.</p>
+{% else %}<p>We'll retry the payment automatically, but you can also update your billing details from your Settings page.</p>
+{% endif %}

@@ -551,7 +551,33 @@ jobs:
             --region us-west-2 || echo "Rule set activation failed (may already be active)"
 
   # ──────────────────────────────────────────────
-  # 3a. Setup Stripe Webhooks (after infra, before API services)
+  # 3a-1. Sync Email Templates to S3
+  # ──────────────────────────────────────────────
+  sync-email-templates:
+    name: Sync Email Templates
+    needs: [detect-changes, deploy-infra]
+    if: always() && (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::570331155915:role/GitHubActions-Deploy-Dev
+          aws-region: us-west-2
+
+      - name: Sync email templates to S3
+        run: |
+          BUCKET="mfh-data-${{ env.DEPLOY_STAGE }}"
+          echo "Syncing email templates to s3://${BUCKET}/email-templates/"
+          aws s3 sync backend/golang/email-templates/ \
+            "s3://${BUCKET}/email-templates/" \
+            --delete --region us-west-2
+          TEMPLATE_COUNT=$(aws s3 ls "s3://${BUCKET}/email-templates/" --recursive --region us-west-2 | wc -l)
+          echo "Synced ${TEMPLATE_COUNT} template files"
+
+  # ──────────────────────────────────────────────
+  # 3a-2. Setup Stripe Webhooks (after infra, before API services)
   # ──────────────────────────────────────────────
   setup-stripe-webhooks:
     name: Setup Stripe Webhooks
@@ -711,11 +737,12 @@ jobs:
   # ──────────────────────────────────────────────
   deploy-api:
     name: "Deploy API: ${{ matrix.service }}"
-    needs: [detect-changes, deploy-gateway]
+    needs: [detect-changes, deploy-gateway, sync-email-templates]
     if: |
       always() &&
       needs.detect-changes.outputs.has_api == 'true' &&
-      (needs.deploy-gateway.result == 'success' || needs.deploy-gateway.result == 'skipped')
+      (needs.deploy-gateway.result == 'success' || needs.deploy-gateway.result == 'skipped') &&
+      (needs.sync-email-templates.result == 'success' || needs.sync-email-templates.result == 'skipped')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

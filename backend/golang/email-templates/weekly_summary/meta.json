@@ -1,0 +1,7 @@
+{
+    "header_title": "Weekly Summary",
+    "header_subtitle": "{{ week_start }} - {{ week_end }}",
+    "icon": "rocket",
+    "cta_text": "View Dashboard",
+    "cta_url": "{{ base_url }}"
+}

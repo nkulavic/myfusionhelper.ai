@@ -1,0 +1,7 @@
+{
+    "header_title": "Execution Alert",
+    "header_subtitle": "A helper needs your attention",
+    "icon": "warning",
+    "cta_text": "View Executions",
+    "cta_url": "{{ base_url }}/executions"
+}

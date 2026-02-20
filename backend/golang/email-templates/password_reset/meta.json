@@ -1,0 +1,7 @@
+{
+    "header_title": "Password Reset Request",
+    "header_subtitle": "Secure access to your account",
+    "icon": "lock",
+    "cta_text": "Reset Password",
+    "cta_url": "{{ base_url }}/reset-password?email={{ user_email }}"
+}

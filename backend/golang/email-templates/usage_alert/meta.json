@@ -1,0 +1,7 @@
+{
+    "header_title": "Usage Alert",
+    "header_subtitle": "Approaching your plan limit",
+    "icon": "warning",
+    "cta_text": "Upgrade Plan",
+    "cta_url": "{{ base_url }}/settings"
+}
