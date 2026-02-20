@@ -102,7 +102,8 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 			if target == "" {
 				target = userEmail
 			}
-			if err := notifSvc.SendPasswordResetEmail(ctx, target, ""); err != nil {
+			resetCode := getStringData(job.Data, "reset_code")
+			if err := notifSvc.SendPasswordResetEmail(ctx, target, resetCode); err != nil {
 				log.Printf("Failed to send password reset email: %v", err)
 			}
 

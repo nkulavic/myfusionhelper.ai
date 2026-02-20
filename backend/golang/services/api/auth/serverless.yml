@@ -52,6 +52,7 @@ provider:
     API_REFERENCE: mfh-api
     INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
     NOTIFICATION_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueUrl}
+    EMAIL_VERIFICATIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableName}
   iam:
     role:
       statements:
@@ -72,6 +73,8 @@ provider:
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}/index/*"
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}/index/*"
             - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UserAccountsTableArn}/index/*"
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableArn}
+            - "${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableArn}/index/*"
         - Effect: Allow
           Action:
             - cognito-idp:AdminCreateUser
