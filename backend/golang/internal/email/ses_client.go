@@ -159,12 +159,16 @@ func (s *SESClient) SendEmail(ctx context.Context, message EmailMessage) (*Email
 	if len(message.Tags) > 0 {
 		tags := make([]sestypes.MessageTag, 0, len(message.Tags))
 		for key, value := range message.Tags {
-			tags = append(tags, sestypes.MessageTag{
-				Name:  aws.String(key),
-				Value: aws.String(value),
-			})
+			if key != "" && value != "" {
+				tags = append(tags, sestypes.MessageTag{
+					Name:  aws.String(key),
+					Value: aws.String(value),
+				})
+			}
 		}
-		input.Tags = tags
+		if len(tags) > 0 {
+			input.Tags = tags
+		}
 	}
 
 	output, err := s.client.SendEmail(ctx, input)
@@ -258,12 +262,16 @@ func (s *SESClient) SendTemplatedEmail(ctx context.Context, message EmailMessage
 	if len(message.Tags) > 0 {
 		tags := make([]sestypes.MessageTag, 0, len(message.Tags))
 		for key, value := range message.Tags {
-			tags = append(tags, sestypes.MessageTag{
-				Name:  aws.String(key),
-				Value: aws.String(value),
-			})
+			if key != "" && value != "" {
+				tags = append(tags, sestypes.MessageTag{
+					Name:  aws.String(key),
+					Value: aws.String(value),
+				})
+			}
 		}
-		input.Tags = tags
+		if len(tags) > 0 {
+			input.Tags = tags
+		}
 	}
 
 	output, err := s.client.SendTemplatedEmail(ctx, input)
