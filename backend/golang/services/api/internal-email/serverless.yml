@@ -43,7 +43,6 @@ provider:
     EMAIL_TEMPLATES_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailTemplatesTableName}
     EMAIL_VERIFICATIONS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.EmailVerificationsTableName}
     TEMPLATE_BUCKET: ${cf:mfh-infrastructure-s3-${self:provider.stage}.DataBucketName}
-    USE_S3_TEMPLATES: "true"
   iam:
     role:
       statements:
