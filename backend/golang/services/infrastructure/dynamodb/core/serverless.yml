@@ -584,6 +584,8 @@ resources:
       Properties:
         TableName: mfh-${self:provider.stage}-webhook-events
         BillingMode: PAY_PER_REQUEST
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
         TimeToLiveSpecification:
           AttributeName: ttl
           Enabled: true
@@ -616,6 +618,10 @@ resources:
       Value: !GetAtt AccountsTable.Arn
       Export:
         Name: ${self:service}-${self:provider.stage}-AccountsTableArn
+    AccountsTableStreamArn:
+      Value: !GetAtt AccountsTable.StreamArn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-AccountsTableStreamArn
 
     UserAccountsTableName:
       Value: !Ref UserAccountsTable
@@ -800,3 +806,7 @@ resources:
       Value: !GetAtt WebhookEventsTable.Arn
       Export:
         Name: ${self:service}-${self:provider.stage}-WebhookEventsTableArn
+    WebhookEventsTableStreamArn:
+      Value: !GetAtt WebhookEventsTable.StreamArn
+      Export:
+        Name: ${self:service}-${self:provider.stage}-WebhookEventsTableStreamArn

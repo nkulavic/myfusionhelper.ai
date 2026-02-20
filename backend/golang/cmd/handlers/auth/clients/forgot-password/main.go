@@ -12,9 +12,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/myfusionhelper/api/internal/apiutil"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
-	"github.com/myfusionhelper/api/internal/notifications"
 )
 
 type ForgotPasswordRequest struct {
@@ -70,19 +70,27 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return handleForgotPasswordError(err), nil
 	}
 
-	// Send branded notification email asynchronously (Cognito will also send the actual reset code email)
-	go func() {
-		notifSvc, err := notifications.New(ctx)
-		if err != nil {
-			log.Printf("Failed to create notification service for password reset notification: %v", err)
-			return
+	// Enqueue branded password reset notification via SQS (no DynamoDB write
+	// occurs for forgot-password, so we can't use a stream trigger here).
+	notifQueueURL := os.Getenv("NOTIFICATION_QUEUE_URL")
+	if notifQueueURL != "" {
+		sqsClient := sqs.NewFromConfig(cfg)
+		jobJSON, _ := json.Marshal(map[string]interface{}{
+			"type":    "password_reset",
+			"user_id": "",
+			"data": map[string]interface{}{
+				"user_email": req.Email,
+			},
+		})
+		_, sqsErr := sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
+			QueueUrl:       aws.String(notifQueueURL),
+			MessageGroupId: aws.String("pwd-rese"),
+			MessageBody:    aws.String(string(jobJSON)),
+		})
+		if sqsErr != nil {
+			log.Printf("Failed to enqueue password reset notification: %v", sqsErr)
 		}
-		// Note: We're not sending the actual code here - Cognito handles that securely
-		// This is just a branded notification confirming the reset request
-		if err := notifSvc.SendPasswordResetEmail(ctx, req.Email, ""); err != nil {
-			log.Printf("Failed to send password reset notification email: %v", err)
-		}
-	}()
+	}
 
 	// Always return success to prevent email enumeration
 	return authMiddleware.CreateSuccessResponse(200, "If an account exists with this email, a reset code has been sent.", nil), nil

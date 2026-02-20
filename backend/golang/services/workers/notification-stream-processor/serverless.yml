@@ -1,0 +1,100 @@
+service: mfh-notification-stream-processor
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: provided.al2023
+  architecture: arm64
+  region: us-west-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 60
+  tracing:
+    lambda: true
+  environment:
+    STAGE: ${self:provider.stage}
+    NOTIFICATION_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueUrl}
+    USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
+    ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
+  iam:
+    role:
+      statements:
+        # Read from 3 DynamoDB streams
+        - Effect: Allow
+          Action:
+            - dynamodb:DescribeStream
+            - dynamodb:GetRecords
+            - dynamodb:GetShardIterator
+            - dynamodb:ListStreams
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableStreamArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableStreamArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.WebhookEventsTableStreamArn}
+        # Read Users + Accounts for email/name lookups
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+          Resource:
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}
+            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}
+        # Send to notification FIFO queue
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource:
+            - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueArn}
+
+functions:
+  processor:
+    handler: services/workers/notification-stream-processor/main.go
+    description: "Route DynamoDB stream events to notification SQS queue for email delivery"
+    reservedConcurrency: 5
+    events:
+      # Users table — new user registrations trigger welcome email
+      - stream:
+          type: dynamodb
+          arn: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableStreamArn}
+          batchSize: 10
+          startingPosition: LATEST
+          maximumRetryAttempts: 3
+          bisectBatchOnFunctionError: true
+          functionResponseType: ReportBatchItemFailures
+          filterPatterns:
+            - eventName: [INSERT]
+      # Accounts table — trial expiration triggers trial_expired email
+      - stream:
+          type: dynamodb
+          arn: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableStreamArn}
+          batchSize: 10
+          startingPosition: LATEST
+          maximumRetryAttempts: 3
+          bisectBatchOnFunctionError: true
+          functionResponseType: ReportBatchItemFailures
+          filterPatterns:
+            - eventName: [MODIFY]
+      # WebhookEvents table — billing emails when event marked as processed
+      - stream:
+          type: dynamodb
+          arn: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.WebhookEventsTableStreamArn}
+          batchSize: 10
+          startingPosition: LATEST
+          maximumRetryAttempts: 3
+          bisectBatchOnFunctionError: true
+          functionResponseType: ReportBatchItemFailures
+          filterPatterns:
+            - eventName: [MODIFY]
+              dynamodb:
+                NewImage:
+                  status:
+                    S: ["processed"]
+
+plugins:
+  - serverless-go-plugin
+
+custom:
+  go:
+    baseDir: ../../..
+    cmd: 'GOARCH=arm64 GOOS=linux go build -ldflags="-s -w"'
+    supportedRuntimes: ["provided.al2023"]
+    buildProvidedRuntimeAsBootstrap: true

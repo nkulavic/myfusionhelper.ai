@@ -20,7 +20,6 @@ import (
 	"github.com/myfusionhelper/api/internal/billing"
 	appConfig "github.com/myfusionhelper/api/internal/config"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
-	"github.com/myfusionhelper/api/internal/notifications"
 	stripe "github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/checkout/session"
 	stripeSub "github.com/stripe/stripe-go/v82/subscription"
@@ -95,35 +94,36 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 
 	// Route to handler
 	var handlerErr error
+	var notifData map[string]interface{}
 	switch stripeEvent.Type {
 	case "customer.subscription.created":
-		handlerErr = handleSubscriptionCreated(ctx, dbClient, stripeEvent)
+		handlerErr, notifData = handleSubscriptionCreated(ctx, dbClient, stripeEvent)
 	case "customer.subscription.updated":
-		handlerErr = handleSubscriptionUpdated(ctx, dbClient, stripeEvent)
+		handlerErr, notifData = handleSubscriptionUpdated(ctx, dbClient, stripeEvent)
 	case "customer.subscription.deleted":
-		handlerErr = handleSubscriptionCancelled(ctx, dbClient, stripeEvent)
+		handlerErr, notifData = handleSubscriptionCancelled(ctx, dbClient, stripeEvent)
 	case "customer.subscription.trial_will_end":
-		handlerErr = handleTrialWillEnd(ctx, dbClient, stripeEvent)
+		handlerErr, notifData = handleTrialWillEnd(ctx, dbClient, stripeEvent)
 	case "checkout.session.completed":
-		handlerErr = handleCheckoutSessionCompleted(ctx, dbClient, stripeEvent, stripeKey)
+		handlerErr, notifData = handleCheckoutSessionCompleted(ctx, dbClient, stripeEvent, stripeKey)
 	case "invoice.payment_failed":
-		handlerErr = handlePaymentFailed(ctx, dbClient, stripeEvent)
+		handlerErr, notifData = handlePaymentFailed(ctx, dbClient, stripeEvent)
 	case "invoice.paid":
-		handlerErr = handleInvoicePaid(ctx, dbClient, stripeEvent)
+		handlerErr, notifData = handleInvoicePaid(ctx, dbClient, stripeEvent)
 	case "charge.refunded":
-		handlerErr = handleChargeRefunded(ctx, dbClient, stripeEvent)
+		handlerErr, notifData = handleChargeRefunded(ctx, dbClient, stripeEvent)
 	default:
 		log.Printf("Unhandled event type: %s", stripeEvent.Type)
 	}
 
-	// Update event status
+	// Update event status (notification_data written atomically with status=processed)
 	if handlerErr != nil {
 		log.Printf("Handler error for event %s: %v", stripeEvent.ID, handlerErr)
-		markEventStatus(ctx, dbClient, stripeEvent.ID, "failed", handlerErr.Error())
+		markEventStatus(ctx, dbClient, stripeEvent.ID, "failed", handlerErr.Error(), nil)
 		return authMiddleware.CreateErrorResponse(500, "Failed to process event"), nil
 	}
 
-	markEventStatus(ctx, dbClient, stripeEvent.ID, "processed", "")
+	markEventStatus(ctx, dbClient, stripeEvent.ID, "processed", "", notifData)
 	return authMiddleware.CreateSuccessResponse(200, "OK", nil), nil
 }
 
@@ -164,7 +164,10 @@ func checkAndRecordEvent(ctx context.Context, dbClient *dynamodb.Client, event s
 }
 
 // markEventStatus updates the processing status of a recorded webhook event.
-func markEventStatus(ctx context.Context, dbClient *dynamodb.Client, eventID string, status, errorMsg string) {
+// When notificationData is non-nil and status is "processed", it writes the
+// notification_data map atomically so the DynamoDB stream consumer can enqueue
+// the corresponding email notification.
+func markEventStatus(ctx context.Context, dbClient *dynamodb.Client, eventID string, status, errorMsg string, notificationData map[string]interface{}) {
 	if webhookEventsTable == "" {
 		return
 	}
@@ -179,6 +182,16 @@ func markEventStatus(ctx context.Context, dbClient *dynamodb.Client, eventID str
 	if errorMsg != "" {
 		updateExpr += ", error_message = :err"
 		exprValues[":err"] = &ddbtypes.AttributeValueMemberS{Value: errorMsg}
+	}
+
+	if notificationData != nil && status == "processed" {
+		ndAV, err := attributevalue.Marshal(notificationData)
+		if err == nil {
+			updateExpr += ", notification_data = :nd"
+			exprValues[":nd"] = ndAV
+		} else {
+			log.Printf("Failed to marshal notification_data for %s: %v", eventID, err)
+		}
 	}
 
 	_, err := dbClient.UpdateItem(ctx, &dynamodb.UpdateItemInput{
@@ -330,17 +343,17 @@ func subscriptionStatusToAccountStatus(status stripe.SubscriptionStatus) string 
 // ---------------------------------------------------------------------------
 
 // handleSubscriptionCreated handles customer.subscription.created events.
-// Skips the email if checkout.session.completed already sent one (race condition fix).
-func handleSubscriptionCreated(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+// Skips the notification if checkout.session.completed already sent one (race condition fix).
+func handleSubscriptionCreated(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) (error, map[string]interface{}) {
 	var sub stripe.Subscription
 	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
-		return fmt.Errorf("failed to parse subscription: %w", err)
+		return fmt.Errorf("failed to parse subscription: %w", err), nil
 	}
 
 	customerID := sub.Customer.ID
 	if customerID == "" {
 		log.Printf("No customer ID in subscription.created event")
-		return nil
+		return nil, nil
 	}
 
 	plan := extractPlanFromSubscription(&sub)
@@ -348,44 +361,44 @@ func handleSubscriptionCreated(ctx context.Context, dbClient *dynamodb.Client, e
 
 	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
 	if err != nil {
-		return fmt.Errorf("failed to look up account: %w", err)
+		return fmt.Errorf("failed to look up account: %w", err), nil
 	}
 	if acct == nil {
-		return nil
+		return nil, nil
 	}
 
 	if err := updateAccountPlan(ctx, dbClient, acct.AccountID, plan, status); err != nil {
-		return fmt.Errorf("failed to update account: %w", err)
+		return fmt.Errorf("failed to update account: %w", err), nil
 	}
 
+	var notifData map[string]interface{}
 	if acct.OwnerUserID != "" {
 		syncCognitoPlanGroup(ctx, dbClient, acct.OwnerUserID, plan)
 
-		// Only send email if checkout hasn't already sent one.
-		// Check for subscription_email_sent flag on the account.
+		// Only include notification data if checkout hasn't already sent one.
 		emailAlreadySent := checkAndClearEmailSentFlag(ctx, dbClient, acct.AccountID)
 		if !emailAlreadySent {
-			sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "subscription_created", plan)
+			notifData = buildNotificationData(ctx, dbClient, acct.OwnerUserID, acct.AccountID, "subscription_created", plan)
 		} else {
-			log.Printf("Skipping subscription_created email -- already sent by checkout handler")
+			log.Printf("Skipping subscription_created notification -- already sent by checkout handler")
 		}
 	}
 
-	return nil
+	return nil, notifData
 }
 
 // handleSubscriptionUpdated handles customer.subscription.updated events.
-// Detects upgrade vs downgrade and sends the correct email.
-func handleSubscriptionUpdated(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+// Detects upgrade vs downgrade and builds the correct notification data.
+func handleSubscriptionUpdated(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) (error, map[string]interface{}) {
 	var sub stripe.Subscription
 	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
-		return fmt.Errorf("failed to parse subscription: %w", err)
+		return fmt.Errorf("failed to parse subscription: %w", err), nil
 	}
 
 	customerID := sub.Customer.ID
 	if customerID == "" {
 		log.Printf("No customer ID in subscription.updated event")
-		return nil
+		return nil, nil
 	}
 
 	plan := extractPlanFromSubscription(&sub)
@@ -393,102 +406,104 @@ func handleSubscriptionUpdated(ctx context.Context, dbClient *dynamodb.Client, e
 
 	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
 	if err != nil {
-		return fmt.Errorf("failed to look up account: %w", err)
+		return fmt.Errorf("failed to look up account: %w", err), nil
 	}
 	if acct == nil {
-		return nil
+		return nil, nil
 	}
 
 	previousPlan := acct.CurrentPlan
 
 	if err := updateAccountPlan(ctx, dbClient, acct.AccountID, plan, status); err != nil {
-		return fmt.Errorf("failed to update account: %w", err)
+		return fmt.Errorf("failed to update account: %w", err), nil
 	}
 
+	var notifData map[string]interface{}
 	if acct.OwnerUserID != "" {
 		syncCognitoPlanGroup(ctx, dbClient, acct.OwnerUserID, plan)
 
-		// Determine correct email type based on plan change direction
+		// Determine correct notification type based on plan change direction
 		emailType := classifyPlanChange(previousPlan, plan)
 		if emailType != "" {
-			sendBillingEmail(ctx, dbClient, acct.OwnerUserID, emailType, plan)
+			notifData = buildNotificationData(ctx, dbClient, acct.OwnerUserID, acct.AccountID, emailType, plan)
 		} else {
-			log.Printf("Subscription updated but plan unchanged (%s), no email sent", plan)
+			log.Printf("Subscription updated but plan unchanged (%s), no notification", plan)
 		}
 	}
 
-	return nil
+	return nil, notifData
 }
 
 // handleSubscriptionCancelled handles customer.subscription.deleted events.
-func handleSubscriptionCancelled(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+func handleSubscriptionCancelled(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) (error, map[string]interface{}) {
 	var sub stripe.Subscription
 	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
-		return fmt.Errorf("failed to parse subscription: %w", err)
+		return fmt.Errorf("failed to parse subscription: %w", err), nil
 	}
 
 	customerID := sub.Customer.ID
 	if customerID == "" {
-		return nil
+		return nil, nil
 	}
 
 	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
 	if err != nil {
-		return fmt.Errorf("failed to look up account: %w", err)
+		return fmt.Errorf("failed to look up account: %w", err), nil
 	}
 	if acct == nil {
-		return nil
+		return nil, nil
 	}
 
 	// Downgrade to trial plan
 	if err := updateAccountPlan(ctx, dbClient, acct.AccountID, "trial", "active"); err != nil {
-		return fmt.Errorf("failed to downgrade account: %w", err)
+		return fmt.Errorf("failed to downgrade account: %w", err), nil
 	}
 
 	// Mark trial as expired since they had a subscription before
 	setTrialExpired(ctx, dbClient, acct.AccountID)
 
+	var notifData map[string]interface{}
 	if acct.OwnerUserID != "" {
 		syncCognitoPlanGroup(ctx, dbClient, acct.OwnerUserID, "trial")
-		sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "subscription_cancelled", "trial")
+		notifData = buildNotificationData(ctx, dbClient, acct.OwnerUserID, acct.AccountID, "subscription_cancelled", "trial")
 	}
 
-	return nil
+	return nil, notifData
 }
 
 // handleTrialWillEnd handles customer.subscription.trial_will_end events (3 days before end).
-func handleTrialWillEnd(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+func handleTrialWillEnd(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) (error, map[string]interface{}) {
 	var sub stripe.Subscription
 	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
-		return fmt.Errorf("failed to parse subscription: %w", err)
+		return fmt.Errorf("failed to parse subscription: %w", err), nil
 	}
 
 	customerID := sub.Customer.ID
 	if customerID == "" {
-		return nil
+		return nil, nil
 	}
 
 	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
 	if err != nil {
-		return fmt.Errorf("failed to look up account: %w", err)
+		return fmt.Errorf("failed to look up account: %w", err), nil
 	}
 	if acct == nil {
-		return nil
+		return nil, nil
 	}
 
-	// No data changes, just send the email
+	var notifData map[string]interface{}
 	if acct.OwnerUserID != "" {
-		sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "trial_ending", acct.CurrentPlan)
+		notifData = buildNotificationData(ctx, dbClient, acct.OwnerUserID, acct.AccountID, "trial_ending", acct.CurrentPlan)
 	}
 
-	return nil
+	return nil, notifData
 }
 
 // handlePaymentFailed handles invoice.payment_failed events.
-func handlePaymentFailed(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+func handlePaymentFailed(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) (error, map[string]interface{}) {
 	var invoice stripe.Invoice
 	if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
-		return fmt.Errorf("failed to parse invoice: %w", err)
+		return fmt.Errorf("failed to parse invoice: %w", err), nil
 	}
 
 	customerID := ""
@@ -497,19 +512,18 @@ func handlePaymentFailed(ctx context.Context, dbClient *dynamodb.Client, event s
 	}
 	if customerID == "" {
 		log.Printf("Payment failed event with no customer ID")
-		return nil
+		return nil, nil
 	}
 
 	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
 	if err != nil {
-		return fmt.Errorf("failed to look up account: %w", err)
+		return fmt.Errorf("failed to look up account: %w", err), nil
 	}
 	if acct == nil {
-		return nil
+		return nil, nil
 	}
 
-	// No account status change -- Stripe handles retry logic.
-	// Send payment_failed email with direct link to pay the invoice.
+	var notifData map[string]interface{}
 	if acct.OwnerUserID != "" {
 		var extraData map[string]interface{}
 		if invoice.HostedInvoiceURL != "" {
@@ -517,19 +531,19 @@ func handlePaymentFailed(ctx context.Context, dbClient *dynamodb.Client, event s
 				"InvoiceURL": invoice.HostedInvoiceURL,
 			}
 		}
-		sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "payment_failed", acct.CurrentPlan, extraData)
+		notifData = buildNotificationData(ctx, dbClient, acct.OwnerUserID, acct.AccountID, "payment_failed", acct.CurrentPlan, extraData)
 	}
 
-	log.Printf("Payment failed for customer %s -- email sent, Stripe will retry", customerID)
-	return nil
+	log.Printf("Payment failed for customer %s -- notification data built, Stripe will retry", customerID)
+	return nil, notifData
 }
 
 // handleInvoicePaid handles invoice.paid events.
 // Resets past_due accounts back to active, and sends a payment receipt for all paid invoices.
-func handleInvoicePaid(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+func handleInvoicePaid(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) (error, map[string]interface{}) {
 	var invoice stripe.Invoice
 	if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
-		return fmt.Errorf("failed to parse invoice: %w", err)
+		return fmt.Errorf("failed to parse invoice: %w", err), nil
 	}
 
 	customerID := ""
@@ -537,15 +551,15 @@ func handleInvoicePaid(ctx context.Context, dbClient *dynamodb.Client, event str
 		customerID = invoice.Customer.ID
 	}
 	if customerID == "" {
-		return nil
+		return nil, nil
 	}
 
 	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
 	if err != nil {
-		return fmt.Errorf("failed to look up account: %w", err)
+		return fmt.Errorf("failed to look up account: %w", err), nil
 	}
 	if acct == nil {
-		return nil
+		return nil, nil
 	}
 
 	// Reset past_due accounts back to active
@@ -565,18 +579,20 @@ func handleInvoicePaid(ctx context.Context, dbClient *dynamodb.Client, event str
 			},
 		})
 		if err != nil {
-			return fmt.Errorf("failed to reset account status: %w", err)
+			return fmt.Errorf("failed to reset account status: %w", err), nil
 		}
 
 		log.Printf("Reset account %s from past_due to active", acct.AccountID)
 
+		var notifData map[string]interface{}
 		if acct.OwnerUserID != "" {
-			sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "payment_recovered", acct.CurrentPlan)
+			notifData = buildNotificationData(ctx, dbClient, acct.OwnerUserID, acct.AccountID, "payment_recovered", acct.CurrentPlan)
 		}
-		return nil
+		return nil, notifData
 	}
 
 	// For all other paid invoices, send a payment receipt
+	var notifData map[string]interface{}
 	if acct.OwnerUserID != "" && invoice.AmountPaid > 0 {
 		extraData := map[string]interface{}{
 			"Amount":        formatStripeAmount(invoice.AmountPaid, string(invoice.Currency)),
@@ -585,19 +601,19 @@ func handleInvoicePaid(ctx context.Context, dbClient *dynamodb.Client, event str
 		if invoice.HostedInvoiceURL != "" {
 			extraData["InvoiceURL"] = invoice.HostedInvoiceURL
 		}
-		sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "payment_receipt", acct.CurrentPlan, extraData)
-		log.Printf("Sent payment receipt for invoice %s (amount: %d %s)", invoice.Number, invoice.AmountPaid, invoice.Currency)
+		notifData = buildNotificationData(ctx, dbClient, acct.OwnerUserID, acct.AccountID, "payment_receipt", acct.CurrentPlan, extraData)
+		log.Printf("Built payment receipt notification for invoice %s (amount: %d %s)", invoice.Number, invoice.AmountPaid, invoice.Currency)
 	}
 
-	return nil
+	return nil, notifData
 }
 
 // handleChargeRefunded handles charge.refunded events.
-// Sends a refund confirmation email to the account owner.
-func handleChargeRefunded(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) error {
+// Builds refund notification data for the account owner.
+func handleChargeRefunded(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event) (error, map[string]interface{}) {
 	var charge stripe.Charge
 	if err := json.Unmarshal(event.Data.Raw, &charge); err != nil {
-		return fmt.Errorf("failed to parse charge: %w", err)
+		return fmt.Errorf("failed to parse charge: %w", err), nil
 	}
 
 	customerID := ""
@@ -606,17 +622,18 @@ func handleChargeRefunded(ctx context.Context, dbClient *dynamodb.Client, event 
 	}
 	if customerID == "" {
 		log.Printf("Charge refunded event with no customer ID")
-		return nil
+		return nil, nil
 	}
 
 	acct, err := lookupAccountByStripeCustomer(ctx, dbClient, customerID)
 	if err != nil {
-		return fmt.Errorf("failed to look up account: %w", err)
+		return fmt.Errorf("failed to look up account: %w", err), nil
 	}
 	if acct == nil {
-		return nil
+		return nil, nil
 	}
 
+	var notifData map[string]interface{}
 	if acct.OwnerUserID != "" {
 		refundAmount := charge.AmountRefunded
 		refundReason := ""
@@ -639,12 +656,12 @@ func handleChargeRefunded(ctx context.Context, dbClient *dynamodb.Client, event 
 			extraData["RefundReason"] = refundReason
 		}
 
-		sendBillingEmail(ctx, dbClient, acct.OwnerUserID, "refund_processed", acct.CurrentPlan, extraData)
-		log.Printf("Sent refund_processed email for customer %s (amount: %d %s)",
+		notifData = buildNotificationData(ctx, dbClient, acct.OwnerUserID, acct.AccountID, "refund_processed", acct.CurrentPlan, extraData)
+		log.Printf("Built refund_processed notification for customer %s (amount: %d %s)",
 			customerID, refundAmount, charge.Currency)
 	}
 
-	return nil
+	return nil, notifData
 }
 
 // formatStripeAmount converts Stripe's integer cents to a formatted dollar string.
@@ -675,17 +692,17 @@ func formatRefundReason(reason string) string {
 }
 
 // handleCheckoutSessionCompleted handles checkout.session.completed events.
-func handleCheckoutSessionCompleted(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event, stripeKey string) error {
+func handleCheckoutSessionCompleted(ctx context.Context, dbClient *dynamodb.Client, event stripe.Event, stripeKey string) (error, map[string]interface{}) {
 	var sess stripe.CheckoutSession
 	if err := json.Unmarshal(event.Data.Raw, &sess); err != nil {
-		return fmt.Errorf("failed to parse checkout session: %w", err)
+		return fmt.Errorf("failed to parse checkout session: %w", err), nil
 	}
 
 	log.Printf("Checkout session completed: %s, mode: %s", sess.ID, sess.Mode)
 
 	if sess.Mode != stripe.CheckoutSessionModeSubscription {
 		log.Printf("Ignoring non-subscription checkout session")
-		return nil
+		return nil, nil
 	}
 
 	// Extract account_id and plan from session metadata or subscription metadata
@@ -719,7 +736,7 @@ func handleCheckoutSessionCompleted(ctx context.Context, dbClient *dynamodb.Clie
 
 	if accountID == "" {
 		log.Printf("No account_id found in checkout session metadata, falling back to customer lookup")
-		return nil
+		return nil, nil
 	}
 
 	if plan == "" {
@@ -753,7 +770,7 @@ func handleCheckoutSessionCompleted(ctx context.Context, dbClient *dynamodb.Clie
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to activate account %s: %w", accountID, err)
+		return fmt.Errorf("failed to activate account %s: %w", accountID, err), nil
 	}
 
 	log.Printf("Successfully activated account %s on plan %s", accountID, plan)
@@ -763,14 +780,15 @@ func handleCheckoutSessionCompleted(ctx context.Context, dbClient *dynamodb.Clie
 		storeMeteredItemID(ctx, dbClient, accountID, sess.Subscription.ID, stripeKey)
 	}
 
-	// Send welcome/activation email
+	// Build notification data — stream processor will enqueue the email
+	var notifData map[string]interface{}
 	ownerUserID := getAccountOwnerUserID(ctx, dbClient, accountID)
 	if ownerUserID != "" {
 		syncCognitoPlanGroup(ctx, dbClient, ownerUserID, plan)
-		sendBillingEmail(ctx, dbClient, ownerUserID, "subscription_created", plan)
+		notifData = buildNotificationData(ctx, dbClient, ownerUserID, accountID, "subscription_created", plan)
 	}
 
-	return nil
+	return nil, notifData
 }
 
 // ---------------------------------------------------------------------------
@@ -823,12 +841,13 @@ func intToStr(n int) string {
 	return fmt.Sprintf("%d", n)
 }
 
-// sendBillingEmail looks up the account owner and sends a billing notification email.
-// Optional extraData is forwarded to the notification service (e.g., InvoiceURL).
-func sendBillingEmail(ctx context.Context, dbClient *dynamodb.Client, ownerUserID, eventType, plan string, extraData ...map[string]interface{}) {
-	if usersTable == "" {
-		log.Printf("USERS_TABLE not set, skipping billing email")
-		return
+// buildNotificationData looks up the account owner's email/name and returns a
+// notification_data map. This map is written to the webhook-events DynamoDB record
+// so the stream consumer can enqueue the email notification via SQS.
+// Returns nil if the user cannot be found or if ownerUserID is empty.
+func buildNotificationData(ctx context.Context, dbClient *dynamodb.Client, ownerUserID, accountID, eventType, plan string, extraData ...map[string]interface{}) map[string]interface{} {
+	if usersTable == "" || ownerUserID == "" {
+		return nil
 	}
 
 	// Look up owner user to get their email
@@ -843,17 +862,17 @@ func sendBillingEmail(ctx context.Context, dbClient *dynamodb.Client, ownerUserI
 		},
 	})
 	if err != nil {
-		log.Printf("Failed to look up user %s for billing email: %v", ownerUserID, err)
-		return
+		log.Printf("Failed to look up user %s for notification data: %v", ownerUserID, err)
+		return nil
 	}
 	if userResult.Item == nil {
-		log.Printf("User %s not found, skipping billing email", ownerUserID)
-		return
+		log.Printf("User %s not found, skipping notification data", ownerUserID)
+		return nil
 	}
 
 	emailAttr, ok := userResult.Item["email"]
 	if !ok {
-		return
+		return nil
 	}
 	userEmail := emailAttr.(*ddbtypes.AttributeValueMemberS).Value
 
@@ -862,17 +881,21 @@ func sendBillingEmail(ctx context.Context, dbClient *dynamodb.Client, ownerUserI
 		userName = nameAttr.(*ddbtypes.AttributeValueMemberS).Value
 	}
 
-	notifSvc, err := notifications.New(ctx)
-	if err != nil {
-		log.Printf("Failed to create notification service: %v", err)
-		return
+	data := map[string]interface{}{
+		"notification_type": "billing_event",
+		"user_id":           ownerUserID,
+		"account_id":        accountID,
+		"event_type":        eventType,
+		"plan_name":         billing.GetPlanLabel(plan),
+		"email":             userEmail,
+		"user_name":         userName,
 	}
 
-	if err := notifSvc.SendBillingEvent(ctx, userName, userEmail, eventType, billing.GetPlanLabel(plan), extraData...); err != nil {
-		log.Printf("Failed to send %s billing email to %s: %v", eventType, userEmail, err)
-	} else {
-		log.Printf("Sent %s billing email to %s (plan: %s)", eventType, userEmail, plan)
+	if len(extraData) > 0 && extraData[0] != nil {
+		data["extra"] = extraData[0]
 	}
+
+	return data
 }
 
 // syncCognitoPlanGroup updates a user's Cognito plan group.

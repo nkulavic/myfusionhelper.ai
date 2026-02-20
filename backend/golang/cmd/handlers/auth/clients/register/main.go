@@ -21,7 +21,6 @@ import (
 	"github.com/myfusionhelper/api/internal/billing"
 	appConfig "github.com/myfusionhelper/api/internal/config"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
-	"github.com/myfusionhelper/api/internal/notifications"
 	stripe "github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/customer"
 )
@@ -333,17 +332,9 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 
 	log.Printf("Registration successful for user: %s", req.Email)
 
-	// Send welcome email asynchronously
-	go func() {
-		notifSvc, err := notifications.New(ctx)
-		if err != nil {
-			log.Printf("Failed to create notification service for welcome email: %v", err)
-			return
-		}
-		if err := notifSvc.SendWelcomeEmail(ctx, req.Name, req.Email); err != nil {
-			log.Printf("Failed to send welcome email: %v", err)
-		}
-	}()
+	// Welcome email is triggered automatically by the DynamoDB stream on the
+	// Users table INSERT. The notification-stream-processor detects the new
+	// user record and enqueues a "welcome" notification via SQS.
 
 	return authMiddleware.CreateSuccessResponse(200, "Registration successful", map[string]interface{}{
 		"token":         *authResult.AuthenticationResult.AccessToken,

@@ -174,7 +174,7 @@ jobs:
           if [ "$DEPLOY_TARGET" = "all" ]; then
             echo "infra_services=$(to_json 'cognito dynamodb-core s3 sqs ses acm')" >> $GITHUB_OUTPUT
             echo "has_infra=true" >> $GITHUB_OUTPUT
-            echo "pre_gateway_services=$(to_json 'api-key-authorizer scheduler executions-stream stream-router')" >> $GITHUB_OUTPUT
+            echo "pre_gateway_services=$(to_json 'api-key-authorizer scheduler executions-stream stream-router notification-stream-processor')" >> $GITHUB_OUTPUT
             echo "has_pre_gateway=true" >> $GITHUB_OUTPUT
             echo "deploy_gateway=true" >> $GITHUB_OUTPUT
             echo "deploy_route53=true" >> $GITHUB_OUTPUT
@@ -332,9 +332,12 @@ jobs:
           if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/workers/stream-router/)"; then
             PRE_GW="$PRE_GW stream-router"
           fi
+          if echo "$CHANGED_FILES" | grep -qE "^backend/golang/(services/workers/notification-stream-processor/)"; then
+            PRE_GW="$PRE_GW notification-stream-processor"
+          fi
           # Shared code → deploy all pre-gateway
           if $DEPLOY_ALL_API; then
-            PRE_GW="api-key-authorizer scheduler executions-stream stream-router"
+            PRE_GW="api-key-authorizer scheduler executions-stream stream-router notification-stream-processor"
           fi
 
           # ── Gateway ──
@@ -619,6 +622,7 @@ jobs:
             scheduler)          echo "dir=services/workers/scheduler" >> $GITHUB_OUTPUT ;;
             executions-stream)  echo "dir=services/workers/executions-stream" >> $GITHUB_OUTPUT ;;
             stream-router)      echo "dir=services/workers/stream-router" >> $GITHUB_OUTPUT ;;
+            notification-stream-processor) echo "dir=services/workers/notification-stream-processor" >> $GITHUB_OUTPUT ;;
             *) echo "Unknown pre-gateway service: ${{ matrix.service }}"; exit 1 ;;
           esac
 

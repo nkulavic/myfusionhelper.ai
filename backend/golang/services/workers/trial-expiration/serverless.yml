@@ -26,8 +26,6 @@ provider:
     STAGE: ${self:provider.stage}
     COGNITO_REGION: ${self:provider.region}
     ACCOUNTS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableName}
-    USERS_TABLE: ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableName}
-    INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
   iam:
     role:
       statements:
@@ -37,16 +35,6 @@ provider:
             - dynamodb:UpdateItem
           Resource:
             - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.AccountsTableArn}
-        - Effect: Allow
-          Action:
-            - dynamodb:GetItem
-          Resource:
-            - ${cf:mfh-infrastructure-dynamodb-core-${self:provider.stage}.UsersTableArn}
-        - Effect: Allow
-          Action:
-            - ssm:GetParameter
-          Resource:
-            - "arn:aws:ssm:${self:provider.region}:*:parameter/myfusionhelper/${self:provider.stage}/secrets"
         - Effect: Allow
           Action:
             - logs:CreateLogGroup

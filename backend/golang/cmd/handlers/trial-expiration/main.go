@@ -12,12 +12,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/myfusionhelper/api/internal/notifications"
 )
 
 var (
 	accountsTable = os.Getenv("ACCOUNTS_TABLE")
-	usersTable    = os.Getenv("USERS_TABLE")
 )
 
 // trialAccount is a minimal projection of an account for the scan.
@@ -90,10 +88,10 @@ func handleScheduleEvent(ctx context.Context) error {
 			expiredCount++
 			log.Printf("Expired trial for account %s (trial ended: %v)", account.AccountID, account.TrialEndsAt)
 
-			// Send trial_expired email to the account owner
-			if account.OwnerUserID != "" {
-				sendTrialExpiredEmail(ctx, db, account.OwnerUserID)
-			}
+			// The trial_expired email is triggered automatically by the
+			// DynamoDB stream on the Accounts table. The notification-stream-
+			// processor detects trial_expired flipping from false to true
+			// and enqueues the notification via SQS.
 		}
 
 		lastKey = result.LastEvaluatedKey
@@ -123,52 +121,3 @@ func markTrialExpired(ctx context.Context, db *dynamodb.Client, accountID string
 	return err
 }
 
-// sendTrialExpiredEmail looks up the user's email and sends a trial_expired notification.
-func sendTrialExpiredEmail(ctx context.Context, db *dynamodb.Client, ownerUserID string) {
-	if usersTable == "" {
-		log.Printf("USERS_TABLE not set, skipping trial expired email")
-		return
-	}
-
-	userResult, err := db.GetItem(ctx, &dynamodb.GetItemInput{
-		TableName: aws.String(usersTable),
-		Key: map[string]ddbtypes.AttributeValue{
-			"user_id": &ddbtypes.AttributeValueMemberS{Value: ownerUserID},
-		},
-		ProjectionExpression: aws.String("#n, email"),
-		ExpressionAttributeNames: map[string]string{
-			"#n": "name",
-		},
-	})
-	if err != nil {
-		log.Printf("Failed to look up user %s for trial expired email: %v", ownerUserID, err)
-		return
-	}
-	if userResult.Item == nil {
-		log.Printf("User %s not found, skipping trial expired email", ownerUserID)
-		return
-	}
-
-	emailAttr, ok := userResult.Item["email"]
-	if !ok {
-		return
-	}
-	userEmail := emailAttr.(*ddbtypes.AttributeValueMemberS).Value
-
-	userName := "there"
-	if nameAttr, ok := userResult.Item["name"]; ok {
-		userName = nameAttr.(*ddbtypes.AttributeValueMemberS).Value
-	}
-
-	notifSvc, err := notifications.New(ctx)
-	if err != nil {
-		log.Printf("Failed to create notification service: %v", err)
-		return
-	}
-
-	if err := notifSvc.SendBillingEvent(ctx, userName, userEmail, "trial_expired", "Trial"); err != nil {
-		log.Printf("Failed to send trial expired email to %s: %v", userEmail, err)
-	} else {
-		log.Printf("Sent trial_expired email to %s", userEmail)
-	}
-}

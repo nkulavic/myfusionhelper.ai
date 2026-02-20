@@ -51,6 +51,7 @@ provider:
     API_VERSION: v1
     API_REFERENCE: mfh-api
     INTERNAL_SECRETS_PARAM: /myfusionhelper/${self:provider.stage}/secrets
+    NOTIFICATION_QUEUE_URL: ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueUrl}
   iam:
     role:
       statements:
@@ -106,6 +107,11 @@ provider:
             - ses:SendEmail
             - ses:SendRawEmail
           Resource: "arn:aws:ses:${self:provider.region}:*:identity/myfusionhelper.ai"
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource:
+            - ${cf:mfh-infrastructure-sqs-${self:provider.stage}.NotificationQueueArn}
         - Effect: Allow
           Action:
             - ssm:GetParameter

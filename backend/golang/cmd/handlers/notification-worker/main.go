@@ -58,20 +58,54 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 
 		log.Printf("Processing notification type=%s for user=%s", job.Type, job.UserID)
 
-		// Look up user info
-		_, userEmail, _, err := lookupUser(ctx, db, job.UserID)
-		if err != nil {
-			log.Printf("Failed to look up user %s: %v", job.UserID, err)
-			continue
+		// Use email/name from job data if present (stream-sourced messages include them).
+		// Fall back to DDB lookup for messages that don't include user info.
+		userName := getStringData(job.Data, "user_name")
+		userEmail := getStringData(job.Data, "email")
+		if userEmail == "" {
+			userEmail = getStringData(job.Data, "user_email")
+		}
+		if userEmail == "" && job.UserID != "" {
+			var lookupErr error
+			userName, userEmail, _, lookupErr = lookupUser(ctx, db, job.UserID)
+			if lookupErr != nil {
+				log.Printf("Failed to look up user %s: %v", job.UserID, lookupErr)
+				continue
+			}
 		}
 
 		if userEmail == "" {
 			log.Printf("No email found for user %s, skipping", job.UserID)
 			continue
 		}
+		if userName == "" {
+			userName = "there"
+		}
 
 		// Dispatch based on notification type
 		switch job.Type {
+		case "welcome":
+			target := getStringData(job.Data, "user_email")
+			if target == "" {
+				target = userEmail
+			}
+			name := getStringData(job.Data, "user_name")
+			if name == "" {
+				name = userName
+			}
+			if err := notifSvc.SendWelcomeEmail(ctx, name, target); err != nil {
+				log.Printf("Failed to send welcome email: %v", err)
+			}
+
+		case "password_reset":
+			target := getStringData(job.Data, "user_email")
+			if target == "" {
+				target = userEmail
+			}
+			if err := notifSvc.SendPasswordResetEmail(ctx, target, ""); err != nil {
+				log.Printf("Failed to send password reset email: %v", err)
+			}
+
 		case "execution_failure":
 			helperName := getStringData(job.Data, "helper_name")
 			errorMsg := getStringData(job.Data, "error_message")
@@ -97,7 +131,13 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 		case "billing_event":
 			eventType := getStringData(job.Data, "event_type")
 			planName := getStringData(job.Data, "plan_name")
-			if err := notifSvc.SendBillingEvent(ctx, job.AccountID, userEmail, eventType, planName); err != nil {
+			var extraData []map[string]interface{}
+			if extra, ok := job.Data["extra"]; ok {
+				if m, ok := extra.(map[string]interface{}); ok {
+					extraData = append(extraData, m)
+				}
+			}
+			if err := notifSvc.SendBillingEvent(ctx, userName, userEmail, eventType, planName, extraData...); err != nil {
 				log.Printf("Failed to send billing event email: %v", err)
 			}
 
