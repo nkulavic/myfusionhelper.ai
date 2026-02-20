@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -161,8 +162,8 @@ func (s *SESClient) SendEmail(ctx context.Context, message EmailMessage) (*Email
 		for key, value := range message.Tags {
 			if key != "" && value != "" {
 				tags = append(tags, sestypes.MessageTag{
-					Name:  aws.String(key),
-					Value: aws.String(value),
+					Name:  aws.String(sanitizeTagValue(key)),
+					Value: aws.String(sanitizeTagValue(value)),
 				})
 			}
 		}
@@ -264,8 +265,8 @@ func (s *SESClient) SendTemplatedEmail(ctx context.Context, message EmailMessage
 		for key, value := range message.Tags {
 			if key != "" && value != "" {
 				tags = append(tags, sestypes.MessageTag{
-					Name:  aws.String(key),
-					Value: aws.String(value),
+					Name:  aws.String(sanitizeTagValue(key)),
+					Value: aws.String(sanitizeTagValue(value)),
 				})
 			}
 		}
@@ -366,6 +367,18 @@ func isValidEmail(email string) bool {
 	}
 
 	return hasDot
+}
+
+// sanitizeTagValue replaces characters not allowed by SES with underscores.
+// SES only allows alphanumeric ASCII, '_', '-', '.', '@'.
+func sanitizeTagValue(s string) string {
+	return strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
+			r == '_' || r == '-' || r == '.' || r == '@' {
+			return r
+		}
+		return '_'
+	}, s)
 }
 
 // GetSendQuota returns the current SES sending quota
