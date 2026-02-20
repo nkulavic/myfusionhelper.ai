@@ -131,13 +131,16 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 		case "billing_event":
 			eventType := getStringData(job.Data, "event_type")
 			planName := getStringData(job.Data, "plan_name")
-			var extraData []map[string]interface{}
-			if extra, ok := job.Data["extra"]; ok {
-				if m, ok := extra.(map[string]interface{}); ok {
-					extraData = append(extraData, m)
+			extra := map[string]interface{}{}
+			if e, ok := job.Data["extra"]; ok {
+				if m, ok := e.(map[string]interface{}); ok {
+					extra = m
 				}
 			}
-			if err := notifSvc.SendBillingEvent(ctx, userName, userEmail, eventType, planName, extraData...); err != nil {
+			if userName != "" {
+				extra["UserName"] = userName
+			}
+			if err := notifSvc.SendBillingEvent(ctx, job.AccountID, userEmail, eventType, planName, extra); err != nil {
 				log.Printf("Failed to send billing event email: %v", err)
 			}
 
