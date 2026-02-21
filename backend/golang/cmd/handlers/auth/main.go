@@ -24,7 +24,9 @@ import (
 	mfaChallengeClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/mfa-challenge"
 	refreshClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/refresh"
 	registerClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/register"
+	resendVerificationClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/resend-verification"
 	resetPasswordClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/reset-password"
+	verifyEmailClient "github.com/myfusionhelper/api/cmd/handlers/auth/clients/verify-email"
 )
 
 // Handle is the main entry point for the consolidated auth service
@@ -75,6 +77,10 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return resetPasswordClient.Handle(ctx, event)
 	case "/auth/mfa-challenge":
 		return mfaChallengeClient.Handle(ctx, event)
+	case "/auth/verify-email":
+		return verifyEmailClient.Handle(ctx, event)
+	case "/auth/resend-verification":
+		return resendVerificationClient.Handle(ctx, event)
 
 	default:
 		log.Printf("No handler found for path: %s", event.RequestContext.HTTP.Path)

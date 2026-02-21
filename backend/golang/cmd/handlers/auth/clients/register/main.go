@@ -2,9 +2,11 @@ package register
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"log"
+	"math/big"
 	"os"
 	"strings"
 	"time"
@@ -16,11 +18,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/google/uuid"
 	"github.com/myfusionhelper/api/internal/apiutil"
 	"github.com/myfusionhelper/api/internal/billing"
 	appConfig "github.com/myfusionhelper/api/internal/config"
+	"github.com/myfusionhelper/api/internal/database"
 	authMiddleware "github.com/myfusionhelper/api/internal/middleware/auth"
+	"github.com/myfusionhelper/api/internal/types"
 	stripe "github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/customer"
 )
@@ -42,6 +47,7 @@ type User struct {
 	Company          string `json:"company,omitempty" dynamodbav:"company,omitempty"`
 	Status           string `json:"status" dynamodbav:"status"`
 	CurrentAccountID string `json:"current_account_id" dynamodbav:"current_account_id"`
+	EmailVerified    bool   `json:"email_verified" dynamodbav:"email_verified"`
 	CreatedAt        string `json:"created_at" dynamodbav:"created_at"`
 	UpdatedAt        string `json:"updated_at" dynamodbav:"updated_at"`
 }
@@ -83,11 +89,12 @@ type Account struct {
 }
 
 var (
-	usersTable        = os.Getenv("USERS_TABLE")
-	accountsTable     = os.Getenv("ACCOUNTS_TABLE")
-	userAccountsTable = os.Getenv("USER_ACCOUNTS_TABLE")
-	userPoolID        = os.Getenv("COGNITO_USER_POOL_ID")
-	cognitoClientID   = os.Getenv("COGNITO_CLIENT_ID")
+	usersTable              = os.Getenv("USERS_TABLE")
+	accountsTable           = os.Getenv("ACCOUNTS_TABLE")
+	userAccountsTable       = os.Getenv("USER_ACCOUNTS_TABLE")
+	emailVerificationsTable = os.Getenv("EMAIL_VERIFICATIONS_TABLE")
+	userPoolID              = os.Getenv("COGNITO_USER_POOL_ID")
+	cognitoClientID         = os.Getenv("COGNITO_CLIENT_ID")
 )
 
 // Handle is the registration handler (public, no auth required)
@@ -136,7 +143,7 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 	// Build user attributes
 	userAttributes := []cognitotypes.AttributeType{
 		{Name: aws.String("email"), Value: aws.String(strings.ToLower(req.Email))},
-		{Name: aws.String("email_verified"), Value: aws.String("true")},
+		{Name: aws.String("email_verified"), Value: aws.String("false")},
 		{Name: aws.String("name"), Value: aws.String(req.Name)},
 	}
 	if req.PhoneNumber != "" {
@@ -259,6 +266,7 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		Company:          req.Company,
 		Status:           "active",
 		CurrentAccountID: accountID,
+		EmailVerified:    false,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -312,6 +320,54 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		return authMiddleware.CreateErrorResponse(500, "Failed to create user-account relationship"), nil
 	}
 
+	// Generate email verification code and enqueue notification
+	verifyCode, err := generateSecureCode()
+	if err != nil {
+		log.Printf("Failed to generate verification code: %v", err)
+		// Non-fatal — user is created, they can resend later
+	} else if emailVerificationsTable != "" {
+		verificationsRepo := database.NewEmailVerificationsRepository(dynamoClient, emailVerificationsTable)
+
+		verification := &types.EmailVerification{
+			VerificationID: "verify:" + uuid.Must(uuid.NewV7()).String(),
+			Email:          strings.ToLower(req.Email),
+			Token:          verifyCode,
+			ExpiresAt:      time.Now().Add(15 * time.Minute).Unix(),
+		}
+		if err := verificationsRepo.Create(ctx, verification); err != nil {
+			log.Printf("Failed to store email verification code: %v", err)
+		} else {
+			log.Printf("Created email verification code for %s (verification_id: %s)", req.Email, verification.VerificationID)
+		}
+
+		// Enqueue email_verification notification via SQS
+		notifQueueURL := os.Getenv("NOTIFICATION_QUEUE_URL")
+		if notifQueueURL != "" {
+			sqsClient := sqs.NewFromConfig(cfg)
+			userName := req.Name
+			if userName == "" {
+				userName = "there"
+			}
+			jobJSON, _ := json.Marshal(map[string]interface{}{
+				"type":    "email_verification",
+				"user_id": userID,
+				"data": map[string]interface{}{
+					"user_email":  strings.ToLower(req.Email),
+					"user_name":   userName,
+					"verify_code": verifyCode,
+				},
+			})
+			_, sqsErr := sqsClient.SendMessage(ctx, &sqs.SendMessageInput{
+				QueueUrl:       aws.String(notifQueueURL),
+				MessageGroupId: aws.String("email-verify"),
+				MessageBody:    aws.String(string(jobJSON)),
+			})
+			if sqsErr != nil {
+				log.Printf("Failed to enqueue email verification notification: %v", sqsErr)
+			}
+		}
+	}
+
 	// Authenticate the new user to get tokens
 	authResult, err := cognitoClient.InitiateAuth(ctx, &cognitoidentityprovider.InitiateAuthInput{
 		AuthFlow: cognitotypes.AuthFlowTypeUserPasswordAuth,
@@ -342,4 +398,23 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 		"user":          user,
 		"account":       account,
 	}), nil
+}
+
+// generateSecureCode generates a cryptographically secure 6-digit numeric code
+func generateSecureCode() (string, error) {
+	max := big.NewInt(1000000) // 0-999999
+	n, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		return "", err
+	}
+	return padCode(n.Int64()), nil
+}
+
+func padCode(n int64) string {
+	s := make([]byte, 6)
+	for i := 5; i >= 0; i-- {
+		s[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(s)
 }

@@ -69,6 +69,10 @@ export default function LoginPage() {
           setMfaChallenge(res.data as MfaChallengeResponse)
           return
         }
+        if (res.data && 'user' in res.data && res.data.user?.emailVerified === false) {
+          router.push(`/verify-email?email=${encodeURIComponent(values.email)}`)
+          return
+        }
         router.push(onboardingComplete ? '/' : '/onboarding/plan')
       },
       onError: (err) => {
@@ -106,7 +110,11 @@ export default function LoginPage() {
       if (res.data) {
         setUser(res.data.user, res.data.token, res.data.refreshToken)
         setAccount(res.data.account)
-        router.push(onboardingComplete ? '/' : '/onboarding/plan')
+        if (res.data.user?.emailVerified === false) {
+          router.push(`/verify-email?email=${encodeURIComponent(res.data.user.email)}`)
+        } else {
+          router.push(onboardingComplete ? '/' : '/onboarding/plan')
+        }
       }
     } catch (err) {
       if (err instanceof APIError) {

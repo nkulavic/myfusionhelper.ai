@@ -36,6 +36,7 @@ type User struct {
 	Status             string `json:"status" dynamodbav:"status"`
 	CurrentAccountID   string `json:"current_account_id" dynamodbav:"current_account_id"`
 	OnboardingComplete bool   `json:"onboarding_complete" dynamodbav:"onboarding_complete"`
+	EmailVerified      bool   `json:"email_verified" dynamodbav:"email_verified"`
 	CreatedAt          string `json:"created_at" dynamodbav:"created_at"`
 	UpdatedAt          string `json:"updated_at" dynamodbav:"updated_at"`
 }

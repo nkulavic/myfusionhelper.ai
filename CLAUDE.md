@@ -46,7 +46,7 @@ myfusionhelper.ai/
 - **ACM Certificate**: Managed via `services/infrastructure/acm` (DNS validation)
 - **Cognito User Pool**: `us-west-2_1E74cZW97`
 - **DynamoDB table prefix**: `mfh-{stage}-` (e.g., `mfh-dev-users`)
-- **S3 data bucket**: `mfh-{stage}-data`
+- **S3 data bucket**: `mfh-{stage}-data` (also stores email templates at `email-templates/`)
 - **Unified Secrets SSM**: `/myfusionhelper/{stage}/secrets` (single SecureString JSON -- see Secrets section below)
 
 ## AWS CLI Profile for Claude Code
@@ -232,10 +232,10 @@ Reads stage-prefixed GitHub secrets, builds unified JSON via `scripts/build-inte
 | `DEV_INTERNAL_STRIPE_PRICE_GROW` | sync-internal-secrets | Stripe price ID for Grow plan (dev) |
 | `DEV_INTERNAL_STRIPE_PRICE_DELIVER` | sync-internal-secrets | Stripe price ID for Deliver plan (dev) |
 | `DEV_INTERNAL_GROQ_API_KEY` | sync-internal-secrets | Groq API key for voice assistants (dev, optional) |
-| `DEV_INTERNAL_TWILIO_ACCOUNT_SID` | sync-internal-secrets | Twilio account SID (dev, optional) |
-| `DEV_INTERNAL_TWILIO_AUTH_TOKEN` | sync-internal-secrets | Twilio auth token (dev, optional) |
-| `DEV_INTERNAL_TWILIO_FROM_NUMBER` | sync-internal-secrets | Twilio phone number (dev, optional) |
-| `DEV_INTERNAL_TWILIO_MESSAGING_SID` | sync-internal-secrets | Twilio messaging service SID (dev, optional) |
+| `DEV_INTERNAL_TWILIO_ACCOUNT_SID` | sync-internal-secrets | Twilio account SID (dev, **account suspended — needs reactivation**) |
+| `DEV_INTERNAL_TWILIO_AUTH_TOKEN` | sync-internal-secrets | Twilio auth token (dev, **needs update after reactivation**) |
+| `DEV_INTERNAL_TWILIO_FROM_NUMBER` | sync-internal-secrets | Twilio phone number (dev, **not yet set**) |
+| `DEV_INTERNAL_TWILIO_MESSAGING_SID` | sync-internal-secrets | Twilio messaging service SID (dev, **not yet set**) |
 
 Same pattern for `STAGING_INTERNAL_*` and `MAIN_INTERNAL_*` (36 stage-scoped + 1 global = **37 total GitHub secrets**).
 
@@ -371,15 +371,44 @@ These old SSM parameters still exist but are **no longer used**:
 | `invoice.payment_failed` | No data change (Stripe retries) | `payment_failed` (with hosted invoice URL) |
 | `charge.refunded` | No data change | `refund_processed` (amount, reason) |
 
-### Transactional Email System
+### Transactional Email System (S3 Liquid Templates)
 
-**Internal email service**: `cmd/handlers/internal-email/clients/send/main.go` — receives template type + data, renders HTML via `internal/email/templates.go`, sends via SES.
+**Template engine**: Liquid templates (`github.com/osteele/liquid`) stored in S3, rendered at runtime. Templates are cached for 5 minutes by the `TemplateLoader`.
+
+**S3 location**: `s3://mfh-{stage}-data/email-templates/{template_type}/` — each template has `subject.liquid`, `body.html.liquid`, `body.txt.liquid` (optional), and `meta.json` (header, CTA, icon).
+
+**Template source files**: `backend/golang/email-templates/` — synced to S3 during deployment.
+
+**Internal email service**: `cmd/handlers/internal-email/clients/send/main.go` — receives template type + data, resolves S3 path, renders Liquid templates, sends via SES.
 
 **Notification service**: `internal/notifications/notifications.go` — HTTP client that calls the internal email API. Used by webhook handler, trial-expiration worker, and other services.
 
-**Email flow**: Handler → `notifications.SendBillingEvent()` → HTTP POST to `/internal/emails/send` → `mapToTemplateData()` → `GetBillingEventEmailTemplate()` → SES
+**Email flow**:
+```
+Handler → SQS (NotificationQueue)
+  → Notification Worker → HTTP POST to /internal/emails/send
+  → ResolveTemplatePath() → TemplateLoader (S3 + cache)
+  → Liquid render with TemplateData bindings (snake_case)
+  → meta.json (header_title, cta_url, etc.) injected into HTML wrapper
+  → SES sends email
+```
 
-**12 email template types**: `welcome`, `password_reset`, `email_verification`, `execution_alert`, `billing_event` (with sub-types: `subscription_created`, `subscription_cancelled`, `payment_failed`, `payment_recovered`, `payment_receipt`, `trial_ending`, `trial_expired`, `plan_upgraded`, `plan_downgraded`, `card_expiring`, `refund_processed`), `connection_alert`, `usage_alert`, `weekly_summary`, `team_invite`
+**9 email template types** (each a directory in S3):
+- `welcome`, `password_reset`, `execution_alert`, `connection_alert`, `usage_alert`, `weekly_summary`, `team_invite`
+- `billing_event/` — contains 12 sub-type subdirectories: `subscription_created`, `subscription_cancelled`, `payment_failed`, `payment_recovered`, `payment_receipt`, `trial_ending`, `trial_expired`, `plan_upgraded`, `plan_downgraded`, `card_expiring`, `refund_processed`, `default`
+
+**Liquid template variables**: All use snake_case (e.g., `{{ user_name }}`, `{{ reset_code }}`, `{{ base_url }}`, `{{ plan_name }}`). Converted from Go `TemplateData` struct via `TemplateDataToBindings()`.
+
+### Password Reset Flow (Self-Managed Verification Codes)
+
+Password reset does **NOT** use Cognito's `ForgotPassword`/`ConfirmForgotPassword` APIs. Instead, the system generates and manages its own 6-digit verification codes:
+
+1. `POST /auth/forgot-password` — generates crypto/rand 6-digit code, stores in `EMAIL_VERIFICATIONS_TABLE` (15-min TTL), enqueues branded email via SQS with the code. Always returns 200 (email enumeration prevention).
+2. User receives branded email with `{{ reset_code }}` rendered in the template.
+3. `POST /auth/reset-password` — verifies code from DynamoDB (`GetPendingByEmail` GSI query + in-memory match), calls Cognito `AdminSetUserPassword`, marks code as verified.
+
+**Key files**: `cmd/handlers/auth/clients/forgot-password/main.go`, `cmd/handlers/auth/clients/reset-password/main.go`
+**DynamoDB table**: `mfh-{stage}-email-verifications` (partition key: `verification_id`, GSI: `EmailIndex` on `email`)
 
 ## Helper Categories
 

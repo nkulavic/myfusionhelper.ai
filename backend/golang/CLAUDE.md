@@ -102,8 +102,8 @@ backend/golang/
 │   │   └── platform/              # 1 helper: keap_backup
 │   ├── middleware/auth/           # JWT auth middleware
 │   ├── config/                    # Secrets loading (SSM)
-│   ├── email/                     # Email templates (HTML generation) + SES client
-│   ├── notifications/             # Internal email service HTTP client
+│   ├── email/                     # S3 Liquid template loader, renderer, bindings, SES client
+│   ├── notifications/             # Internal email service HTTP client (Send* methods)
 │   ├── billing/                   # Plan configs, limit enforcement, helpers
 │   ├── services/parquet/          # Parquet file writer for data sync
 │   └── types/types.go             # All shared Go types
@@ -128,9 +128,23 @@ backend/golang/
 │       ├── score-it-worker/
 │       ├── ... (97 total helper workers)
 │       ├── data-sync/             # Non-helper: CRM data sync
-│       ├── notification-worker/   # Non-helper: send notifications
+│       ├── notification-worker/   # Non-helper: SQS → email dispatch (welcome, password_reset, billing, etc.)
 │       ├── trial-expiration/      # Non-helper: EventBridge cron, expires trial accounts
 │       └── helper-worker/         # DEPRECATED: old monolith (fallback only)
+│
+├── email-templates/               # S3 Liquid email templates (synced to s3://mfh-{stage}-data/email-templates/)
+│   ├── welcome/                   # subject.liquid, body.html.liquid, meta.json
+│   ├── password_reset/
+│   ├── execution_alert/
+│   ├── connection_alert/
+│   ├── usage_alert/
+│   ├── weekly_summary/
+│   ├── team_invite/
+│   └── billing_event/             # 12 sub-type subdirectories
+│       ├── subscription_created/
+│       ├── payment_failed/
+│       ├── card_expiring/
+│       └── ... (12 total)
 │
 ├── go.mod, go.sum
 └── package.json                   # serverless-go-plugin dependency
@@ -393,6 +407,59 @@ func Handle(ctx context.Context, event events.APIGatewayV2HTTPRequest) (events.A
 **Public endpoints**: Use `Handle(ctx, event)` signature directly.
 **Protected endpoints**: Use `HandleWithAuth(ctx, event, authCtx)` signature, wrapped by `routeToProtectedHandler`.
 
+## Password Reset (Self-Managed Verification Codes)
+
+Password reset does **NOT** use Cognito's `ForgotPassword`/`ConfirmForgotPassword`. The system generates and manages its own 6-digit codes.
+
+### Flow
+
+```
+POST /auth/forgot-password (public)
+├─ Validate email
+├─ Query Users table (EmailIndex) → check exists (silent failure for enumeration prevention)
+├─ Expire prior pending codes (GetPendingByEmail → MarkAsExpired)
+├─ generateSecureCode() → crypto/rand 6-digit code (0-padded)
+├─ Create EmailVerification record (TTL: 15 minutes)
+├─ Enqueue SQS: type="password_reset", data={user_email, user_name, reset_code}
+└─ Return 200 (always, even if user doesn't exist)
+
+POST /auth/reset-password (public)
+├─ Validate email, code, new_password
+├─ Query EmailVerifications (EmailIndex GSI) → GetPendingByEmail()
+├─ Match code + validate not expired
+├─ Cognito AdminSetUserPassword(permanent=true)
+├─ MarkAsVerified() on the verification record
+└─ Return 200 or error (400 invalid code, 429 rate limited, etc.)
+```
+
+### Key Files
+
+- `cmd/handlers/auth/clients/forgot-password/main.go` — code generation + storage
+- `cmd/handlers/auth/clients/reset-password/main.go` — code verification + password set
+- `internal/database/email_verifications_repository.go` — DynamoDB CRUD
+
+### EmailVerification Record
+
+```go
+type EmailVerification struct {
+    VerificationID string  // "verify:" + UUIDv7
+    Email          string  // EmailIndex GSI partition key
+    Token          string  // 6-digit code
+    ExpiresAt      int64   // Unix timestamp (15 min TTL)
+    Status         string  // "pending" | "verified" | "expired"
+    CreatedAt      string  // RFC3339
+    VerifiedAt     string  // RFC3339 (set on successful reset)
+}
+```
+
+### Security
+
+- `crypto/rand` for code generation (not `math/rand`)
+- 15-minute expiry (DynamoDB TTL auto-cleanup)
+- One active code per email (prior codes expired on new request)
+- Always returns 200 from forgot-password (prevents email enumeration)
+- Password validation delegated to Cognito (8+ chars, mixed case, numbers, symbols)
+
 ## Auth Middleware (`internal/middleware/auth/auth.go`)
 
 The `WithAuth` wrapper:
@@ -432,6 +499,9 @@ All responses include CORS headers (`Access-Control-Allow-Origin: *`).
 | `PLATFORMS_TABLE` | `mfh-{stage}-platforms` | `platform_id` | -- |
 | `OAUTH_STATES_TABLE` | `mfh-{stage}-oauth-states` | `state` | -- |
 | `WEBHOOK_EVENTS_TABLE` | `mfh-{stage}-webhook-events` | `event_id` | -- |
+| `EMAIL_VERIFICATIONS_TABLE` | `mfh-{stage}-email-verifications` | `verification_id` | -- |
+| `EMAIL_TEMPLATES_TABLE` | `mfh-{stage}-email-templates` | `template_id` | -- |
+| `EMAIL_LOGS_TABLE` | `mfh-{stage}-email-logs` | `email_id` | -- |
 
 ### GSI Patterns
 
@@ -442,6 +512,8 @@ Most tables have an `AccountIdIndex` GSI. Other notable GSIs:
 - Executions: `AccountIdCreatedAtIndex`, `HelperIdCreatedAtIndex`
 - Platforms: `SlugIndex`
 - Platform Connection Auths: `ConnectionIdIndex`
+- Email Verifications: `EmailIndex` (used by password reset to query pending codes by email)
+- Email Logs: `AccountIdIndex`, `RecipientEmailIndex`
 
 ### Database Client (`internal/database/client.go`)
 
@@ -511,44 +583,124 @@ Key functions:
 - `formatStripeAmount()` -- converts Stripe integer cents to formatted string (e.g., `3900` → `"$39.00"`)
 - `syncCognitoPlanGroup()` -- removes user from all `plan-*` Cognito groups, adds to new `plan-{name}` group
 
-## Email & Notification System
+## Email & Notification System (S3 Liquid Templates)
 
-### Internal Email Service (`cmd/handlers/internal-email/clients/send/main.go`)
+### Architecture Overview
 
-HTTP Lambda that receives a template type + data, renders HTML via `internal/email/templates.go`, and sends via SES. Accessed via API Gateway at `/internal/emails/send`.
-
-### Notification Service (`internal/notifications/notifications.go`)
-
-HTTP client that calls the internal email API. Used by webhook handler, trial-expiration worker, and other services. Key method: `SendBillingEvent(ctx, accountID, email, eventType, planName, extraData...)` -- variadic `extraData` maps are merged into the template data for forward-compatible field passing.
-
-### Email Templates (`internal/email/templates.go`)
-
-All templates use a shared HTML layout with header, greeting, main content, CTA button, and footer.
-
-**`TemplateData` struct** holds all possible template variables. Key billing-related fields:
-- `PlanName`, `InvoiceURL`, `Amount`, `InvoiceNumber` -- payment/billing
-- `CardLast4`, `CardBrand`, `CardExpMonth`, `CardExpYear` -- card expiring
-- `RefundReason` -- refund processed
-
-**Template types** (via `GetBillingEventEmailTemplate(data, eventType)`):
-`subscription_created`, `subscription_cancelled`, `payment_failed`, `payment_recovered`, `payment_receipt`, `trial_ending`, `trial_expired`, `plan_upgraded`, `plan_downgraded`, `refund_processed`
-
-**Other templates**: `welcome`, `password_reset`, `email_verification`, `execution_alert`, `connection_alert`, `usage_alert`, `weekly_summary`, `team_invite`
-
-### Email Data Flow
+Emails are rendered using **Liquid templates stored in S3**, not hardcoded Go templates. The rendering pipeline uses `github.com/osteele/liquid` with a 5-minute template cache.
 
 ```
-Handler (webhook/trial-expiration/etc.)
-  → notifications.SendBillingEvent(ctx, accountID, email, eventType, planName, extraData)
-  → HTTP POST to /internal/emails/send (template_type + data map)
-  → mapToTemplateData() converts map → TemplateData struct
-  → GetBillingEventEmailTemplate(data, eventType) renders HTML
+Service/Worker → SQS (NotificationQueue)
+  → Notification Worker → notifications.Service.Send*()
+  → HTTP POST to /internal/emails/send
+  → ResolveTemplatePath(templateType, data) → S3 path
+  → TemplateLoader.RenderTemplate(ctx, path, bindings) [cached 5min]
+  → meta.json (header_title, cta_url, icon) rendered + injected
   → SES sends email
 ```
 
-### Stage-Specific Email Configuration
+### Key Files
 
-Emails are stage-aware for both sender address and CTA links:
+| Component | Path |
+|-----------|------|
+| Notification Worker | `cmd/handlers/notification-worker/main.go` |
+| Internal Email Handler | `cmd/handlers/internal-email/clients/send/main.go` |
+| Notifications Service (HTTP client) | `internal/notifications/notifications.go` |
+| Template Loader (S3 + cache) | `internal/email/template_loader.go` |
+| Template Rendering + Path Resolution | `internal/email/templates.go` |
+| Template Bindings (Go → snake_case) | `internal/email/template_bindings.go` |
+| SES Client | `internal/email/ses_client.go` |
+| S3 Template Source Files | `email-templates/` (synced to S3) |
+
+### S3 Template Structure
+
+**Bucket**: `mfh-{stage}-data` (env var: `TEMPLATE_BUCKET`)
+**Prefix**: `email-templates/{template_type}/`
+
+Each template directory contains:
+```
+template-name/
+├── subject.liquid          # Email subject (Liquid template)
+├── body.html.liquid        # HTML email body (Liquid template)
+├── body.txt.liquid         # Plain text alternative (optional)
+└── meta.json              # Metadata (header_title, header_subtitle, icon, cta_text, cta_url)
+```
+
+**Directory tree**:
+```
+email-templates/
+├── welcome/
+├── password_reset/
+├── execution_alert/
+├── connection_alert/
+├── usage_alert/
+├── weekly_summary/
+├── team_invite/
+└── billing_event/
+    ├── subscription_created/
+    ├── subscription_cancelled/
+    ├── payment_failed/
+    ├── payment_recovered/
+    ├── payment_receipt/
+    ├── card_expiring/
+    ├── refund_processed/
+    ├── plan_upgraded/
+    ├── plan_downgraded/
+    ├── trial_ending/
+    ├── trial_expired/
+    └── default/
+```
+
+### Template Variables (Liquid Bindings)
+
+All template variables use **snake_case** (converted from Go `TemplateData` via `TemplateDataToBindings()`):
+
+| Liquid Variable | Purpose |
+|-----------------|---------|
+| `user_name` | User's display name |
+| `user_email` | User's email |
+| `app_name` | "MyFusion Helper" |
+| `base_url` | Stage-specific app URL |
+| `reset_code` | 6-digit password reset code |
+| `plan_name` | Billing plan name |
+| `helper_name` | Helper name (execution alerts) |
+| `error_msg` | Error details |
+| `invoice_url`, `amount`, `invoice_number` | Billing |
+| `card_last4`, `card_brand`, `card_exp_month`, `card_exp_year` | Card expiring |
+| `refund_reason` | Refund details |
+| `inviter_name`, `inviter_email`, `role_name`, `account_name`, `invite_token` | Team invite |
+| `resource_name`, `usage_percent`, `usage_current`, `usage_limit` | Usage alerts |
+| `total_helpers`, `total_executed`, `total_succeeded`, `total_failed`, `success_rate`, `top_helper`, `week_start`, `week_end` | Weekly summary |
+| `current_year` | Auto-injected |
+
+### Notification Worker Dispatch
+
+The notification worker (`cmd/handlers/notification-worker/main.go`) processes SQS jobs by type:
+
+| Job Type | Service Method | Notes |
+|----------|---------------|-------|
+| `welcome` | `SendWelcomeEmail` | |
+| `password_reset` | `SendPasswordResetEmail` | Passes `reset_code` from job data |
+| `execution_failure` | `SendHelperExecutionAlert` | |
+| `connection_issue` | `SendConnectionAlert` | |
+| `usage_alert` | `SendUsageAlert` | |
+| `billing_event` | `SendBillingEvent` | `event_type` sub-field → resolves to billing_event/{sub_type} |
+| `weekly_summary` | `SendWeeklySummary` | |
+| `team_invite` | `SendTeamInvite` | |
+
+### Notification Service Methods (`internal/notifications/notifications.go`)
+
+- `SendWelcomeEmail(ctx, name, email)`
+- `SendPasswordResetEmail(ctx, email, resetCode)`
+- `SendEmailVerificationEmail(ctx, email, verifyCode)`
+- `SendHelperExecutionAlert(ctx, accountID, email, helperName, errorMsg)`
+- `SendBillingEvent(ctx, accountID, email, eventType, planName, extraData...)`
+- `SendConnectionAlert(ctx, accountID, email, connectionName)`
+- `SendUsageAlert(ctx, accountID, email, resourceName, usagePercent, usageCurrent, usageLimit)`
+- `SendWeeklySummary(ctx, accountID, email, summaryData)`
+- `SendTeamInvite(ctx, inviterName, inviterEmail, inviteeEmail, roleName, accountName, inviteToken)`
+
+### Stage-Specific Email Configuration
 
 | Stage | FROM Address | CTA Base URL |
 |-------|-------------|--------------|

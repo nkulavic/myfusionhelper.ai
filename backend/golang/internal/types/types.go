@@ -17,6 +17,7 @@ type User struct {
 	Status                  string                   `json:"status" dynamodbav:"status"`
 	CurrentAccountID        string                   `json:"current_account_id" dynamodbav:"current_account_id"`
 	OnboardingComplete      bool                     `json:"onboarding_complete" dynamodbav:"onboarding_complete"`
+	EmailVerified           bool                     `json:"email_verified" dynamodbav:"email_verified"`
 	NotificationPreferences *NotificationPreferences `json:"notification_preferences,omitempty" dynamodbav:"notification_preferences,omitempty"`
 	CreatedAt               time.Time                `json:"created_at" dynamodbav:"created_at"`
 	UpdatedAt               time.Time                `json:"updated_at" dynamodbav:"updated_at"`

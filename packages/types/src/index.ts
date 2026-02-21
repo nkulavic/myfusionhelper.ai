@@ -10,6 +10,7 @@ export interface User {
   status: string
   currentAccountId: string
   onboardingComplete?: boolean
+  emailVerified?: boolean
   notificationPreferences?: NotificationPreferences
   createdAt: string
   updatedAt: string

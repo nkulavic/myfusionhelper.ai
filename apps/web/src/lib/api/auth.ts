@@ -79,6 +79,12 @@ export const authApi = {
   resetPassword: (input: ResetPasswordInput) =>
     apiClient.post<void>('/auth/reset-password', input),
 
+  verifyEmail: (data: { email: string; code: string }) =>
+    apiClient.post<void>('/auth/verify-email', data),
+
+  resendVerification: (data: { email: string }) =>
+    apiClient.post<void>('/auth/resend-verification', data),
+
   // MFA
   submitMfaChallenge: (input: { session: string; code: string; challengeName: string; username: string }) =>
     apiClient.post<AuthResponse>('/auth/mfa-challenge', input),

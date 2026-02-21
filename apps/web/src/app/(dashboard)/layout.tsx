@@ -84,6 +84,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Register global keyboard shortcuts
   useGlobalKeyboardShortcuts()
 
+  // Redirect unverified users to verify-email page
+  useEffect(() => {
+    if (_hasHydrated && user && user.emailVerified === false) {
+      router.replace(`/verify-email?email=${encodeURIComponent(user.email)}`)
+    }
+  }, [_hasHydrated, user, router])
+
   // Redirect to onboarding if not completed
   useEffect(() => {
     if (_hasHydrated && !onboardingComplete) {

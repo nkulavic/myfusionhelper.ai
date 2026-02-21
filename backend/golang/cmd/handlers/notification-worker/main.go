@@ -159,6 +159,16 @@ func handleSQSEvent(ctx context.Context, event events.SQSEvent) error {
 				log.Printf("Failed to send weekly summary: %v", err)
 			}
 
+		case "email_verification":
+			target := getStringData(job.Data, "user_email")
+			if target == "" {
+				target = userEmail
+			}
+			verifyCode := getStringData(job.Data, "verify_code")
+			if err := notifSvc.SendEmailVerificationEmail(ctx, target, verifyCode); err != nil {
+				log.Printf("Failed to send email verification: %v", err)
+			}
+
 		case "team_invite":
 			recipientEmail := getStringData(job.Data, "recipient_email")
 			inviterName := getStringData(job.Data, "inviter_name")

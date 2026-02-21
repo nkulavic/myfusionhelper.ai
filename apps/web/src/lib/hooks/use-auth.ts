@@ -61,6 +61,24 @@ export function useResetPassword() {
   })
 }
 
+export function useVerifyEmail() {
+  const queryClient = useQueryClient()
+  const { updateUserData } = useAuthStore()
+  return useMutation({
+    mutationFn: (data: { email: string; code: string }) => authApi.verifyEmail(data),
+    onSuccess: () => {
+      updateUserData({ emailVerified: true })
+      queryClient.invalidateQueries({ queryKey: ['auth-status'] })
+    },
+  })
+}
+
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: (data: { email: string }) => authApi.resendVerification(data),
+  })
+}
+
 export function useCompleteOnboarding() {
   const { updateUserData } = useAuthStore()
   return useMutation({

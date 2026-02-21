@@ -1,0 +1,7 @@
+{
+    "header_title": "Verify Your Email",
+    "header_subtitle": "One quick step to get started",
+    "icon": "mail",
+    "cta_text": "Verify Email",
+    "cta_url": "{{ base_url }}/verify-email?email={{ user_email }}&code={{ verify_code }}"
+}

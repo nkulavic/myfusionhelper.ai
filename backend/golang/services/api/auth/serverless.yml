@@ -438,3 +438,37 @@ functions:
       - httpApi:
           path: /auth/reset-password
           method: post
+
+  auth-verify-email:
+    handler: cmd/handlers/auth/main.go
+    description: "Verify email with 6-digit code"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-verify-email
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-verify-email
+      ENDPOINT_PATH: /auth/verify-email
+    events:
+      - httpApi:
+          path: /auth/verify-email
+          method: post
+
+  auth-resend-verification:
+    handler: cmd/handlers/auth/main.go
+    description: "Resend email verification code"
+    tags:
+      Service: ${self:service}
+      Stage: ${self:provider.stage}
+      Function: auth-resend-verification
+    memorySize: 256
+    timeout: 10
+    environment:
+      FUNCTION_NAME: auth-resend-verification
+      ENDPOINT_PATH: /auth/resend-verification
+    events:
+      - httpApi:
+          path: /auth/resend-verification
+          method: post
