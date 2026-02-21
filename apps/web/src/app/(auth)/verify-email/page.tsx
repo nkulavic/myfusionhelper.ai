@@ -6,10 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useVerifyEmail, useResendVerification } from '@/lib/hooks/use-auth'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useWorkspaceStore } from '@/lib/stores/workspace-store'
-import { APIError } from '@/lib/api/client'
+
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, CheckCircle, Loader2, Mail } from 'lucide-react'
 import { useState, useCallback, useEffect, Suspense } from 'react'
@@ -53,12 +53,8 @@ function VerifyEmailForm() {
               router.push(onboardingComplete ? '/' : '/onboarding/plan')
             }, 1500)
           },
-          onError: (err) => {
-            if (err instanceof APIError) {
-              showError(err.message)
-            } else {
-              showError('Verification failed. Please try again.')
-            }
+          onError: () => {
+            showError('Oops, that code is incorrect. Please double-check and try again.')
           },
         },
       )
@@ -86,12 +82,8 @@ function VerifyEmailForm() {
             router.push(onboardingComplete ? '/' : '/onboarding/plan')
           }, 1500)
         },
-        onError: (err) => {
-          if (err instanceof APIError) {
-            showError(err.message)
-          } else {
-            showError('Verification failed. Please try again.')
-          }
+        onError: () => {
+          showError('Oops, that code is incorrect. Please double-check and try again.')
         },
       },
     )
