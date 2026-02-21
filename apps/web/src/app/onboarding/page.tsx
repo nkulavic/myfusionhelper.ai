@@ -7,6 +7,7 @@ import { useWorkspaceStore } from '@/lib/stores/workspace-store'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useCompleteOnboarding } from '@/lib/hooks/use-auth'
 import { useBillingInfo } from '@/lib/hooks/use-settings'
+import { isTrialPlan } from '@/lib/plan-constants'
 import { ConnectCRMStep } from './_components/connect-crm-step'
 import { PickHelperStep } from './_components/pick-helper-step'
 import { QuickTourStep } from './_components/quick-tour-step'
@@ -76,9 +77,9 @@ function OnboardingContent() {
     }
   }, [mounted, _hasHydrated, onboardingComplete, user?.onboardingComplete, router])
 
-  // If user has no subscription, redirect to plan selection
+  // If user hasn't selected a paid plan yet, redirect to plan selection
   useEffect(() => {
-    if (mounted && !billingLoading && billing && billing.plan === 'free') {
+    if (mounted && !billingLoading && billing && isTrialPlan(billing.plan)) {
       router.replace('/onboarding/plan')
     }
   }, [mounted, billingLoading, billing, router])

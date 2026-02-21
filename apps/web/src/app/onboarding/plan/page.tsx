@@ -9,6 +9,7 @@ import {
   PAID_PLAN_IDS,
   formatLimit,
   getAnnualSavingsPercent,
+  isTrialPlan,
   type PlanId,
 } from '@/lib/plan-constants'
 import { useAuthStore } from '@/lib/stores/auth-store'
@@ -54,9 +55,9 @@ function PlanGateContent() {
   const [activating, setActivating] = useState(false)
   const [isAnnual, setIsAnnual] = useState(false)
 
-  // If user already has a paid plan, skip to onboarding
+  // If user already has a paid plan (not trial/free), skip to onboarding
   useEffect(() => {
-    if (!billingLoading && billing && billing.plan !== 'free') {
+    if (!billingLoading && billing && !isTrialPlan(billing.plan)) {
       router.replace('/onboarding')
     }
   }, [billing, billingLoading, router])
@@ -74,7 +75,7 @@ function PlanGateContent() {
       const result = await refetchBilling()
       const plan = result.data?.plan
 
-      if (plan && plan !== 'free') {
+      if (plan && !isTrialPlan(plan)) {
         clearInterval(interval)
         setActivating(false)
         router.push('/onboarding')

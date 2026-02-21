@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/lib/hooks/use-settings'
+import { useAuthStore } from '@/lib/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,12 +16,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { TestEmailLog } from './test-email-log'
 
 const urlRegex = /^https?:\/\/.+/
 
 export function NotificationsTab() {
   const { data: prefs, isLoading } = useNotificationPreferences()
   const updatePrefs = useUpdateNotificationPreferences()
+  const user = useAuthStore((s) => s.user)
+  const isTestUser = user?.email?.endsWith('@test.myfusionhelper.ai') ?? false
   const [webhookUrl, setWebhookUrl] = useState('')
   const [webhookInitialized, setWebhookInitialized] = useState(false)
 
@@ -183,6 +187,8 @@ export function NotificationsTab() {
           </div>
         </CardContent>
       </Card>
+
+      {isTestUser && <TestEmailLog />}
     </div>
   )
 }
