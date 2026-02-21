@@ -194,7 +194,20 @@ export default function RegisterPage() {
     <Card className="animate-scale-in">
       <CardHeader className="text-center">
         <Link href="/" className="mx-auto mb-2 flex items-center gap-2 font-bold">
-          <Image src="/logo.png" alt="MyFusion Helper" width={180} height={23} className="dark:brightness-0 dark:invert" />
+          <Image
+            src="/logo.png"
+            alt="MyFusion Helper"
+            width={180}
+            height={23}
+            className="dark:hidden"
+          />
+          <Image
+            src="/logo-full.png"
+            alt="MyFusion Helper"
+            width={180}
+            height={23}
+            className="hidden dark:block"
+          />
         </Link>
         <CardTitle className="text-2xl">Create an account</CardTitle>
         <CardDescription>Start your free trial today</CardDescription>

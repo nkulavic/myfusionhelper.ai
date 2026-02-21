@@ -123,16 +123,24 @@ function VerifyEmailForm() {
               alt="MyFusion Helper"
               width={180}
               height={23}
-              className="dark:brightness-0 dark:invert"
+              className="dark:hidden"
+            />
+            <Image
+              src="/logo-full.png"
+              alt="MyFusion Helper"
+              width={180}
+              height={23}
+              className="hidden dark:block"
             />
           </Link>
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-success/10">
-            <CheckCircle className="h-6 w-6 text-success" />
+          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-success/10">
+            <CheckCircle className="h-8 w-8 text-success" />
           </div>
-          <CardTitle className="text-2xl">Email verified</CardTitle>
-          <CardDescription>
-            Your email has been verified. Redirecting you now...
-          </CardDescription>
+          <CardTitle className="text-2xl">Email verified!</CardTitle>
+          <div className="mt-2 space-y-1 text-center text-sm text-muted-foreground">
+            <p>Your email has been verified.</p>
+            <p>Redirecting you now...</p>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex justify-center">
@@ -152,17 +160,25 @@ function VerifyEmailForm() {
             alt="MyFusion Helper"
             width={180}
             height={23}
-            className="dark:brightness-0 dark:invert"
+            className="dark:hidden"
+          />
+          <Image
+            src="/logo-full.png"
+            alt="MyFusion Helper"
+            width={180}
+            height={23}
+            className="hidden dark:block"
           />
         </Link>
-        <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-          <Mail className="h-6 w-6 text-primary" />
+        <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+          <Mail className="h-8 w-8 text-primary" />
         </div>
-        <CardTitle className="text-2xl">Verify your email</CardTitle>
-        <CardDescription>
-          We sent a 6-digit code to <span className="font-medium text-foreground">{email}</span>.
-          Enter it below to verify your email address.
-        </CardDescription>
+        <CardTitle className="text-2xl">Check your email!</CardTitle>
+        <div className="mt-2 space-y-1 text-center text-sm text-muted-foreground">
+          <p>We sent a 6-digit verification code to</p>
+          <p className="font-medium text-foreground">{email}</p>
+          <p>Enter the code below to continue.</p>
+        </div>
       </CardHeader>
       <CardContent>
         {error && (

@@ -143,7 +143,14 @@ export default function LoginPage() {
               alt="MyFusion Helper"
               width={180}
               height={23}
-              className="dark:brightness-0 dark:invert"
+              className="dark:hidden"
+            />
+            <Image
+              src="/logo-full.png"
+              alt="MyFusion Helper"
+              width={180}
+              height={23}
+              className="hidden dark:block"
             />
           </Link>
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
@@ -226,10 +233,17 @@ export default function LoginPage() {
             alt="MyFusion Helper"
             width={180}
             height={23}
-            className="dark:brightness-0 dark:invert"
+            className="dark:hidden"
+          />
+          <Image
+            src="/logo-full.png"
+            alt="MyFusion Helper"
+            width={180}
+            height={23}
+            className="hidden dark:block"
           />
         </Link>
-        <CardTitle className="text-2xl">Welcome back</CardTitle>
+        <CardTitle className="text-xl text-primary">Welcome back</CardTitle>
         <CardDescription>Enter your credentials to sign in</CardDescription>
       </CardHeader>
       <CardContent>

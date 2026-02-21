@@ -41,7 +41,17 @@ export function LandingHeader() {
             height={20}
             className={cn(
               'transition-all',
-              scrolled ? 'dark:brightness-0 dark:invert' : 'brightness-0 invert dark:brightness-100 dark:invert-0'
+              scrolled ? 'dark:hidden' : 'hidden'
+            )}
+          />
+          <Image
+            src="/logo-full.png"
+            alt="MyFusion Helper"
+            width={160}
+            height={20}
+            className={cn(
+              'transition-all',
+              scrolled ? 'hidden dark:block' : 'block dark:block'
             )}
           />
         </Link>
