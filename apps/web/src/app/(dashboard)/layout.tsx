@@ -27,7 +27,7 @@ import {
   Clock,
   ArrowLeft,
 } from 'lucide-react'
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/lib/stores/auth-store'
 import { useWorkspaceStore } from '@/lib/stores/workspace-store'
@@ -330,10 +330,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             sidebarMinimized && 'lg:p-2'
           )}>
             {isSettingsPage ? (
-              <SettingsSidebarNav
-                sidebarMinimized={sidebarMinimized}
-                onNavClick={() => setSidebarCollapsed(true)}
-              />
+              <Suspense fallback={null}>
+                <SettingsSidebarNav
+                  sidebarMinimized={sidebarMinimized}
+                  onNavClick={() => setSidebarCollapsed(true)}
+                />
+              </Suspense>
             ) : (
               navigation.map((item) => {
                 const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + '/'))

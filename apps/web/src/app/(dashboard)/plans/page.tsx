@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Shield, Clock, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -29,6 +29,14 @@ import {
 } from '@/lib/plan-constants'
 
 export default function PlansPage() {
+  return (
+    <Suspense fallback={null}>
+      <PlansContent />
+    </Suspense>
+  )
+}
+
+function PlansContent() {
   const searchParams = useSearchParams()
   const { data: billing } = useBillingInfo()
   const createPortal = useCreatePortalSession()
