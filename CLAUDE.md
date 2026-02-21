@@ -414,6 +414,129 @@ Password reset does **NOT** use Cognito's `ForgotPassword`/`ConfirmForgotPasswor
 
 Helpers are organized into categories: contact, data, tagging, automation, integration, notification, analytics. Each helper implements the `helpers.Helper` Go interface and is registered in a global registry via `helpers.Register()`.
 
+## Data Explorer
+
+Browse, query, filter, and export CRM data synced from connected platforms. Data is stored as Parquet files in S3 and queried in-process via DuckDB.
+
+### Data Pipeline
+
+```
+CRM Platform (Keap, GHL, etc.)
+  → data-sync worker pulls records via connector
+  → Writes Parquet files to s3://mfh-{stage}-data/{connection_id}/{object_type}/
+  → Data Explorer queries Parquet via DuckDB (in-Lambda, CGO required)
+```
+
+### API Endpoints
+
+| Method | Route | Handler | Purpose |
+|--------|-------|---------|---------|
+| GET | `/data/catalog` | catalog | List all object types across user's connections (record counts, columns, sync status) |
+| GET | `/data/schema` | schema | Column metadata for a specific object type |
+| POST | `/data/query` | query | Query records with filters, sorting, pagination (DuckDB SQL on Parquet) |
+| GET | `/data/record/{connId}/{objectType}/{recordId}` | record | Single record detail (full JSON) |
+| POST | `/data/export` | export | Export matching records as CSV or JSON |
+| POST | `/data/sync` | sync | Trigger manual data sync (enqueues SQS job) |
+| POST | `/data/aggregate` | aggregate | Group/count aggregations for Studio charts |
+| POST | `/data/timeseries` | timeseries | Time-bucketed aggregations for line/area charts |
+
+### Key Files
+
+| Layer | Path | Notes |
+|-------|------|-------|
+| Frontend page | `apps/web/src/app/(dashboard)/data-explorer/page.tsx` | Two-panel resizable layout |
+| Zustand store | `apps/web/src/lib/stores/data-explorer-store.ts` | Selection, filters, pagination (persisted) |
+| API client | `apps/web/src/lib/api/data-explorer.ts` | HTTP endpoints + request/response types |
+| React Query hooks | `apps/web/src/lib/hooks/use-data-explorer.ts` | `useDataCatalog`, `useDataQuery`, `useDataRecord`, `useDataSchema`, `useTriggerSync` |
+| Components | `apps/web/src/components/data-explorer/` | HierarchicalNav, DataTable, NLQueryBar, RecordDetail, JsonViewer, ExportUtils, etc. |
+| Backend router | `backend/golang/cmd/handlers/data-explorer/main.go` | Consolidated Lambda handler dispatching by path+method |
+| Client handlers | `backend/golang/cmd/handlers/data-explorer/clients/*/main.go` | 9 sub-handlers (catalog, schema, query, record, export, sync, aggregate, timeseries, health) |
+| Serverless config | `backend/golang/services/api/data-explorer/serverless.yml` | **x86_64** arch (required for DuckDB/CGO), 512-1024MB memory |
+| Smoke tests | `backend/golang/tests/smoke/test-data-explorer.sh` | Catalog, query, filter, sort, pagination, export, aggregate tests |
+
+### Architecture Notes
+
+- **x86_64 only**: Data explorer Lambda runs on x86_64 (not ARM64) because DuckDB requires CGO. A pre-built binary is copied during build instead of compiling from source.
+- **Hierarchical navigation**: Frontend tree is Platform → Connection → ObjectType. Selection level drives which view renders (PlatformOverview, ConnectionOverview, DataTable, RecordDetail).
+- **Filter operators**: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `contains`, `startswith`, `in`, `between`, `daterange`.
+- **NL Query bar**: UI exists with example suggestions but no LLM backend yet (placeholder).
+- **DynamoDB table**: `mfh-{stage}-dashboards` (also used by Studio for its dashboards).
+
+## Studio (Dashboard Builder)
+
+Visual dashboard builder for creating custom CRM analytics dashboards with charts, scorecards, and tables. Data sourced from the Data Explorer's aggregate/timeseries endpoints.
+
+### How It Works
+
+1. Users create dashboards (blank or from platform-specific templates)
+2. Add widgets: scorecard, bar, line, area, pie, funnel, or data table
+3. Each widget configured with: data source, metric, dimension/grouping, date range, size
+4. Widgets rendered on a 12-column responsive grid (Recharts for charts)
+5. Dashboards persisted in DynamoDB; widgets stored as a list on the dashboard record
+
+### API Endpoints
+
+| Method | Route | Handler | Purpose |
+|--------|-------|---------|---------|
+| GET | `/studio/dashboards` | dashboards | List user's dashboards |
+| POST | `/studio/dashboards` | dashboards | Create new dashboard |
+| GET | `/studio/dashboards/{id}` | dashboards | Get single dashboard |
+| PUT | `/studio/dashboards/{id}` | dashboards | Update dashboard (name, description, widgets) |
+| DELETE | `/studio/dashboards/{id}` | dashboards | Soft-delete dashboard |
+| GET | `/studio/templates` | templates | List templates filtered by user's connected platforms |
+| POST | `/studio/templates/{id}/apply` | templates | Create dashboard from template (injects connection_id) |
+
+Data endpoints (`/data/aggregate`, `/data/timeseries`) are served by the Data Explorer service.
+
+### Templates
+
+6 built-in templates in `cmd/handlers/studio/clients/templates/registry.go`:
+- **Generic CRM Overview** -- works with any platform
+- **Keap**, **GoHighLevel**, **ActiveCampaign**, **Ontraport**, **HubSpot** -- platform-specific dashboards
+- Templates filtered dynamically based on user's connected platforms
+
+### Widget Types & Config
+
+| Chart Type | Data Sources | Metrics | Notes |
+|------------|-------------|---------|-------|
+| Scorecard | contacts, deals, tags | count, sum, avg | Single KPI value |
+| Bar/Pie | contacts, deals, tags | count, sum, avg | Group by dimension (status, source, company, etc.) |
+| Line/Area | contacts, deals, tags | count, sum, avg | Time series only (date_histogram) |
+| Funnel | contacts, deals, tags | count | Ordered stages |
+| Data Table | contacts, deals, tags | count, sum, avg | Tabular aggregation |
+
+Widget sizes: `sm` (3-col), `md` (6-col), `lg` (9-col), `full` (12-col).
+
+### Key Files
+
+| Layer | Path | Notes |
+|-------|------|-------|
+| Frontend list page | `apps/web/src/app/(dashboard)/studio/page.tsx` | Dashboard grid + create dialog |
+| Frontend detail page | `apps/web/src/app/(dashboard)/studio/[id]/page.tsx` | Canvas editor |
+| Zustand store | `apps/web/src/lib/stores/studio-store.ts` | UI state (activeDateRange), type definitions |
+| API client | `apps/web/src/lib/api/studio.ts` | CRUD + template + aggregate/timeseries APIs |
+| React Query hooks | `apps/web/src/lib/hooks/use-studio.ts` | `useDashboards`, `useDashboard`, `useCreateDashboard`, `useUpdateDashboard`, `useDeleteDashboard`, `useTemplates`, `useApplyTemplate` |
+| Components | `apps/web/src/components/studio/` | DashboardList, DashboardCanvas, AddWidgetModal, WidgetCard, WidgetRenderer, DateRangeFilter |
+| Chart components | `apps/web/src/components/studio/charts/` | Scorecard, BarChart, LineChart, AreaChart, PieChart, FunnelChart, DataTable (all Recharts) |
+| Mock data | `apps/web/src/lib/mock-data/studio-mock-data.ts` | Frontend mock aggregation (currently used for chart rendering) |
+| Backend router | `backend/golang/cmd/handlers/studio/main.go` | Lambda handler routing `/studio/*` |
+| Dashboard handler | `backend/golang/cmd/handlers/studio/clients/dashboards/main.go` | CRUD with ownership checks, soft delete, optimistic locking |
+| Template handler | `backend/golang/cmd/handlers/studio/clients/templates/main.go` | List (filtered by connections) + apply |
+| Template registry | `backend/golang/cmd/handlers/studio/clients/templates/registry.go` | 6 static template definitions |
+
+### DynamoDB
+
+- **Table**: `mfh-{stage}-dashboards` (PK: `dashboard_id`, GSI: `AccountIdIndex` on `account_id`)
+- **Dashboard ID format**: `dash:` + UUIDv7
+- **Widget ID format**: `wdg-` + UUID
+- Soft deletes (status: `active` → `deleted`)
+
+### Current State
+
+- Dashboard CRUD and template system are fully functional (backend + frontend)
+- Chart rendering currently uses **frontend mock data** (`studio-mock-data.ts`) -- not yet wired to backend aggregate/timeseries endpoints
+- Backend `/data/aggregate` and `/data/timeseries` endpoints exist and are ready for integration
+
 ## Project Management & Planning Workflow
 
 **Teamwork Project ID**: 674054 (myfusionhelper.ai)
