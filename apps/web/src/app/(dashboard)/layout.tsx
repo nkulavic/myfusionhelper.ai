@@ -84,31 +84,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Register global keyboard shortcuts
   useGlobalKeyboardShortcuts()
 
-  // Redirect unverified users to verify-email page
-  useEffect(() => {
-    if (_hasHydrated && user && user.emailVerified === false) {
-      router.replace(`/verify-email?email=${encodeURIComponent(user.email)}`)
-    }
-  }, [_hasHydrated, user, router])
-
-  // Redirect to onboarding if not completed
-  useEffect(() => {
-    if (_hasHydrated && !onboardingComplete) {
-      router.replace('/onboarding/plan')
-    }
-  }, [_hasHydrated, onboardingComplete, router])
-
-  // Soft lock: redirect expired trial users to /plans (allow /plans, /settings, /dashboard)
+  // Consolidated redirect logic — priority: email verification > onboarding > soft lock
   const allowedWhileExpired = ['/', '/plans', '/settings', '/dashboard']
   useEffect(() => {
-    if (!isTrialExpired) return
-    const isAllowed = allowedWhileExpired.some(
-      (route) => pathname === route || pathname.startsWith(route + '/'),
-    )
-    if (!isAllowed) {
-      router.replace('/plans')
+    if (!_hasHydrated) return
+
+    // 1. Email verification gate (highest priority)
+    if (user && user.emailVerified === false) {
+      router.replace(`/verify-email?email=${encodeURIComponent(user.email)}`)
+      return
     }
-  }, [isTrialExpired, pathname, router])
+
+    // 2. Onboarding gate
+    if (!onboardingComplete) {
+      router.replace('/onboarding/plan')
+      return
+    }
+
+    // 3. Soft lock: expired trial users restricted to certain pages
+    if (isTrialExpired) {
+      const isAllowed = allowedWhileExpired.some(
+        (route) => pathname === route || pathname.startsWith(route + '/'),
+      )
+      if (!isAllowed) {
+        router.replace('/plans')
+      }
+    }
+  }, [_hasHydrated, user, onboardingComplete, isTrialExpired, pathname, router])
 
   const userInitials = user?.name
     ? user.name
